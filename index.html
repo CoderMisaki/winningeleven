@@ -3,49 +3,70 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; script-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; upgrade-insecure-requests" />
-    <meta name="referrer" content="no-referrer" />
-    <meta http-equiv="X-Content-Type-Options" content="nosniff" />
-    <title>Retro Soccer Memory Backtest</title>
+    <title>WE10 Memory Research System V2</title>
     <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Roboto+Mono:wght@400;700&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="src/css/styles.css" />
   </head>
   <body>
-    <main class="page-shell" aria-label="Retro Soccer Simulator">
-      <section class="memory-panel" aria-label="Memory backtest">
-        <span class="memory-label">P1</span>
-        <select id="memorySelect" aria-label="Pilih memory"></select>
-        <button class="btn btn-import" id="addMemoryBtn">+ Memory</button>
-        <button class="btn btn-import" id="addGameBtn">+ Game</button>
-        <div class="game-counter" id="gameCounter">Game 1</div>
-        <button class="btn btn-predict" id="prevGameBtn">◀ Kiri</button>
-        <button class="btn btn-predict" id="nextGameBtn">Kanan ▶</button>
-        <button class="btn btn-import" id="saveMemoryBtn">Save</button>
+    <main class="page-shell">
+      <header class="we10-header">
+        <h1>WE10 MEMORY SYSTEM V2</h1>
+        <div class="system-sub">RESEARCH & DATASET ENGINE</div>
+      </header>
+
+      <section class="control-panel">
+        <button class="btn btn-blue" id="btnHomeView">MATCHING CENTER</button>
+        <button class="btn btn-gold" id="btnOpenDatabase">MEMORY DATABASE</button>
+        <div id="activeViewIndicator" class="view-indicator">MODE: MATCHING CENTER</div>
       </section>
 
-      <div class="controls-wrapper">
-        <label for="rowCount">BARIS:</label>
-        <input type="number" id="rowCount" value="7" min="1" max="100" inputmode="numeric" aria-describedby="inputHint" />
-        <label for="importInput">KODE:</label>
-        <input type="text" id="importInput" placeholder="Contoh: japvsjep, polvsned" autocomplete="off" autocapitalize="none" spellcheck="false" maxlength="240" aria-describedby="inputHint" />
-        <div class="controls-actions">
-          <button class="btn btn-import" id="importBtn">Import</button>
-          <button class="btn btn-predict" id="predictBtn">Prediksi</button>
-          <button class="btn btn-clear" id="clearBtn">Clear</button>
+      <div class="game-screen">
+        <div class="schedule-tab" id="panelTitle">MATCHING INTERFACE</div>
+        
+        <div class="main-board">
+          <div class="editor-nav-bar hidden" id="editorNav">
+            <button class="btn btn-nav" id="btnPrevGame">◀ PREV GAME</button>
+            <div class="game-badge" id="currentGameLabel">GAME 1</div>
+            <button class="btn btn-nav" id="btnNextGame">NEXT GAME ▶</button>
+            <button class="btn btn-red" id="btnAddGame">+ ADD GAME</button>
+          </div>
+
+          <div class="dataset-container">
+            <div class="p1-row">
+              <label for="p1Input">P1 METADATA (OPTIONAL):</label>
+              <input type="text" id="p1Input" placeholder="Masukkan Negara P1 (e.g. Spain)" autocomplete="off" />
+            </div>
+            
+            <div class="match-grid" id="matchGridForm">
+              </div>
+          </div>
+
+          <div class="action-footer" id="homeActions">
+            <button class="btn btn-green btn-large" id="btnRunMatch">CARI KECOCOKAN</button>
+            <button class="btn btn-red" id="btnClearForm">RESET FORM</button>
+          </div>
         </div>
-        <div class="input-hint" id="inputHint">Manual editor di bawah mendukung smart search 3 huruf/singkatan negara. Simpan ke Memory 1, Memory 2, dst.</div>
       </div>
 
-      <div class="game-screen">
-        <div class="schedule-tab">SCHEDULE</div>
-        <div class="main-board">
-          <div class="cup-header"><span class="arrow" id="prevCupBtn">&#9664;</span><div class="cup-title"><h2 id="cupName">KONAMI CUP</h2><h3 id="roundName">ROUND 1</h3></div><span class="arrow" id="nextCupBtn">&#9654;</span></div>
-          <div class="match-editor" id="matchEditor"></div>
-          <div class="schedule-list" id="scheduleList" aria-live="polite"></div>
-        </div>
-        <section class="top-goals-panel" aria-labelledby="topGoalsTitle"><div class="top-goals-header"><h2 id="topGoalsTitle">TOP GOALS</h2><span class="manual-badge">BENDERA • PEMAIN • GOAL</span></div><div class="top-goals-list" id="topGoalsList"></div></section>
-      </div>
+      <section class="results-panel hidden" id="resultsPanel">
+        <div class="results-header">RESULT OUTPUT</div>
+        <div class="results-body" id="resultsOutput"></div>
+      </section>
     </main>
+
+    <div class="modal-overlay hidden" id="databaseModal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2>MEMORY DATABASE</h2>
+          <button class="close-modal" id="btnCloseModal">X</button>
+        </div>
+        <div class="modal-body" id="databaseModalList">
+          </div>
+      </div>
+    </div>
+
+    <input type="file" id="jsonImportField" class="hidden" accept=".json" />
+
     <script type="module" src="src/js/main.js"></script>
   </body>
 </html>
