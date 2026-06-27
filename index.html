@@ -12,40 +12,100 @@
   </head>
   <body>
     <main class="page-shell" aria-label="Retro Soccer Simulator">
-      <section class="memory-panel" aria-label="Memory backtest">
-        <span class="memory-label">P1</span>
-        <select id="memorySelect" aria-label="Pilih memory"></select>
-        <button class="btn btn-import" id="addMemoryBtn">+ Memory</button>
-        <button class="btn btn-import" id="addGameBtn">+ Game</button>
-        <div class="game-counter" id="gameCounter">Game 1</div>
-        <button class="btn btn-predict" id="prevGameBtn">◀ Kiri</button>
-        <button class="btn btn-predict" id="nextGameBtn">Kanan ▶</button>
-        <button class="btn btn-import" id="saveMemoryBtn">Save</button>
+
+      <!-- Top Actions -->
+      <section class="top-actions">
+        <button class="btn btn-import" id="openMemoryModalBtn">Memory Database</button>
+        <button class="btn btn-predict" id="openSearchModalBtn">🔍 Cari Kecocokan</button>
       </section>
 
-      <div class="controls-wrapper">
-        <label for="rowCount">BARIS:</label>
-        <input type="number" id="rowCount" value="7" min="1" max="100" inputmode="numeric" aria-describedby="inputHint" />
-        <label for="importInput">KODE:</label>
-        <input type="text" id="importInput" placeholder="Contoh: japvsjep, polvsned" autocomplete="off" autocapitalize="none" spellcheck="false" maxlength="240" aria-describedby="inputHint" />
-        <div class="controls-actions">
-          <button class="btn btn-import" id="importBtn">Import</button>
-          <button class="btn btn-predict" id="predictBtn">Prediksi</button>
-          <button class="btn btn-clear" id="clearBtn">Clear</button>
-        </div>
-        <div class="input-hint" id="inputHint">Manual editor di bawah mendukung smart search 3 huruf/singkatan negara. Simpan ke Memory 1, Memory 2, dst.</div>
-      </div>
-
       <div class="game-screen">
-        <div class="schedule-tab">SCHEDULE</div>
+        <div class="schedule-tab" id="memoryTitleTab">MEMORY 1</div>
         <div class="main-board">
-          <div class="cup-header"><span class="arrow" id="prevCupBtn">&#9664;</span><div class="cup-title"><h2 id="cupName">KONAMI CUP</h2><h3 id="roundName">ROUND 1</h3></div><span class="arrow" id="nextCupBtn">&#9654;</span></div>
-          <div class="match-editor" id="matchEditor"></div>
+
+          <!-- Single Game Editor replacing old match-editor & cup-header -->
+          <div class="single-game-editor" id="singleGameEditor">
+            <div class="sge-header">
+               <span class="arrow" id="prevGameBtn">&#9664; Previous</span>
+               <div class="sge-title">
+                  <h2 id="gameNumberDisplay">Game 1</h2>
+                  <div class="p1-input-wrap">
+                      <label for="p1Input">P1</label>
+                      <input type="text" id="p1Input" placeholder="Spain" autocomplete="off" />
+                  </div>
+               </div>
+               <span class="arrow" id="nextGameBtn">Next &#9654;</span>
+            </div>
+
+            <div class="sge-body">
+               <div class="smart-input-wrap">
+                  <input id="homeInput" placeholder="Negara Kiri" autocomplete="off">
+               </div>
+               <input class="score-input" id="scoreInput" placeholder="0-0">
+               <div class="smart-input-wrap">
+                  <input id="awayInput" placeholder="Negara Kanan" autocomplete="off">
+               </div>
+            </div>
+
+            <div class="sge-footer">
+               <button class="btn btn-clear" id="deleteGameBtn">Delete Game</button>
+               <button class="btn btn-import" id="addGameBtn">+ Add Game</button>
+            </div>
+          </div>
+
           <div class="schedule-list" id="scheduleList" aria-live="polite"></div>
         </div>
-        <section class="top-goals-panel" aria-labelledby="topGoalsTitle"><div class="top-goals-header"><h2 id="topGoalsTitle">TOP GOALS</h2><span class="manual-badge">BENDERA • PEMAIN • GOAL</span></div><div class="top-goals-list" id="topGoalsList"></div></section>
+
+        <section class="top-goals-panel" aria-labelledby="topGoalsTitle">
+          <div class="top-goals-header">
+             <h2 id="topGoalsTitle">TOP GOALS</h2>
+             <span class="manual-badge">BENDERA • PEMAIN • GOAL</span>
+          </div>
+          <div class="top-goals-list" id="topGoalsList"></div>
+        </section>
       </div>
     </main>
+
+    <!-- Modal Dialogs -->
+    <dialog id="memoryModal" class="modal-dialog">
+      <div class="modal-content">
+         <div class="modal-header">
+            <h2>Memory Database</h2>
+            <button class="btn-close" id="closeMemoryModalBtn">&times;</button>
+         </div>
+         <div class="modal-body" id="memoryListContainer">
+            <!-- Rendered via JS -->
+         </div>
+      </div>
+    </dialog>
+
+    <dialog id="searchModal" class="modal-dialog">
+      <div class="modal-content">
+         <div class="modal-header">
+            <h2>Cari Kecocokan</h2>
+            <button class="btn-close" id="closeSearchModalBtn">&times;</button>
+         </div>
+         <div class="modal-body">
+            <div class="search-input-section">
+               <div class="search-p1-wrap">
+                  <label>P1 (Opsional)</label>
+                  <input type="text" id="searchP1" placeholder="Spain">
+               </div>
+               <div id="searchGamesContainer">
+                  <!-- 7 input rows rendered via JS -->
+               </div>
+               <button class="btn btn-predict" id="executeSearchBtn" style="width: 100%; margin-top: 1rem;">Cari Kecocokan</button>
+            </div>
+            <div class="search-results-section" id="searchResultsContainer">
+               <!-- Results here -->
+            </div>
+         </div>
+      </div>
+    </dialog>
+
+    <!-- Hidden File Input for Import -->
+    <input type="file" id="importFileInput" accept=".json" style="display: none;" />
+
     <script type="module" src="src/js/main.js"></script>
   </body>
 </html>
