@@ -1,5 +1,9 @@
+// ────────────────────────────────────────────────────────────────────────────
+// 📄 PATH: src/js/ui/uiRenderer.js
+// ────────────────────────────────────────────────────────────────────────────
+
 import { StateManager } from "../state/appState.js";
-import { MemoryManager } from "../services/memoryManager.js";
+import { MemoryManager } from "../services/memoryManager.js"; 
 import { teamsDB } from "../data/teams.js";
 import { countryAliases } from "../data/countryAliases.js";
 
