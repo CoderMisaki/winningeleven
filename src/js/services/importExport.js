@@ -14,6 +14,22 @@ export const ImportExportService = {
     document.body.removeChild(link);
   },
 
+
+  downloadTemplate(memoryId) {
+    const template = {
+      memoryNumber: parseInt(memoryId, 10),
+      games: [],
+      lastUpdate: new Date().toISOString()
+    };
+    const blob = new Blob([JSON.stringify(template, null, 2)], { type: "application/json" });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = `memo${memoryId}_template.json`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  },
+
   processImportFile(file, targetMemoryId, onComplete) {
     if (!file.name.toLowerCase().endsWith('.json')) {
       alert("Format berkas ditolak! Harap unggah file .json");

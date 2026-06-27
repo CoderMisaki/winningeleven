@@ -139,7 +139,7 @@ body {
 }
 .p1-row label { font-family: var(--font-retro); font-size: 0.65rem; color: var(--text-light); }
 .p1-row input {
-  flex-grow: 1;
+
   padding: 6px;
   background: var(--bg-dark);
   border: 2px solid var(--border-color);

@@ -34,7 +34,10 @@
           <div class="dataset-container">
             <div class="p1-row">
               <label for="p1Input">P1 METADATA (OPTIONAL):</label>
-              <input type="text" id="p1Input" placeholder="Masukkan Negara P1 (e.g. Spain)" autocomplete="off" />
+              <div class="team-input-wrap" style="flex-grow: 1;">
+                <input type="text" id="p1Input" placeholder="Masukkan Negara P1 (e.g. Spain)" autocomplete="off" />
+                <div class="suggestions-box hidden"></div>
+              </div>
             </div>
             
             <div class="match-grid" id="matchGridForm">
