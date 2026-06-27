@@ -56,20 +56,22 @@ document.addEventListener("DOMContentLoaded", () => {
     resultsOutput.innerHTML = "";
 
     if (results.length === 0) {
-      resultsOutput.innerHTML = `<div style="color: var(--accent-red); font-family: 'Press Start 2P'; font-size: 0.7rem;">Tidak ditemukan kecocokan pada seluruh Memory.</div>`;
+      resultsOutput.innerHTML = `<div class="error-msg">Tidak ditemukan kecocokan pada seluruh Memory.</div>`;
       return;
     }
 
     // Bangun keluaran teks log penelitian
-    let outputHTML = `<pre style="font-family: 'Roboto Mono', monospace;">================================<br/>   MATCH FOUND REPORT SYSTEMS<br/>================================<br/><br/>`;
+    let outputHTML = `<pre class="log-output">================================<br/>   MATCH FOUND REPORT SYSTEMS<br/>================================<br/><br/>`;
     
     results.forEach((match, index) => {
       const isPerfect = match.similarity === 100;
       outputHTML += `Memory     : ${match.memoryName}<br/>`;
       outputHTML += `Game       : ${match.gameNumber}<br/>`;
-      outputHTML += `Similarity : <span style="color: ${isPerfect ? 'var(--accent-green)' : 'var(--accent-gold)'}; font-weight: bold;">${match.similarity}%</span><br/>`;
+
       if (isPerfect) {
-        outputHTML += `<span style="color: var(--accent-green); font-family: 'Press Start 2P'; font-size: 0.6rem;">[ PERFECT MATCH ]</span><br/>`;
+        outputHTML += `Similarity : <span class="sim-perfect">${match.similarity}%</span> <span class="sim-badge">[ PERFECT MATCH ]</span><br/>`;
+      } else {
+        outputHTML += `Similarity : <span class="sim-normal">${match.similarity}%</span><br/>`;
       }
       
       if (index < results.length - 1) {
@@ -103,12 +105,25 @@ document.addEventListener("DOMContentLoaded", () => {
   // Handler Event untuk Mengimpor JSON Dataset
   document.getElementById("jsonImportField").onchange = (e) => {
     const file = e.target.files[0];
-    if (!file) return;
-
-    ImportExportService.processImportFile(file, (allocatedMemoryId) => {
-      UIRenderer.renderDatabaseModal();
-      // Reset input element berkas agar dapat mendeteksi file baru kembali
+    if (!file) {
       e.target.value = "";
+      e.target.dataset.targetId = "";
+      return;
+    }
+
+    const targetMemoryId = parseInt(e.target.dataset.targetId, 10);
+    if (!targetMemoryId) {
+      e.target.value = "";
+      e.target.dataset.targetId = "";
+      return;
+    }
+
+    ImportExportService.processImportFile(file, targetMemoryId, (allocatedMemoryId) => {
+      UIRenderer.renderDatabaseModal();
     });
+
+    // Reset input element berkas agar dapat mendeteksi file baru kembali di kesempatan berikutnya
+    e.target.value = "";
+    e.target.dataset.targetId = "";
   };
 });

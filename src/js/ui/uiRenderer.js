@@ -6,6 +6,7 @@ import { StateManager } from "../state/appState.js";
 import { MemoryManager } from "../services/memoryManager.js"; 
 import { teamsDB } from "../data/teams.js";
 import { countryAliases } from "../data/countryAliases.js";
+import { NavigationManager } from "./navigation.js";
 
 export const UIRenderer = {
   renderMatchGrid() {
@@ -156,7 +157,7 @@ export const UIRenderer = {
         card.innerHTML = `
           <div class="db-card-header">
             <span>MEMORY ${i}</span>
-            <span style="color: var(--accent-green)">ONLINE</span>
+            <span class="status-online">ONLINE</span>
           </div>
           <div class="db-info-row">
             <span>Jumlah Dataset Game:</span>
@@ -167,23 +168,23 @@ export const UIRenderer = {
             <span>${formattedDate}</span>
           </div>
           <div class="db-actions">
-            <button class="btn btn-blue btn-open-mem" data-id="${i}">OPEN</button>
-            <button class="btn btn-gold btn-export-mem" data-id="${i}">EXPORT</button>
-            <button class="btn btn-red btn-delete-mem" data-id="${i}">DELETE</button>
+            <button class="btn btn-open-mem" data-id="${i}">OPEN</button>
+            <button class="btn btn-export-mem" data-id="${i}">EXPORT</button>
+            <button class="btn btn-delete-mem" data-id="${i}">DELETE</button>
           </div>
         `;
       } else {
         card.innerHTML = `
           <div class="db-card-header">
             <span>MEMORY ${i}</span>
-            <span style="color: #777">EMPTY</span>
+            <span class="status-empty">EMPTY</span>
           </div>
           <div class="db-info-row">
             <span>Dataset Kosong</span>
           </div>
           <div class="db-actions">
-            <button class="btn btn-green btn-create-mem" data-id="${i}">CREATE</button>
-            <button class="btn btn-gold btn-import-trigger" data-id="${i}">IMPORT JSON</button>
+            <button class="btn btn-create-mem" data-id="${i}">CREATE</button>
+            <button class="btn btn-import-trigger" data-id="${i}">IMPORT JSON</button>
           </div>
         `;
       }
@@ -209,6 +210,10 @@ export const UIRenderer = {
         if (confirm(`Apakah anda yakin menghapus permanen seluruh dataset pada Memory ${id}?`)) {
           MemoryManager.deleteMemory(id);
           this.renderDatabaseModal();
+
+          if (StateManager.activeMemoryId === parseInt(id, 10)) {
+            NavigationManager.switchToHomeView();
+          }
         }
       };
     });
@@ -216,7 +221,9 @@ export const UIRenderer = {
     // Tombol Trigger Import Manual per Slot
     document.querySelectorAll(".btn-import-trigger").forEach(btn => {
       btn.onclick = () => {
-        document.getElementById("jsonImportField").click();
+        const importField = document.getElementById("jsonImportField");
+        importField.dataset.targetId = btn.dataset.id;
+        importField.click();
       };
     });
   }
