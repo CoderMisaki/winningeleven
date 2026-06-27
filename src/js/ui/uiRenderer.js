@@ -7,6 +7,7 @@ import { MemoryManager } from "../services/memoryManager.js";
 import { teamsDB } from "../data/teams.js";
 import { countryAliases } from "../data/countryAliases.js";
 import { NavigationManager } from "./navigation.js";
+import { ImportExportService } from "../services/importExport.js";
 
 export const UIRenderer = {
   renderMatchGrid() {
@@ -52,21 +53,84 @@ export const UIRenderer = {
     this.bindGridEvents();
   },
 
+
   bindGridEvents() {
     const isEditorMode = StateManager.activeMemoryId !== null;
     const memId = StateManager.activeMemoryId;
     const gIdx = StateManager.activeGameIndex;
 
+    const setupAutocomplete = (inputElement, sideKey, mIdx) => {
+      inputElement.oninput = (e) => {
+        const query = e.target.value.toLowerCase();
+        const suggestionContainer = inputElement.nextElementSibling;
+
+        if (sideKey === 'p1') {
+          if (isEditorMode) {
+            MemoryManager.updateGameField(memId, gIdx, "p1", e.target.value);
+          } else {
+            StateManager.homeQuery.p1 = e.target.value;
+          }
+        } else {
+          if (isEditorMode) {
+            MemoryManager.updateMatchField(memId, gIdx, mIdx, sideKey, e.target.value);
+          } else {
+            StateManager.homeQuery.matches[mIdx][sideKey] = e.target.value;
+          }
+        }
+
+        if (!query) { suggestionContainer.classList.add("hidden"); return; }
+
+        // Filter tim berdasarkan database kode, nama, atau alias 3 huruf
+        const matchedTeams = Object.entries(teamsDB).filter(([code, data]) => {
+          const aliases = countryAliases[code] || [];
+          return code.toLowerCase().startsWith(query) ||
+                 data.name.toLowerCase().startsWith(query) ||
+                 aliases.some(a => a.startsWith(query));
+        });
+
+        if (matchedTeams.length > 0) {
+          suggestionContainer.innerHTML = "";
+          suggestionContainer.classList.remove("hidden");
+          matchedTeams.slice(0, 5).forEach(([code, data]) => {
+            const div = document.createElement("div");
+            div.className = "suggestion-line";
+            div.textContent = `${data.flag} ${data.name} (${code})`;
+            div.onmousedown = () => {
+              inputElement.value = code;
+              if (sideKey === 'p1') {
+                if (isEditorMode) {
+                  MemoryManager.updateGameField(memId, gIdx, "p1", code);
+                } else {
+                  StateManager.homeQuery.p1 = code;
+                }
+              } else {
+                if (isEditorMode) {
+                  MemoryManager.updateMatchField(memId, gIdx, mIdx, sideKey, code);
+                } else {
+                  StateManager.homeQuery.matches[mIdx][sideKey] = code;
+                }
+              }
+              suggestionContainer.classList.add("hidden");
+            };
+            suggestionContainer.appendChild(div);
+          });
+        } else {
+          suggestionContainer.classList.add("hidden");
+        }
+      };
+
+      inputElement.onblur = () => {
+        setTimeout(() => {
+          if (inputElement.nextElementSibling) {
+            inputElement.nextElementSibling.classList.add("hidden");
+          }
+        }, 200);
+      };
+    };
+
     // Listener input P1 dengan Auto-save terintegrasi
     const p1Field = document.getElementById("p1Input");
-    p1Field.oninput = (e) => {
-      const value = e.target.value;
-      if (isEditorMode) {
-        MemoryManager.updateGameField(memId, gIdx, "p1", value);
-      } else {
-        StateManager.homeQuery.p1 = value;
-      }
-    };
+    setupAutocomplete(p1Field, 'p1', null);
 
     // Listener untuk input Tim & Skor di Grid pertandingan
     document.querySelectorAll(".match-row-item").forEach((row) => {
@@ -75,59 +139,8 @@ export const UIRenderer = {
       const scoreInput = row.querySelector(".score-field");
       const mIdx = parseInt(homeInput.dataset.idx, 10);
 
-      const setupAutocomplete = (inputElement, sideKey) => {
-        inputElement.oninput = (e) => {
-          const query = e.target.value.toLowerCase();
-          const suggestionContainer = inputElement.nextElementSibling;
-          
-          if (isEditorMode) {
-            MemoryManager.updateMatchField(memId, gIdx, mIdx, sideKey, e.target.value);
-          } else {
-            StateManager.homeQuery.matches[mIdx][sideKey] = e.target.value;
-          }
-
-          if (!query) { suggestionContainer.classList.add("hidden"); return; }
-
-          // Filter tim berdasarkan database kode, nama, atau alias 3 huruf
-          const matchedTeams = Object.entries(teamsDB).filter(([code, data]) => {
-            const aliases = countryAliases[code] || [];
-            return code.toLowerCase().startsWith(query) || 
-                   data.name.toLowerCase().startsWith(query) ||
-                   aliases.some(a => a.startsWith(query));
-          });
-
-          if (matchedTeams.length > 0) {
-            suggestionContainer.innerHTML = "";
-            suggestionContainer.classList.remove("hidden");
-            matchedTeams.slice(0, 5).forEach(([code, data]) => {
-              const div = document.createElement("div");
-              div.className = "suggestion-line";
-              div.textContent = `${data.flag} ${data.name} (${code})`;
-              div.onmousedown = () => {
-                inputElement.value = code;
-                if (isEditorMode) {
-                  MemoryManager.updateMatchField(memId, gIdx, mIdx, sideKey, code);
-                } else {
-                  StateManager.homeQuery.matches[mIdx][sideKey] = code;
-                }
-                suggestionContainer.classList.add("hidden");
-              };
-              suggestionContainer.appendChild(div);
-            });
-          } else {
-            suggestionContainer.classList.add("hidden");
-          }
-        };
-
-        inputElement.onblur = () => {
-          setTimeout(() => {
-            row.querySelectorAll(".suggestions-box").forEach(box => box.classList.add("hidden"));
-          }, 200);
-        };
-      };
-
-      setupAutocomplete(homeInput, "home");
-      setupAutocomplete(awayInput, "away");
+      setupAutocomplete(homeInput, "home", mIdx);
+      setupAutocomplete(awayInput, "away", mIdx);
 
       scoreInput.oninput = (e) => {
         // Hanya izinkan format angka dan pemisah titik dua (:)
@@ -147,7 +160,10 @@ export const UIRenderer = {
     const listWrapper = document.getElementById("databaseModalList");
     listWrapper.innerHTML = "";
 
-    for (let i = 1; i <= 7; i++) {
+    const memoryKeys = Object.keys(StateManager.db.memories).map(Number).filter(n => !isNaN(n));
+    const maxId = Math.max(7, ...memoryKeys);
+
+    for (let i = 1; i <= maxId; i++) {
       const memory = StateManager.db.memories[i];
       const card = document.createElement("div");
       card.className = "db-card";
@@ -185,11 +201,22 @@ export const UIRenderer = {
           <div class="db-actions">
             <button class="btn btn-create-mem" data-id="${i}">CREATE</button>
             <button class="btn btn-import-trigger" data-id="${i}">IMPORT JSON</button>
+            <button class="btn btn-download-template" data-id="${i}">DOWNLOAD TEMPLATE</button>
           </div>
         `;
       }
       listWrapper.appendChild(card);
     }
+
+    // Add memory slot card
+    const addCard = document.createElement("div");
+    addCard.className = "db-card";
+    addCard.style.alignItems = "center";
+    addCard.style.justifyContent = "center";
+    addCard.style.cursor = "pointer";
+    addCard.innerHTML = `<span class="btn-add-memory" style="font-size: 2rem; width: 100%; text-align: center;">+</span>`;
+    listWrapper.appendChild(addCard);
+
     this.bindModalActions();
   },
 
@@ -226,5 +253,26 @@ export const UIRenderer = {
         importField.click();
       };
     });
+
+
+    // Tombol Download Template
+    document.querySelectorAll(".btn-download-template").forEach(btn => {
+      btn.onclick = () => {
+        const id = btn.dataset.id;
+        ImportExportService.downloadTemplate(id);
+      };
+    });
+
+    // Tombol Add Memory
+    const addMemoryBtn = document.querySelector(".btn-add-memory");
+    if (addMemoryBtn) {
+      addMemoryBtn.parentElement.onclick = () => {
+        const memoryKeys = Object.keys(StateManager.db.memories).map(Number).filter(n => !isNaN(n));
+        const maxId = Math.max(7, ...memoryKeys);
+        const newId = maxId + 1;
+        MemoryManager.initializeEmptyMemory(newId);
+        this.renderDatabaseModal();
+      };
+    }
   }
 };
