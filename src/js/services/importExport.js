@@ -14,16 +14,12 @@ export const ImportExportService = {
     document.body.removeChild(link);
   },
 
-  processImportFile(file, onComplete) {
-    const fileName = file.name.toLowerCase();
-    const matchesPattern = fileName.match(/^memo([1-7])\.json$/);
-
-    if (!matchesPattern) {
-      alert("Format berkas ditolak! Nama berkas wajib berformat murni: memo1.json hingga memo7.json");
+  processImportFile(file, targetMemoryId, onComplete) {
+    if (!file.name.toLowerCase().endsWith('.json')) {
+      alert("Format berkas ditolak! Harap unggah file .json");
       return;
     }
 
-    const targetMemoryId = parseInt(matchesPattern[1], 10);
     const reader = new FileReader();
 
     reader.onload = (event) => {
@@ -32,6 +28,10 @@ export const ImportExportService = {
         
         if (!importedData.games || !Array.isArray(importedData.games)) {
           throw new Error("Struktur data Game paket didalam JSON tidak valid.");
+        }
+
+        if (importedData.games.length === 0) {
+            throw new Error("Dataset Game kosong.");
         }
 
         // Konfirmasi Overwrite apabila data pada slot memori tujuan sudah terisi
