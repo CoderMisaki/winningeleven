@@ -1,36 +1,31 @@
-const STORAGE_KEY = "winningeleven.memory.v1";
+const LOCAL_STORAGE_KEY = "we10_memory_research_v2_data";
 
-export function createEmptyGame(index) {
-  return {
-    id: globalThis.crypto?.randomUUID ? globalThis.crypto.randomUUID() : `${Date.now()}-${index}`,
-    label: `Game ${index}`,
-    matches: [],
-    topGoals: [],
-    updatedAt: new Date().toISOString(),
-  };
-}
+export const StorageService = {
+  loadData() {
+    try {
+      const serialized = localStorage.getItem(LOCAL_STORAGE_KEY);
+      if (serialized) {
+        return JSON.parse(serialized);
+      }
+    } catch (e) {
+      console.error("Gagal memuat LocalStorage", e);
+    }
+    return this.generateInitialStructure();
+  },
 
-export function createEmptyMemory(slot = 1) {
-  return {
-    activeSlot: slot,
-    memories: {
-      [slot]: {
-        name: `Memory ${slot}`,
-        activeGameIndex: 0,
-        games: [createEmptyGame(1)],
-      },
-    },
-  };
-}
+  saveData(data) {
+    try {
+      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(data));
+    } catch (e) {
+      console.error("Gagal menyimpan ke LocalStorage", e);
+    }
+  },
 
-export function loadMemoryStore() {
-  try {
-    const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY));
-    if (parsed?.memories) return parsed;
-  } catch (_) {}
-  return createEmptyMemory(1);
-}
-
-export function saveMemoryStore(store) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(store));
-}
+  generateInitialStructure() {
+    const defaultData = { memories: {} };
+    for (let i = 1; i <= 7; i++) {
+      defaultData.memories[i] = null; // null merepresentasikan status 'Empty'
+    }
+    return defaultData;
+  }
+};
