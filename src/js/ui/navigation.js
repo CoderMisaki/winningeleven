@@ -29,6 +29,7 @@ export const NavigationManager = {
   updateEditorTopBar() {
     const memId = StateManager.activeMemoryId;
     const memory = StateManager.db.memories[memId];
+    if (!memory || !memory.games?.length) return;
     const currentGame = memory.games[StateManager.activeGameIndex];
 
     document.getElementById("panelTitle").textContent = `EDITOR: MEMORY ${memId}`;
@@ -46,6 +47,7 @@ export const NavigationManager = {
     if (!memId) return;
 
     const memory = StateManager.db.memories[memId];
+    if (!memory || !memory.games?.length) return;
     let newIndex = StateManager.activeGameIndex + direction;
 
     if (newIndex >= 0) {
@@ -63,11 +65,16 @@ export const NavigationManager = {
   },
 
   jumpToGame(targetNumber) {
+    if (targetNumber > 1000) {
+      alert("Maksimal game yang diizinkan adalah 1000.");
+      return;
+    }
     const memId = StateManager.activeMemoryId;
     if (!memId || targetNumber < 1) return;
 
     const targetIndex = targetNumber - 1;
     const memory = StateManager.db.memories[memId];
+    if (!memory || !memory.games?.length) return;
 
     if (targetIndex >= memory.games.length) {
       const diff = targetIndex - memory.games.length + 1;
@@ -87,6 +94,7 @@ export const NavigationManager = {
 
     MemoryManager.addNewGameToMemory(memId);
     const memory = StateManager.db.memories[memId];
+    if (!memory || !memory.games?.length) return;
     StateManager.activeGameIndex = memory.games.length - 1; // Lompat otomatis ke game baru
     
     this.updateEditorTopBar();

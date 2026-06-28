@@ -3,6 +3,36 @@ import { MemoryManager } from "../services/memoryManager.js";
 import { Security } from "../utils/security.js";
 
 export const UIRenderer = {
+  showConfirm(message, onYes) {
+    const modal = document.getElementById("confirmModal");
+    const msgEl = document.getElementById("confirmMessage");
+    const btnYes = document.getElementById("btnConfirmYes");
+    const btnNo = document.getElementById("btnConfirmNo");
+
+    if (!modal || !msgEl || !btnYes || !btnNo) {
+      // Fallback
+      if (confirm(message)) onYes();
+      return;
+    }
+
+    msgEl.textContent = message;
+    modal.classList.remove("hidden");
+
+    const cleanup = () => {
+      modal.classList.add("hidden");
+      btnYes.onclick = null;
+      btnNo.onclick = null;
+    };
+
+    btnYes.onclick = () => {
+      cleanup();
+      onYes();
+    };
+
+    btnNo.onclick = () => {
+      cleanup();
+    };
+  },
   renderMatchGrid() {
     const isEditor = StateManager.activeMemoryId !== null;
     const dataSource = isEditor
@@ -27,21 +57,28 @@ export const UIRenderer = {
       matchGridForm.innerHTML = "";
       for (let i = 0; i < 7; i++) {
         const matchData = dataSource.matches[i] || { home: "", score: "", away: "" };
-        matchGridForm.innerHTML += `
-          <div class="match-row-item">
-            <div class="match-num">B${i + 1}</div>
-            <div class="team-input-wrap">
-              <input type="text" placeholder="HOME" value="${matchData.home}" data-idx="${i}" class="match-home" />
-            </div>
-            <div class="score-box-center">
-              <input type="text" placeholder="X:X" value="${matchData.score}" data-idx="${i}" class="match-score" />
-            </div>
-            <div class="team-input-wrap">
-              <input type="text" placeholder="AWAY" value="${matchData.away}" data-idx="${i}" class="match-away" />
-            </div>
+        const rowItem = document.createElement("div");
+        rowItem.className = "match-row-item";
+
+        rowItem.innerHTML = `
+          <div class="match-num">B${i + 1}</div>
+          <div class="team-input-wrap">
+            <input type="text" placeholder="HOME" data-idx="${i}" class="match-home" />
+          </div>
+          <div class="score-box-center">
+            <input type="text" placeholder="X:X" data-idx="${i}" class="match-score" />
+          </div>
+          <div class="team-input-wrap">
+            <input type="text" placeholder="AWAY" data-idx="${i}" class="match-away" />
           </div>`;
+
+        rowItem.querySelector('.match-home').value = matchData.home;
+        rowItem.querySelector('.match-score').value = matchData.score;
+        rowItem.querySelector('.match-away').value = matchData.away;
+
+        matchGridForm.appendChild(rowItem);
       }
-      this.attachMatchEvents(isEditor);
+      // attachMatchEvents is removed because we'll use event delegation
     }
 
     const topGoalsForm = document.getElementById("topGoalsForm");
@@ -49,57 +86,29 @@ export const UIRenderer = {
       topGoalsForm.innerHTML = "";
       for (let i = 0; i < 7; i++) {
         const goalData = dataSource.topGoals ? dataSource.topGoals[i] : { country: "", player: "", goals: "" };
-        topGoalsForm.innerHTML += `
-          <div class="top-goal-row-item">
-            <div class="top-goal-num">G${i + 1}</div>
-            <div class="team-input-wrap">
-              <input type="text" placeholder="NEGARA" value="${goalData.country}" data-idx="${i}" class="goal-country" />
-            </div>
-            <div class="team-input-wrap">
-              <input type="text" placeholder="PEMAIN" value="${goalData.player}" data-idx="${i}" class="goal-player" />
-            </div>
-            <div class="team-input-wrap">
-              <input type="number" placeholder="GOL" value="${goalData.goals}" data-idx="${i}" class="goal-amount" />
-            </div>
+        const rowItem = document.createElement("div");
+        rowItem.className = "top-goal-row-item";
+
+        rowItem.innerHTML = `
+          <div class="top-goal-num">G${i + 1}</div>
+          <div class="team-input-wrap">
+            <input type="text" placeholder="NEGARA" data-idx="${i}" class="goal-country" />
+          </div>
+          <div class="team-input-wrap">
+            <input type="text" placeholder="PEMAIN" data-idx="${i}" class="goal-player" />
+          </div>
+          <div class="team-input-wrap">
+            <input type="number" placeholder="GOL" data-idx="${i}" class="goal-amount" />
           </div>`;
+
+        rowItem.querySelector('.goal-country').value = goalData.country;
+        rowItem.querySelector('.goal-player').value = goalData.player;
+        rowItem.querySelector('.goal-amount').value = goalData.goals;
+
+        topGoalsForm.appendChild(rowItem);
       }
-      this.attachGoalEvents(isEditor);
+      // attachGoalEvents is removed because we'll use event delegation
     }
-  },
-
-  attachMatchEvents(isEditor) {
-    document.querySelectorAll(".match-home, .match-score, .match-away").forEach(input => {
-      input.addEventListener("input", (e) => {
-        const idx = e.target.dataset.idx;
-        const val = Security.sanitizeInput(e.target.value);
-        const field = e.target.className.split("-")[1];
-
-        if (isEditor) {
-          MemoryManager.updateMatchField(StateManager.activeMemoryId, StateManager.activeGameIndex, idx, field, val);
-        } else {
-          StateManager.homeQuery.matches[idx][field] = val;
-        }
-      });
-    });
-  },
-
-  attachGoalEvents(isEditor) {
-    document.querySelectorAll(".goal-country, .goal-player, .goal-amount").forEach(input => {
-      input.addEventListener("input", (e) => {
-        const idx = e.target.dataset.idx;
-        const val = Security.sanitizeInput(e.target.value);
-
-        let field = "goals";
-        if(e.target.classList.contains("goal-country")) field = "country";
-        if(e.target.classList.contains("goal-player")) field = "player";
-
-        if (isEditor) {
-          MemoryManager.updateTopGoalField(StateManager.activeMemoryId, StateManager.activeGameIndex, idx, field, val);
-        } else {
-          StateManager.homeQuery.topGoals[idx][field] = val;
-        }
-      });
-    });
   },
 
   renderDatabaseModal() {
@@ -126,8 +135,9 @@ export const UIRenderer = {
             ${isEmpty
               ? `<button class="btn btn-create-mem" data-id="${i}">CREATE</button>`
               : `<button class="btn btn-open-mem" data-id="${i}">OPEN EDITOR</button>
-                 <button class="btn btn-export-mem" data-id="${i}">EXPORT DB</button>`}
-            <button class="btn btn-import-mem" onclick="document.getElementById('jsonImportField').dataset.targetId = ${i}; document.getElementById('jsonImportField').click();">IMPORT JSON</button>
+                 <button class="btn btn-export-mem" data-id="${i}">EXPORT DB</button>
+                 <button class="btn btn-delete-mem" style="background-color: #550000; color: #ff5555; border-color: #ff0000;" data-id="${i}">DELETE</button>`}
+            <button class="btn btn-import-mem" data-id="${i}">IMPORT JSON</button>
             <button class="btn btn-download-template" data-id="${i}">DOWNLOAD JSON</button>
           </div>
         </div>`;

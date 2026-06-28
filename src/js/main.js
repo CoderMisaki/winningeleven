@@ -50,12 +50,10 @@ document.addEventListener("DOMContentLoaded", () => {
         NavigationManager.jumpToGame(val);
       } else {
         // Reset to current if invalid
-        const memId = import("./state/appState.js").then(({StateManager}) => {
-             if(StateManager.activeMemoryId) {
-                const currentNum = StateManager.activeGameIndex + 1;
-                e.target.value = currentNum;
-             }
-        });
+        if(StateManager.activeMemoryId) {
+           const currentNum = StateManager.activeGameIndex + 1;
+           e.target.value = currentNum;
+        }
       }
     });
   }
@@ -75,6 +73,54 @@ document.addEventListener("DOMContentLoaded", () => {
     const resultsPanel = document.getElementById("resultsPanel");
     if (resultsPanel) resultsPanel.classList.add("hidden");
   });
+
+    // --- EVENT DELEGATION FORM INPUT ---
+  const matchGridForm = document.getElementById("matchGridForm");
+  if (matchGridForm) {
+    matchGridForm.addEventListener("input", (e) => {
+      const target = e.target;
+      if (target.tagName !== "INPUT") return;
+      const idx = target.dataset.idx;
+      const val = Security.sanitizeInput(target.value);
+      const isEditor = StateManager.activeMemoryId !== null;
+      let field = "";
+      if (target.classList.contains("match-home")) field = "home";
+      if (target.classList.contains("match-score")) field = "score";
+      if (target.classList.contains("match-away")) field = "away";
+
+      if (field !== "") {
+        if (isEditor) {
+          import("./services/memoryManager.js").then(({ MemoryManager }) => {
+            MemoryManager.updateMatchField(StateManager.activeMemoryId, StateManager.activeGameIndex, idx, field, val);
+          });
+        } else {
+          StateManager.homeQuery.matches[idx][field] = val;
+        }
+      }
+    });
+  }
+
+  const topGoalsForm = document.getElementById("topGoalsForm");
+  if (topGoalsForm) {
+    topGoalsForm.addEventListener("input", (e) => {
+      const target = e.target;
+      if (target.tagName !== "INPUT") return;
+      const idx = target.dataset.idx;
+      const val = Security.sanitizeInput(target.value);
+      const isEditor = StateManager.activeMemoryId !== null;
+      let field = "goals";
+      if (target.classList.contains("goal-country")) field = "country";
+      if (target.classList.contains("goal-player")) field = "player";
+
+      if (isEditor) {
+        import("./services/memoryManager.js").then(({ MemoryManager }) => {
+          MemoryManager.updateTopGoalField(StateManager.activeMemoryId, StateManager.activeGameIndex, idx, field, val);
+        });
+      } else {
+        StateManager.homeQuery.topGoals[idx][field] = val;
+      }
+    });
+  }
 
   // Eksekusi Pencocokan Dataset (Matching Engine)
   bindClick("btnRunMatch", () => {
@@ -164,13 +210,13 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!id) return;
 
     if (target.classList.contains("btn-create-mem")) {
-      if (confirm("Lanjutkan inisialisasi Memory ini? (Yes=OK, No=Cancel)")) {
+      UIRenderer.showConfirm("Lanjutkan inisialisasi Memory ini?", () => {
         import("./services/memoryManager.js").then(({ MemoryManager }) => {
           MemoryManager.initializeEmptyMemory(id);
           NavigationManager.switchToEditorView(id);
           NavigationManager.closeDatabaseModal();
         });
-      }
+      });
     } else if (target.classList.contains("btn-open-mem")) {
       NavigationManager.switchToEditorView(id);
       NavigationManager.closeDatabaseModal();
@@ -178,20 +224,30 @@ document.addEventListener("DOMContentLoaded", () => {
     else if (target.classList.contains("btn-export-mem")) {
       ImportExportService.exportMemoryToJSON(id);
     }
+    else if (target.classList.contains("btn-import-mem")) {
+      const importField = document.getElementById("jsonImportField");
+      if (importField) {
+        importField.dataset.targetId = id;
+        importField.click();
+      }
+    }
+    else if (target.classList.contains("btn-delete-mem")) {
+      UIRenderer.showConfirm("Yakin ingin menghapus seluruh data Memory ini?", () => {
+        import("./services/memoryManager.js").then(({ MemoryManager }) => {
+          MemoryManager.deleteMemory(id);
+          import("./ui/uiRenderer.js").then(({UIRenderer}) => UIRenderer.renderDatabaseModal());
+        });
+      });
+    }
     else if (target.classList.contains("btn-download-template")) {
       ImportExportService.downloadTemplate(id);
     }
     else if (target.classList.contains("btn-add-memory-slot")) {
-      import("./state/appState.js").then(({StateManager}) => {
-         StateManager.db.maxSlot = (StateManager.db.maxSlot || 7) + 1;
-         StateManager.save();
-         import("./ui/uiRenderer.js").then(({UIRenderer}) => {
-             UIRenderer.renderDatabaseModal();
-             // scroll to bottom
-             const list = document.getElementById("databaseModalList");
-             if(list) list.scrollTop = list.scrollHeight;
-         });
-      });
+      StateManager.db.maxSlot = (StateManager.db.maxSlot || 7) + 1;
+      StateManager.save();
+      UIRenderer.renderDatabaseModal();
+      const list = document.getElementById("databaseModalList");
+      if(list) list.scrollTop = list.scrollHeight;
     }
     };
   }
