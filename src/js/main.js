@@ -134,7 +134,7 @@ document.addEventListener("DOMContentLoaded", () => {
     
     // Tarik scroll layar agar hasil langsung terlihat di perangkat mobile
     resultsPanel.scrollIntoView({ behavior: "smooth" });
-  };
+  });
 
   // Delegasi Event Klik Dinamis di dalam Modal Database
   const dbModalList = document.getElementById("databaseModalList");

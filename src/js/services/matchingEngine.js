@@ -10,7 +10,7 @@ export const MatchingEngine = {
 
     for (const memoryId of memoryKeys) {
       const currentMemory = StateManager.db.memories[memoryId];
-      if (!currentMemory || !currentMemory.games) continue;
+      if (!currentMemory || !currentMemory.games) return;
 
       currentMemory.games.forEach((game) => {
         // Pre-filter berdasarkan P1 dan Home 1 (index sederhana)
@@ -23,12 +23,12 @@ export const MatchingEngine = {
 
         // Jika query memiliki P1 tapi target tidak punya atau berbeda total
         if (queryP1 && targetP1 && queryP1 !== targetP1) {
-           continue;
+           return;
         }
 
         // Jika query memiliki Home1 tapi target tidak punya atau berbeda total
         if (queryHome1 && targetHome1 && queryHome1 !== targetHome1) {
-           continue;
+           return;
         }
 
         const simResult = SimilarityCalculator.calculate(query, game);
