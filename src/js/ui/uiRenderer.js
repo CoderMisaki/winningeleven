@@ -13,24 +13,42 @@ import { Security } from "../utils/security.js";
 export const UIRenderer = {
   renderMatchGrid() {
     const gridContainer = document.getElementById("matchGridForm");
+    if (!gridContainer) return;
+
     gridContainer.textContent = "";
 
     const isEditorMode = StateManager.activeMemoryId !== null;
-    let activeDataset;
+    let activeDataset = null;
 
     if (isEditorMode) {
       const currentMemory = StateManager.db.memories[StateManager.activeMemoryId];
-      activeDataset = currentMemory.games[StateManager.activeGameIndex];
+      if (currentMemory && currentMemory.games) {
+        activeDataset = currentMemory.games[StateManager.activeGameIndex];
+      }
     } else {
       activeDataset = StateManager.homeQuery;
     }
 
+    if (!activeDataset) {
+      console.error("Dataset aktif tidak ditemukan");
+      return;
+    }
+
+    const matches = Array.isArray(activeDataset.matches)
+      ? activeDataset.matches
+      : Array.from({ length: 7 }, () => ({ home: "", score: "", away: "" }));
+
+    const topGoals = Array.isArray(activeDataset.topGoals)
+      ? activeDataset.topGoals
+      : Array.from({ length: 7 }, () => ({ country: "", player: "", goals: "" }));
+
     // Set nilai elemen input P1 kepala
-    document.getElementById("p1Input").value = activeDataset.p1 || "";
+    const p1Input = document.getElementById("p1Input");
+    if (p1Input) p1Input.value = activeDataset.p1 || "";
 
     // Bangun 7 baris pertandingan simetris retro khas WE10
     for (let i = 0; i < 7; i++) {
-      const matchData = activeDataset.matches[i] || { home: "", score: "", away: "" };
+      const matchData = matches[i] || { home: "", score: "", away: "" };
       
       const rowItem = document.createElement("div");
       rowItem.className = "match-row-item";
@@ -89,7 +107,7 @@ export const UIRenderer = {
     if (topGoalsContainer) {
       topGoalsContainer.textContent = "";
       for (let i = 0; i < 7; i++) {
-        const goalData = activeDataset.topGoals ? activeDataset.topGoals[i] || { country: "", player: "", goals: "" } : { country: "", player: "", goals: "" };
+        const goalData = topGoals[i] || { country: "", player: "", goals: "" };
 
         const goalRowItem = document.createElement("div");
         goalRowItem.className = "top-goal-row-item";
@@ -221,7 +239,9 @@ export const UIRenderer = {
 
     // Listener input P1 dengan Auto-save terintegrasi
     const p1Field = document.getElementById("p1Input");
-    setupAutocomplete(p1Field, 'p1', null);
+    if (p1Field) {
+      setupAutocomplete(p1Field, 'p1', null);
+    }
 
     // Listener untuk input Tim & Skor di Grid pertandingan
     document.querySelectorAll(".match-row-item").forEach((row) => {

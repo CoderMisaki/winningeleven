@@ -14,45 +14,52 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // --- REGISTRASI EVENT LISTENER UTAMA ---
 
+  // Fungsi Helper untuk Bind Event Aman
+  const bindClick = (id, handler) => {
+    const el = document.getElementById(id);
+    if (el) el.onclick = handler;
+  };
+
   // Navigasi Bar Menu Atas
-  document.getElementById("btnHomeView").onclick = () => {
+  bindClick("btnHomeView", () => {
     NavigationManager.switchToHomeView();
-  };
+  });
 
-  document.getElementById("btnOpenDatabase").onclick = () => {
+  bindClick("btnOpenDatabase", () => {
     NavigationManager.openDatabaseModal();
-  };
+  });
 
-  document.getElementById("btnCloseModal").onclick = () => {
+  bindClick("btnCloseModal", () => {
     NavigationManager.closeDatabaseModal();
-  };
+  });
 
   // Navigasi Editor Paket Game (Previous / Next)
-  document.getElementById("btnPrevGame").onclick = () => {
+  bindClick("btnPrevGame", () => {
     NavigationManager.navigateGames(-1);
-  };
+  });
 
-  document.getElementById("btnNextGame").onclick = () => {
+  bindClick("btnNextGame", () => {
     NavigationManager.navigateGames(1);
-  };
+  });
 
-  document.getElementById("btnAddGame").onclick = () => {
+  bindClick("btnAddGame", () => {
     NavigationManager.triggerAddGame();
-  };
+  });
 
-  document.getElementById("btnExitEditor").onclick = () => {
+  bindClick("btnExitEditor", () => {
     NavigationManager.switchToHomeView();
-  };
+  });
 
   // Reset Form Pencarian Utama
-  document.getElementById("btnClearForm").onclick = () => {
+  bindClick("btnClearForm", () => {
     StateManager.clearHomeQuery();
     UIRenderer.renderMatchGrid();
-    document.getElementById("resultsPanel").classList.add("hidden");
-  };
+    const resultsPanel = document.getElementById("resultsPanel");
+    if (resultsPanel) resultsPanel.classList.add("hidden");
+  });
 
   // Eksekusi Pencocokan Dataset (Matching Engine)
-  document.getElementById("btnRunMatch").onclick = () => {
+  bindClick("btnRunMatch", () => {
     const results = MatchingEngine.executeSearch(StateManager.homeQuery);
     const resultsPanel = document.getElementById("resultsPanel");
     const resultsOutput = document.getElementById("resultsOutput");
@@ -130,7 +137,9 @@ document.addEventListener("DOMContentLoaded", () => {
   };
 
   // Delegasi Event Klik Dinamis di dalam Modal Database
-  document.getElementById("databaseModalList").onclick = (e) => {
+  const dbModalList = document.getElementById("databaseModalList");
+  if (dbModalList) {
+    dbModalList.onclick = (e) => {
     const target = e.target;
     const id = target.dataset.id;
 
@@ -143,10 +152,13 @@ document.addEventListener("DOMContentLoaded", () => {
     else if (target.classList.contains("btn-export-mem")) {
       ImportExportService.exportMemoryToJSON(id);
     }
-  };
+    };
+  }
 
   // Handler Event untuk Mengimpor JSON Dataset
-  document.getElementById("jsonImportField").onchange = (e) => {
+  const jsonImportField = document.getElementById("jsonImportField");
+  if (jsonImportField) {
+    jsonImportField.onchange = (e) => {
     const file = e.target.files[0];
     if (!file) {
       e.target.value = "";
@@ -168,5 +180,6 @@ document.addEventListener("DOMContentLoaded", () => {
     // Reset input element berkas agar dapat mendeteksi file baru kembali di kesempatan berikutnya
     e.target.value = "";
     e.target.dataset.targetId = "";
-  };
+    };
+  }
 });
