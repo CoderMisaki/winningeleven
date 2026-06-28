@@ -1,6 +1,7 @@
 import { StateManager } from "../state/appState.js";
 import { MemoryManager } from "../services/memoryManager.js";
 import { Security } from "../utils/security.js";
+import { setupCountryAutocomplete } from "./autocomplete.js";
 
 export const UIRenderer = {
   showConfirm(message, onYes) {
@@ -42,6 +43,7 @@ export const UIRenderer = {
     const p1Input = document.getElementById("p1Input");
     if (p1Input) {
       p1Input.value = dataSource.p1 || "";
+      setupCountryAutocomplete(p1Input);
       p1Input.oninput = (e) => {
         const val = Security.sanitizeInput(e.target.value);
         if (isEditor) {
@@ -64,18 +66,22 @@ export const UIRenderer = {
           <div class="match-num">B${i + 1}</div>
           <div class="team-input-wrap">
             <input type="text" placeholder="HOME" data-idx="${i}" class="match-home" />
+            <div class="suggestions-box hidden"></div>
           </div>
           <div class="score-box-center">
             <input type="text" placeholder="X:X" data-idx="${i}" class="match-score" />
           </div>
           <div class="team-input-wrap">
             <input type="text" placeholder="AWAY" data-idx="${i}" class="match-away" />
+            <div class="suggestions-box hidden"></div>
           </div>`;
 
         rowItem.querySelector('.match-home').value = matchData.home;
         rowItem.querySelector('.match-score').value = matchData.score;
         rowItem.querySelector('.match-away').value = matchData.away;
 
+        setupCountryAutocomplete(rowItem.querySelector(".match-home"));
+        setupCountryAutocomplete(rowItem.querySelector(".match-away"));
         matchGridForm.appendChild(rowItem);
       }
       // attachMatchEvents is removed because we'll use event delegation
@@ -93,6 +99,7 @@ export const UIRenderer = {
           <div class="top-goal-num">G${i + 1}</div>
           <div class="team-input-wrap">
             <input type="text" placeholder="NEGARA" data-idx="${i}" class="goal-country" />
+            <div class="suggestions-box hidden"></div>
           </div>
           <div class="team-input-wrap">
             <input type="text" placeholder="PEMAIN" data-idx="${i}" class="goal-player" />
@@ -105,6 +112,7 @@ export const UIRenderer = {
         rowItem.querySelector('.goal-player').value = goalData.player;
         rowItem.querySelector('.goal-amount').value = goalData.goals;
 
+        setupCountryAutocomplete(rowItem.querySelector(".goal-country"));
         topGoalsForm.appendChild(rowItem);
       }
       // attachGoalEvents is removed because we'll use event delegation
