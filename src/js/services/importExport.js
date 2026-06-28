@@ -32,7 +32,7 @@ export const ImportExportService = {
     const targetMemory = StateManager.db.memories[memoryId];
     if (!targetMemory) return alert("Tidak dapat mengekspor memori kosong!");
 
-    const exportData = { ...targetMemory, version: 2 };
+    const exportData = { ...targetMemory, version: 3 };
     const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: "application/json" });
     const link = document.createElement("a");
     link.href = URL.createObjectURL(blob);
@@ -44,7 +44,7 @@ export const ImportExportService = {
 
   downloadTemplate(memoryId) {
     const template = {
-      version: 2,
+      version: 3,
       memoryNumber: parseInt(memoryId, 10),
       games: [],
       lastUpdate: new Date().toISOString()
@@ -96,7 +96,7 @@ export const ImportExportService = {
             throw new Error(`Game ${game.gameNumber} harus memiliki tepat 7 matches.`);
           }
           game.matches.forEach(m => {
-            if (m.score && !/^\d+:\d+$/.test(m.score) && m.score.trim() !== "") {
+            if (m.score && !/^\d{1,2}:\d{1,2}$/.test(m.score) && m.score.trim() !== "") {
               throw new Error(`Format score tidak valid pada Game ${game.gameNumber}: ${m.score}. Harus berformat x:y`);
             }
             if (m.home && m.home.trim() !== "") {
@@ -123,6 +123,29 @@ export const ImportExportService = {
           });
         });
 
+        // Duplicate Game Detection
+        const importedGameHashes = new Set();
+        importedData.games.forEach(importedGame => {
+          const normalizeData = (g) => canonicalStringify({ p1: g.p1, matches: g.matches, topGoals: g.topGoals });
+          const importedHash = normalizeData(importedGame);
+
+          if (importedGameHashes.has(importedHash)) {
+            throw new Error(`Dataset Game duplikat terdeteksi di dalam file yang diimpor.`);
+          }
+          importedGameHashes.add(importedHash);
+
+          for (const [memId, memory] of Object.entries(StateManager.db.memories)) {
+            if (String(memId) === String(targetMemoryId)) continue; // Skip memory slot yang akan di-overwrite
+            if (memory && memory.games) {
+              for (const existingGame of memory.games) {
+                if (normalizeData(existingGame) === importedHash) {
+                  throw new Error(`Game identik sudah ada pada Memory ${memId} Game ${existingGame.gameNumber}`);
+                }
+              }
+            }
+          }
+        });
+
         // Duplicate Memory Detection
         const identicalMemId = isMemoryIdentical(importedData.games);
         if (identicalMemId && identicalMemId !== String(targetMemoryId)) {
@@ -139,7 +162,7 @@ export const ImportExportService = {
         // Terapkan paksa ID nomor memori mengikuti aturan nama file
         importedData.memoryNumber = targetMemoryId;
         // Pastikan version diupdate
-        importedData.version = importedData.version || 2;
+        importedData.version = 3;
 
         StateManager.db.memories[targetMemoryId] = importedData;
         StateManager.save();

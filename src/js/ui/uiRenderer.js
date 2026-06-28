@@ -244,6 +244,19 @@ export const UIRenderer = {
           StateManager.homeQuery.matches[mIdx].score = val;
         }
       };
+
+      scoreInput.onblur = (e) => {
+        let val = e.target.value.trim();
+        if (val !== "" && !/^\d{1,2}:\d{1,2}$/.test(val)) {
+          alert("Format score tidak valid! Harus berformat x:y (maks 99:99)");
+          e.target.value = "";
+          if (isEditorMode) {
+            MemoryManager.updateMatchField(memId, gIdx, mIdx, "score", "");
+          } else {
+            StateManager.homeQuery.matches[mIdx].score = "";
+          }
+        }
+      };
     });
 
     document.querySelectorAll(".top-goal-row-item").forEach((row) => {
