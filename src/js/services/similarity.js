@@ -18,6 +18,15 @@ function fuzzyMatchString(str1, str2) {
   return s1 === s2 || s1.startsWith(s2) || s2.startsWith(s1);
 }
 
+function reverseScore(score) {
+  if (!score || typeof score !== 'string') return score;
+  const parts = score.split(':');
+  if (parts.length === 2) {
+    return `${parts[1].trim()}:${parts[0].trim()}`;
+  }
+  return score;
+}
+
 function calculateScorePoints(qScore, tScore) {
   if (!qScore || !tScore) return 0;
   if (qScore === tScore) return 6; // exact match
@@ -65,21 +74,43 @@ export const SimilarityCalculator = {
       const tAway = (tMatch.away || "").trim().toUpperCase();
       const tScore = (tMatch.score || "").trim();
 
-      let localScore = 0;
-      let homeMatch = false;
-      let awayMatch = false;
-      let scoreMatchPts = 0;
+      let localScoreNormal = 0;
+      let homeMatchNormal = false;
+      let awayMatchNormal = false;
+      let scoreMatchPtsNormal = 0;
 
       if (qHome && normalizeCountry(qHome) === normalizeCountry(tHome)) {
-        localScore += 4;
-        homeMatch = true;
+        localScoreNormal += 4;
+        homeMatchNormal = true;
       }
       if (qAway && normalizeCountry(qAway) === normalizeCountry(tAway)) {
-        localScore += 4;
-        awayMatch = true;
+        localScoreNormal += 4;
+        awayMatchNormal = true;
       }
-      scoreMatchPts = calculateScorePoints(qScore, tScore);
-      localScore += scoreMatchPts;
+      scoreMatchPtsNormal = calculateScorePoints(qScore, tScore);
+      localScoreNormal += scoreMatchPtsNormal;
+
+      let localScoreReverse = 0;
+      let homeMatchReverse = false;
+      let awayMatchReverse = false;
+      let scoreMatchPtsReverse = 0;
+
+      if (qHome && normalizeCountry(qHome) === normalizeCountry(tAway)) {
+        localScoreReverse += 4;
+        homeMatchReverse = true;
+      }
+      if (qAway && normalizeCountry(qAway) === normalizeCountry(tHome)) {
+        localScoreReverse += 4;
+        awayMatchReverse = true;
+      }
+      scoreMatchPtsReverse = calculateScorePoints(qScore, reverseScore(tScore));
+      localScoreReverse += scoreMatchPtsReverse;
+
+      const isReverse = localScoreReverse > localScoreNormal;
+      const localScore = isReverse ? localScoreReverse : localScoreNormal;
+      const homeMatch = isReverse ? homeMatchReverse : homeMatchNormal;
+      const awayMatch = isReverse ? awayMatchReverse : awayMatchNormal;
+      const scoreMatchPts = isReverse ? scoreMatchPtsReverse : scoreMatchPtsNormal;
 
       const weightedScore = (localScore / 14) * MATCH_WEIGHTS[i];
       matchScore += weightedScore;
@@ -87,14 +118,23 @@ export const SimilarityCalculator = {
       // Explanations for match
       if (qHome || qAway || qScore) {
          if (localScore === 14) {
-             explanations.push(`✔ Match ${i+1} sama persis (+${weightedScore.toFixed(1)} pts)`);
+             if (isReverse) {
+                 explanations.push(`✔ Match ${i+1} Perfect Reverse Match (+${weightedScore.toFixed(1)} pts)`);
+             } else {
+                 explanations.push(`✔ Match ${i+1} sama persis (+${weightedScore.toFixed(1)} pts)`);
+             }
          } else if (localScore > 0) {
              let details = [];
-             if (homeMatch) details.push('Home sama');
-             if (awayMatch) details.push('Away sama');
-             if (scoreMatchPts === 6) details.push('Score sama');
-             else if (scoreMatchPts > 0) details.push('Score mirip');
-             explanations.push(`⚠️ Match ${i+1} parsial (${details.join(', ')}) (+${weightedScore.toFixed(1)} pts)`);
+             if (homeMatch) details.push(isReverse ? 'Home -> Away sama' : 'Home sama');
+             if (awayMatch) details.push(isReverse ? 'Away -> Home sama' : 'Away sama');
+             if (scoreMatchPts === 6) details.push(isReverse ? 'Score Reverse sama' : 'Score sama');
+             else if (scoreMatchPts > 0) details.push(isReverse ? 'Score Reverse mirip' : 'Score mirip');
+
+             if (isReverse) {
+                 explanations.push(`⚠️ Match ${i+1} parsial Reverse Match (${details.join(', ')}) (+${weightedScore.toFixed(1)} pts)`);
+             } else {
+                 explanations.push(`⚠️ Match ${i+1} parsial (${details.join(', ')}) (+${weightedScore.toFixed(1)} pts)`);
+             }
          } else {
              explanations.push(`❌ Match ${i+1} sama sekali beda`);
          }

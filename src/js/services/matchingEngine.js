@@ -20,6 +20,7 @@ export const MatchingEngine = {
 
         const targetP1 = normalizeCountry(game.p1 || "");
         const targetHome1 = normalizeCountry(game.matches && game.matches[0] ? game.matches[0].home || "" : "");
+        const targetAway1 = normalizeCountry(game.matches && game.matches[0] ? game.matches[0].away || "" : "");
 
         // Jika query memiliki P1 tapi target tidak punya atau berbeda total
         if (queryP1 && targetP1 && queryP1 !== targetP1) {
@@ -27,7 +28,8 @@ export const MatchingEngine = {
         }
 
         // Jika query memiliki Home1 tapi target tidak punya atau berbeda total
-        if (queryHome1 && targetHome1 && queryHome1 !== targetHome1) {
+        // We now check if it matches either home1 or away1 to support reverse match
+        if (queryHome1 && targetHome1 && queryHome1 !== targetHome1 && queryHome1 !== targetAway1) {
            return;
         }
 
