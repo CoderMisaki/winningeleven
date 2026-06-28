@@ -1,4 +1,5 @@
 import { StateManager } from "../state/appState.js";
+import { Security } from "../utils/security.js";
 
 export const ImportExportService = {
   exportMemoryToJSON(memoryId) {
@@ -40,7 +41,8 @@ export const ImportExportService = {
 
     reader.onload = (event) => {
       try {
-        const importedData = JSON.parse(event.target.result);
+        let importedData = JSON.parse(event.target.result);
+        importedData = Security.sanitizeObject(importedData);
         
         if (!importedData.games || !Array.isArray(importedData.games)) {
           throw new Error("Struktur data Game paket didalam JSON tidak valid.");
