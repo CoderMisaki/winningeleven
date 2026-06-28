@@ -23,7 +23,7 @@ export const teamsDB = {
   SWE: { name: "Sweden", flag: "🇸🇪" },
   GRE: { name: "Greece", flag: "🇬🇷" },
   RUS: { name: "Russia", flag: "🇷🇺" },
-  TUR: { name: "Turkey", flag: "🇹🇹" },
+  TUR: { name: "Turkey", flag: "🇹🇷" },
   SCO: { name: "Scotland", flag: "🏴󠁧󠁢󠁳󠁣󠁴󠁿" },
   WAL: { name: "Wales", flag: "🏴󠁧󠁢󠁷󠁬󠁳󠁿" },
   BUL: { name: "Bulgaria", flag: "🇧🇬" },
