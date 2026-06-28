@@ -1,11 +1,24 @@
 import { StateManager } from "../state/appState.js";
 import { Security } from "../utils/security.js";
+import { teamsDB } from "../data/teams.js";
+import { normalizeCountry } from "./similarity.js";
+
+function canonicalStringify(obj) {
+  if (Array.isArray(obj)) {
+    return '[' + obj.map(canonicalStringify).join(',') + ']';
+  }
+  if (obj !== null && typeof obj === 'object') {
+    const sortedKeys = Object.keys(obj).sort();
+    return '{' + sortedKeys.map(k => '"' + k + '":' + canonicalStringify(obj[k])).join(',') + '}';
+  }
+  return JSON.stringify(obj);
+}
 
 function isMemoryIdentical(importedGames) {
-  const importedHash = JSON.stringify(importedGames);
+  const importedHash = canonicalStringify(importedGames);
   for (const [memId, memory] of Object.entries(StateManager.db.memories)) {
     if (memory && memory.games) {
-      const existingHash = JSON.stringify(memory.games);
+      const existingHash = canonicalStringify(memory.games);
       if (importedHash === existingHash) {
         return memId;
       }
@@ -86,6 +99,14 @@ export const ImportExportService = {
             if (m.score && !/^\d+:\d+$/.test(m.score) && m.score.trim() !== "") {
               throw new Error(`Format score tidak valid pada Game ${game.gameNumber}: ${m.score}. Harus berformat x:y`);
             }
+            if (m.home && m.home.trim() !== "") {
+              const normHome = normalizeCountry(m.home);
+              if (!teamsDB[normHome]) throw new Error(`Negara Home tidak dikenal pada Game ${game.gameNumber}: ${m.home}`);
+            }
+            if (m.away && m.away.trim() !== "") {
+              const normAway = normalizeCountry(m.away);
+              if (!teamsDB[normAway]) throw new Error(`Negara Away tidak dikenal pada Game ${game.gameNumber}: ${m.away}`);
+            }
           });
 
           if (!game.topGoals || game.topGoals.length !== 7) {
@@ -94,6 +115,10 @@ export const ImportExportService = {
           game.topGoals.forEach(g => {
             if (g.goals && isNaN(parseInt(g.goals, 10))) {
               throw new Error(`Goals harus berupa angka pada Game ${game.gameNumber}`);
+            }
+            if (g.country && g.country.trim() !== "") {
+              const normCountry = normalizeCountry(g.country);
+              if (!teamsDB[normCountry]) throw new Error(`Negara pencetak gol tidak dikenal pada Game ${game.gameNumber}: ${g.country}`);
             }
           });
         });

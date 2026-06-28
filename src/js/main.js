@@ -101,6 +101,15 @@ document.addEventListener("DOMContentLoaded", () => {
       }
       matchBlock.appendChild(simText);
 
+      if (match.explanations && match.explanations.length > 0) {
+        const explText = document.createElement("div");
+        explText.style.marginTop = "5px";
+        explText.style.color = "#aaa";
+        explText.style.fontSize = "0.75rem";
+        explText.innerHTML = match.explanations.map(e => `<div>${e}</div>`).join("");
+        matchBlock.appendChild(explText);
+      }
+
       if (index < filteredResults.length - 1) {
         const divider = document.createElement("div");
         divider.innerHTML = `--------------------------------<br/>`;
