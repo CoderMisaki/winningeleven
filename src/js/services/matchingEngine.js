@@ -1,5 +1,5 @@
 import { StateManager } from "../state/appState.js";
-import { SimilarityCalculator } from "./similarity.js";
+import { SimilarityCalculator, normalizeCountry } from "./similarity.js";
 
 export const MatchingEngine = {
   executeSearch(query) {
@@ -15,25 +15,32 @@ export const MatchingEngine = {
       currentMemory.games.forEach((game) => {
         // Pre-filter berdasarkan P1 dan Home 1 (index sederhana)
         // Jika dataset sudah puluhan ribu, ini akan sangat mempercepat
-        const queryP1 = (query.p1 || "").trim().toLowerCase();
-        const queryHome1 = (query.matches && query.matches[0] ? query.matches[0].home || "" : "").trim().toLowerCase();
+        const queryP1 = normalizeCountry(query.p1 || "");
+        const queryHome1 = normalizeCountry(query.matches && query.matches[0] ? query.matches[0].home || "" : "");
 
-        const targetP1 = (game.p1 || "").trim().toLowerCase();
-        const targetHome1 = (game.matches && game.matches[0] ? game.matches[0].home || "" : "").trim().toLowerCase();
+        const targetP1 = normalizeCountry(game.p1 || "");
+        const targetHome1 = normalizeCountry(game.matches && game.matches[0] ? game.matches[0].home || "" : "");
 
-        // Jika query memiliki P1 tapi target tidak punya atau berbeda total (hanya pre-filter kasar)
-        if (queryP1 && targetP1 && queryP1 !== targetP1 && !queryP1.includes(targetP1) && !targetP1.includes(queryP1)) {
-          // Boleh diskip jika ingin strict, tapi karena Fuzzy kita biarkan lanjut
+        // Jika query memiliki P1 tapi target tidak punya atau berbeda total
+        if (queryP1 && targetP1 && queryP1 !== targetP1) {
+           continue;
         }
 
-        const simPercentage = SimilarityCalculator.calculate(query, game);
+        // Jika query memiliki Home1 tapi target tidak punya atau berbeda total
+        if (queryHome1 && targetHome1 && queryHome1 !== targetHome1) {
+           continue;
+        }
+
+        const simResult = SimilarityCalculator.calculate(query, game);
+        // simResult is now an object { percentage, explanations }
         
-        if (simPercentage > 0) {
+        if (simResult.percentage > 0) {
           results.push({
             memoryId: parseInt(memoryId, 10),
             memoryName: currentMemory.name || `Memory ${memoryId}`,
             gameNumber: game.gameNumber,
-            similarity: simPercentage
+            similarity: simResult.percentage,
+            explanations: simResult.explanations
           });
         }
       });
