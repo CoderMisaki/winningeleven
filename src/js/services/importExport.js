@@ -40,6 +40,7 @@ export const ImportExportService = {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    setTimeout(() => URL.revokeObjectURL(link.href), 100);
   },
 
   downloadTemplate(memoryId) {
@@ -64,6 +65,7 @@ export const ImportExportService = {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    setTimeout(() => URL.revokeObjectURL(link.href), 100);
   },
 
   processImportFile(file, targetMemoryId, onComplete) {
@@ -82,7 +84,7 @@ export const ImportExportService = {
 
       try {
         let importedData = JSON.parse(event.target.result);
-        importedData = Security.sanitizeObject(importedData);
+        // importedData = Security.sanitizeObject(importedData);
         
         if (!importedData.games || !Array.isArray(importedData.games)) {
           throw new Error("Struktur data Game paket didalam JSON tidak valid.");
@@ -104,7 +106,7 @@ export const ImportExportService = {
             throw new Error(`Game ${game.gameNumber} harus memiliki tepat 7 matches.`);
           }
           game.matches.forEach(m => {
-            if (m.score && !/^\d{1,2}:\d{1,2}$/.test(m.score) && m.score.trim() !== "") {
+            if (m.score && !/^\d{1,2}\s*:\s*\d{1,2}$/.test(m.score) && m.score.trim() !== "") {
               throw new Error(`Format score tidak valid pada Game ${game.gameNumber}: ${m.score}. Harus berformat x:y`);
             }
             if (m.home && m.home.trim() !== "") {
@@ -165,6 +167,18 @@ export const ImportExportService = {
         if (StateManager.db.memories[targetMemoryId]) {
           const overwriteConfirmed = confirm(`Peringatan: Slot Memory ${targetMemoryId} sudah berisi dataset. Timpa (Overwrite) seluruh data?`);
           if (!overwriteConfirmed) return;
+          if (overwriteConfirmed) {
+            alert("Sistem akan mendownload backup otomatis (backup_memo" + targetMemoryId + ".json) sebelum menimpa data.");
+            const backupData = { ...StateManager.db.memories[targetMemoryId], version: 3 };
+            const backupBlob = new Blob([JSON.stringify(backupData, null, 2)], { type: "application/json" });
+            const backupLink = document.createElement("a");
+            backupLink.href = URL.createObjectURL(backupBlob);
+            backupLink.download = `backup_memo${targetMemoryId}.json`;
+            document.body.appendChild(backupLink);
+            backupLink.click();
+            document.body.removeChild(backupLink);
+            setTimeout(() => URL.revokeObjectURL(backupLink.href), 100);
+          }
         }
 
         // Terapkan paksa ID nomor memori mengikuti aturan nama file

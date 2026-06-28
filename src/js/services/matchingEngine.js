@@ -10,7 +10,7 @@ export const MatchingEngine = {
 
     for (const memoryId of memoryKeys) {
       const currentMemory = StateManager.db.memories[memoryId];
-      if (!currentMemory || !currentMemory.games) return;
+      if (!currentMemory || !currentMemory.games) continue;
 
       currentMemory.games.forEach((game) => {
         // Pre-filter berdasarkan P1 dan Home 1 (index sederhana)

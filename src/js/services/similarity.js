@@ -23,8 +23,8 @@ function calculateScorePoints(qScore, tScore) {
   if (qScore === tScore) return 6; // exact match
 
   // Partial match: e.g. 3:2 vs 3:1 (1 goal diff)
-  const qParts = qScore.split(':');
-  const tParts = tScore.split(':');
+  const qParts = qScore.split(':').map(s => s.trim());
+  const tParts = tScore.split(':').map(s => s.trim());
   if (qParts.length === 2 && tParts.length === 2) {
     const q1 = parseInt(qParts[0], 10);
     const q2 = parseInt(qParts[1], 10);
@@ -141,15 +141,15 @@ export const SimilarityCalculator = {
     
     if (hasQueryP1 && hasTargetP1) {
       if (normalizeCountry(queryGame.p1) === normalizeCountry(targetGame.p1)) {
-        matchScore += 2;
-        explanations.push(`✔ P1 sama (+2 pts)`);
+        matchScore += 20;
+        explanations.push(`✔ P1 sama (+20 pts)`);
       } else {
         explanations.push(`❌ P1 beda`);
       }
     }
 
     const totalMatchWeights = MATCH_WEIGHTS.reduce((a, b) => a + b, 0); // 100
-    const maxPossiblePoints = totalMatchWeights + GOALS_MAX_SCORE + (hasQueryP1 ? 2 : 0);
+    const maxPossiblePoints = totalMatchWeights + GOALS_MAX_SCORE + (hasQueryP1 ? 20 : 0);
     const calculatedPercentage = (matchScore / maxPossiblePoints) * 100;
     
     return {
