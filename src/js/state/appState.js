@@ -18,8 +18,15 @@ export const StateManager = {
     this.db = StorageService.loadData();
   },
 
+  saveTimeout: null,
+
   save() {
-    StorageService.saveData(this.db);
+    if (this.saveTimeout) {
+      clearTimeout(this.saveTimeout);
+    }
+    this.saveTimeout = setTimeout(() => {
+      StorageService.saveData(this.db);
+    }, 300);
   },
 
   clearHomeQuery() {

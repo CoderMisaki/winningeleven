@@ -13,7 +13,7 @@ import { Security } from "../utils/security.js";
 export const UIRenderer = {
   renderMatchGrid() {
     const gridContainer = document.getElementById("matchGridForm");
-    gridContainer.innerHTML = "";
+    gridContainer.textContent = "";
 
     const isEditorMode = StateManager.activeMemoryId !== null;
     let activeDataset;
@@ -34,45 +34,109 @@ export const UIRenderer = {
       
       const rowItem = document.createElement("div");
       rowItem.className = "match-row-item";
-      rowItem.innerHTML = `
-        <div class="match-num">B${i + 1}</div>
-        <div class="team-input-wrap">
-          <input type="text" class="home-team-field" data-idx="${i}" value="${matchData.home}" placeholder="HOME TEAM" autocomplete="off" />
-          <div class="suggestions-box hidden"></div>
-        </div>
-        <div class="score-box-center">
-          <input type="text" class="score-field" data-idx="${i}" value="${matchData.score}" placeholder="0:0" maxlength="5" />
-        </div>
-        <div class="team-input-wrap">
-          <input type="text" class="away-team-field" data-idx="${i}" value="${matchData.away}" placeholder="AWAY TEAM" autocomplete="off" />
-          <div class="suggestions-box hidden"></div>
-        </div>
-      `;
+      const matchNumSpan = document.createElement("div");
+      matchNumSpan.className = "match-num";
+      matchNumSpan.textContent = `B${i + 1}`;
+      rowItem.appendChild(matchNumSpan);
+
+      const homeWrap = document.createElement("div");
+      homeWrap.className = "team-input-wrap";
+      const homeInput = document.createElement("input");
+      homeInput.type = "text";
+      homeInput.className = "home-team-field";
+      homeInput.dataset.idx = i;
+      homeInput.placeholder = "HOME TEAM";
+      homeInput.value = matchData.home;
+      homeInput.autocomplete = "off";
+      const homeSug = document.createElement("div");
+      homeSug.className = "suggestions-box hidden";
+      homeWrap.appendChild(homeInput);
+      homeWrap.appendChild(homeSug);
+      rowItem.appendChild(homeWrap);
+
+      const scoreWrap = document.createElement("div");
+      scoreWrap.className = "score-box-center";
+      const scoreInput = document.createElement("input");
+      scoreInput.type = "text";
+      scoreInput.className = "score-field";
+      scoreInput.dataset.idx = i;
+      scoreInput.placeholder = "0:0";
+      scoreInput.value = matchData.score;
+      scoreInput.maxLength = 5;
+      scoreWrap.appendChild(scoreInput);
+      rowItem.appendChild(scoreWrap);
+
+      const awayWrap = document.createElement("div");
+      awayWrap.className = "team-input-wrap";
+      const awayInput = document.createElement("input");
+      awayInput.type = "text";
+      awayInput.className = "away-team-field";
+      awayInput.dataset.idx = i;
+      awayInput.placeholder = "AWAY TEAM";
+      awayInput.value = matchData.away;
+      awayInput.autocomplete = "off";
+      const awaySug = document.createElement("div");
+      awaySug.className = "suggestions-box hidden";
+      awayWrap.appendChild(awayInput);
+      awayWrap.appendChild(awaySug);
+      rowItem.appendChild(awayWrap);
+
       gridContainer.appendChild(rowItem);
     }
 
     // Render Top Goals
     const topGoalsContainer = document.getElementById("topGoalsForm");
     if (topGoalsContainer) {
-      topGoalsContainer.innerHTML = "";
+      topGoalsContainer.textContent = "";
       for (let i = 0; i < 7; i++) {
         const goalData = activeDataset.topGoals ? activeDataset.topGoals[i] || { country: "", player: "", goals: "" } : { country: "", player: "", goals: "" };
 
         const goalRowItem = document.createElement("div");
         goalRowItem.className = "top-goal-row-item";
-        goalRowItem.innerHTML = `
-          <div class="top-goal-num">${i + 1}</div>
-          <div class="team-input-wrap">
-            <input type="text" class="goal-country-field" data-idx="${i}" value="${goalData.country}" placeholder="COUNTRY" autocomplete="off" />
-            <div class="suggestions-box hidden"></div>
-          </div>
-          <div class="team-input-wrap">
-            <input type="text" class="goal-player-field" data-idx="${i}" value="${goalData.player}" placeholder="PLAYER NAME" autocomplete="off" />
-          </div>
-          <div class="score-box-center">
-            <input type="text" class="goal-score-field" data-idx="${i}" value="${goalData.goals}" placeholder="0" maxlength="3" />
-          </div>
-        `;
+        const rankSpan = document.createElement("div");
+        rankSpan.className = "top-goal-num";
+        rankSpan.textContent = `${i + 1}`;
+        goalRowItem.appendChild(rankSpan);
+
+        const countryWrap = document.createElement("div");
+        countryWrap.className = "team-input-wrap";
+        const countryInput = document.createElement("input");
+        countryInput.type = "text";
+        countryInput.className = "goal-country-field";
+        countryInput.dataset.idx = i;
+        countryInput.placeholder = "COUNTRY";
+        countryInput.value = goalData.country;
+        countryInput.autocomplete = "off";
+        const countrySug = document.createElement("div");
+        countrySug.className = "suggestions-box hidden";
+        countryWrap.appendChild(countryInput);
+        countryWrap.appendChild(countrySug);
+        goalRowItem.appendChild(countryWrap);
+
+        const playerWrap = document.createElement("div");
+        playerWrap.className = "team-input-wrap";
+        const playerInput = document.createElement("input");
+        playerInput.type = "text";
+        playerInput.className = "goal-player-field";
+        playerInput.dataset.idx = i;
+        playerInput.placeholder = "PLAYER NAME";
+        playerInput.value = goalData.player;
+        playerInput.autocomplete = "off";
+        playerWrap.appendChild(playerInput);
+        goalRowItem.appendChild(playerWrap);
+
+        const goalsWrap = document.createElement("div");
+        goalsWrap.className = "score-box-center";
+        const goalsInput = document.createElement("input");
+        goalsInput.type = "text";
+        goalsInput.className = "goal-score-field";
+        goalsInput.dataset.idx = i;
+        goalsInput.placeholder = "0";
+        goalsInput.value = goalData.goals;
+        goalsInput.maxLength = 3;
+        goalsWrap.appendChild(goalsInput);
+        goalRowItem.appendChild(goalsWrap);
+
         topGoalsContainer.appendChild(goalRowItem);
       }
     }
@@ -116,7 +180,7 @@ export const UIRenderer = {
         });
 
         if (matchedTeams.length > 0) {
-          suggestionContainer.innerHTML = "";
+          suggestionContainer.textContent = "";
           suggestionContainer.classList.remove("hidden");
           matchedTeams.slice(0, 5).forEach(([code, data]) => {
             const div = document.createElement("div");
@@ -210,7 +274,7 @@ export const UIRenderer = {
         });
 
         if (matchedTeams.length > 0) {
-          suggestionContainer.innerHTML = "";
+          suggestionContainer.textContent = "";
           suggestionContainer.classList.remove("hidden");
           matchedTeams.slice(0, 5).forEach(([code, data]) => {
             const div = document.createElement("div");
@@ -265,7 +329,7 @@ export const UIRenderer = {
 
   renderDatabaseModal() {
     const listWrapper = document.getElementById("databaseModalList");
-    listWrapper.innerHTML = "";
+    listWrapper.textContent = "";
 
     const memoryKeys = Object.keys(StateManager.db.memories).map(Number).filter(n => !isNaN(n));
     const maxId = Math.max(7, ...memoryKeys);
@@ -277,40 +341,65 @@ export const UIRenderer = {
 
       if (memory) {
         const formattedDate = memory.lastUpdate ? new Date(memory.lastUpdate).toLocaleString("id-ID") : "-";
-        card.innerHTML = `
-          <div class="db-card-header">
-            <span>MEMORY ${i}</span>
-            <span class="status-online">ONLINE</span>
-          </div>
-          <div class="db-info-row">
-            <span>Jumlah Dataset Game:</span>
-            <span>${memory.games.length} Game</span>
-          </div>
-          <div class="db-info-row">
-            <span>Last Update:</span>
-            <span>${formattedDate}</span>
-          </div>
-          <div class="db-actions">
-            <button class="btn btn-open-mem" data-id="${i}">OPEN</button>
-            <button class="btn btn-export-mem" data-id="${i}">EXPORT</button>
-            <button class="btn btn-delete-mem" data-id="${i}">DELETE</button>
-          </div>
-        `;
+
+        const header = document.createElement("div");
+        header.className = "db-card-header";
+        const titleSpan = document.createElement("span");
+        titleSpan.textContent = `MEMORY ${i}`;
+        const statusSpan = document.createElement("span");
+        statusSpan.className = "status-online";
+        statusSpan.textContent = "ONLINE";
+        header.appendChild(titleSpan);
+        header.appendChild(statusSpan);
+        card.appendChild(header);
+
+        const row1 = document.createElement("div");
+        row1.className = "db-info-row";
+        const r1L = document.createElement("span"); r1L.textContent = "Jumlah Dataset Game:";
+        const r1R = document.createElement("span"); r1R.textContent = `${memory.games.length} Game`;
+        row1.appendChild(r1L); row1.appendChild(r1R);
+        card.appendChild(row1);
+
+        const row2 = document.createElement("div");
+        row2.className = "db-info-row";
+        const r2L = document.createElement("span"); r2L.textContent = "Last Update:";
+        const r2R = document.createElement("span"); r2R.textContent = formattedDate;
+        row2.appendChild(r2L); row2.appendChild(r2R);
+        card.appendChild(row2);
+
+        const actions = document.createElement("div");
+        actions.className = "db-actions";
+        const btnOpen = document.createElement("button"); btnOpen.className = "btn btn-open-mem"; btnOpen.dataset.id = i; btnOpen.textContent = "OPEN";
+        const btnExport = document.createElement("button"); btnExport.className = "btn btn-export-mem"; btnExport.dataset.id = i; btnExport.textContent = "EXPORT";
+        const btnDelete = document.createElement("button"); btnDelete.className = "btn btn-delete-mem"; btnDelete.dataset.id = i; btnDelete.textContent = "DELETE";
+        actions.appendChild(btnOpen); actions.appendChild(btnExport); actions.appendChild(btnDelete);
+        card.appendChild(actions);
+
       } else {
-        card.innerHTML = `
-          <div class="db-card-header">
-            <span>MEMORY ${i}</span>
-            <span class="status-empty">EMPTY</span>
-          </div>
-          <div class="db-info-row">
-            <span>Dataset Kosong</span>
-          </div>
-          <div class="db-actions">
-            <button class="btn btn-create-mem" data-id="${i}">CREATE</button>
-            <button class="btn btn-import-trigger" data-id="${i}">IMPORT JSON</button>
-            <button class="btn btn-download-template" data-id="${i}">DOWNLOAD TEMPLATE</button>
-          </div>
-        `;
+        const header = document.createElement("div");
+        header.className = "db-card-header";
+        const titleSpan = document.createElement("span");
+        titleSpan.textContent = `MEMORY ${i}`;
+        const statusSpan = document.createElement("span");
+        statusSpan.className = "status-empty";
+        statusSpan.textContent = "EMPTY";
+        header.appendChild(titleSpan);
+        header.appendChild(statusSpan);
+        card.appendChild(header);
+
+        const row1 = document.createElement("div");
+        row1.className = "db-info-row";
+        const r1L = document.createElement("span"); r1L.textContent = "Dataset Kosong";
+        row1.appendChild(r1L);
+        card.appendChild(row1);
+
+        const actions = document.createElement("div");
+        actions.className = "db-actions";
+        const btnCreate = document.createElement("button"); btnCreate.className = "btn btn-create-mem"; btnCreate.dataset.id = i; btnCreate.textContent = "CREATE";
+        const btnImport = document.createElement("button"); btnImport.className = "btn btn-import-trigger"; btnImport.dataset.id = i; btnImport.textContent = "IMPORT JSON";
+        const btnTemplate = document.createElement("button"); btnTemplate.className = "btn btn-download-template"; btnTemplate.dataset.id = i; btnTemplate.textContent = "DOWNLOAD TEMPLATE";
+        actions.appendChild(btnCreate); actions.appendChild(btnImport); actions.appendChild(btnTemplate);
+        card.appendChild(actions);
       }
       listWrapper.appendChild(card);
     }
@@ -321,7 +410,13 @@ export const UIRenderer = {
     addCard.style.alignItems = "center";
     addCard.style.justifyContent = "center";
     addCard.style.cursor = "pointer";
-    addCard.innerHTML = `<span class="btn-add-memory" style="font-size: 2rem; width: 100%; text-align: center;">+</span>`;
+    const addSpan = document.createElement("span");
+    addSpan.className = "btn-add-memory";
+    addSpan.style.fontSize = "2rem";
+    addSpan.style.width = "100%";
+    addSpan.style.textAlign = "center";
+    addSpan.textContent = "+";
+    addCard.appendChild(addSpan);
     listWrapper.appendChild(addCard);
 
     this.bindModalActions();

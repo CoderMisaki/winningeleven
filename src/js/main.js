@@ -53,35 +53,64 @@ document.addEventListener("DOMContentLoaded", () => {
     const resultsPanel = document.getElementById("resultsPanel");
     const resultsOutput = document.getElementById("resultsOutput");
 
-    resultsPanel.classList.remove("hidden");
-    resultsOutput.innerHTML = "";
+    const minSimInput = document.getElementById("minSimilarity");
+    const minSimThreshold = minSimInput ? parseInt(minSimInput.value, 10) || 0 : 0;
 
-    if (results.length === 0) {
-      resultsOutput.innerHTML = `<div class="error-msg">Tidak ditemukan kecocokan pada seluruh Memory.</div>`;
+    const filteredResults = results.filter(r => r.similarity >= minSimThreshold);
+
+    resultsPanel.classList.remove("hidden");
+    resultsOutput.innerHTML = ""; // Clear existing
+
+    if (filteredResults.length === 0) {
+      const errMsg = document.createElement("div");
+      errMsg.className = "error-msg";
+      errMsg.textContent = "Tidak ditemukan kecocokan pada seluruh Memory (dengan filter yang diberikan).";
+      resultsOutput.appendChild(errMsg);
       return;
     }
 
-    // Bangun keluaran teks log penelitian
-    let outputHTML = `<pre class="log-output">================================<br/>   MATCH FOUND REPORT SYSTEMS<br/>================================<br/><br/>`;
+    const pre = document.createElement("pre");
+    pre.className = "log-output";
     
-    results.forEach((match, index) => {
-      const isPerfect = match.similarity === 100;
-      outputHTML += `Memory     : ${Security.sanitizeInput(String(match.memoryName))}<br/>`;
-      outputHTML += `Game       : ${Security.sanitizeInput(String(match.gameNumber))}<br/>`;
+    const header = document.createElement("div");
+    header.innerHTML = "================================<br/>   MATCH FOUND REPORT SYSTEMS<br/>================================<br/><br/>";
+    pre.appendChild(header);
 
+    filteredResults.forEach((match, index) => {
+      const isPerfect = match.similarity === 100;
+
+      const matchBlock = document.createElement("div");
+
+      const rankingText = document.createElement("div");
+      rankingText.textContent = `Rank       : #${index + 1}`;
+      matchBlock.appendChild(rankingText);
+
+      const memText = document.createElement("div");
+      memText.textContent = `Memory     : ${match.memoryName}`;
+      matchBlock.appendChild(memText);
+
+      const gameText = document.createElement("div");
+      gameText.textContent = `Game       : ${match.gameNumber}`;
+      matchBlock.appendChild(gameText);
+
+      const simText = document.createElement("div");
       if (isPerfect) {
-        outputHTML += `Similarity : <span class="sim-perfect">${match.similarity}%</span> <span class="sim-badge">[ PERFECT MATCH ]</span><br/>`;
+        simText.innerHTML = `Similarity : <span class="sim-perfect">${match.similarity}%</span> <span class="sim-badge">[ PERFECT MATCH ]</span>`;
       } else {
-        outputHTML += `Similarity : <span class="sim-normal">${match.similarity}%</span><br/>`;
+        simText.innerHTML = `Similarity : <span class="sim-normal">${match.similarity}%</span>`;
       }
-      
-      if (index < results.length - 1) {
-        outputHTML += `--------------------------------<br/>`;
+      matchBlock.appendChild(simText);
+
+      if (index < filteredResults.length - 1) {
+        const divider = document.createElement("div");
+        divider.innerHTML = `--------------------------------<br/>`;
+        matchBlock.appendChild(divider);
       }
+
+      pre.appendChild(matchBlock);
     });
 
-    outputHTML += `</pre>`;
-    resultsOutput.innerHTML = outputHTML;
+    resultsOutput.appendChild(pre);
     
     // Tarik scroll layar agar hasil langsung terlihat di perangkat mobile
     resultsPanel.scrollIntoView({ behavior: "smooth" });
