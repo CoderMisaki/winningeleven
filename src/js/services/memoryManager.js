@@ -15,6 +15,7 @@ export const MemoryManager = {
       gameNumber: gameNum,
       p1: "",
       matches: Array.from({ length: 7 }, () => ({ home: "", score: "", away: "" })),
+      topGoals: Array.from({ length: 7 }, () => ({ country: "", player: "", goals: "" })),
       lastUpdate: new Date().toISOString()
     };
   },
@@ -43,6 +44,22 @@ export const MemoryManager = {
     memory.lastUpdate = new Date().toISOString();
     StateManager.save();
   },
+
+
+  updateTopGoalField(memoryId, gameIndex, goalIndex, field, value) {
+    const memory = StateManager.db.memories[memoryId];
+    if (!memory || !memory.games[gameIndex]) return;
+
+    if (!memory.games[gameIndex].topGoals) {
+      memory.games[gameIndex].topGoals = Array.from({ length: 7 }, () => ({ country: "", player: "", goals: "" }));
+    }
+
+    memory.games[gameIndex].topGoals[goalIndex][field] = value;
+    memory.games[gameIndex].lastUpdate = new Date().toISOString();
+    memory.lastUpdate = new Date().toISOString();
+    StateManager.save();
+  }
+,
 
   updateMatchField(memoryId, gameIndex, matchIndex, field, value) {
     const memory = StateManager.db.memories[memoryId];

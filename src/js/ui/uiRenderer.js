@@ -8,6 +8,7 @@ import { teamsDB } from "../data/teams.js";
 import { countryAliases } from "../data/countryAliases.js";
 import { NavigationManager } from "./navigation.js";
 import { ImportExportService } from "../services/importExport.js";
+import { Security } from "../utils/security.js";
 
 export const UIRenderer = {
   renderMatchGrid() {
@@ -34,7 +35,7 @@ export const UIRenderer = {
       const rowItem = document.createElement("div");
       rowItem.className = "match-row-item";
       rowItem.innerHTML = `
-        <div class="match-num">M${i + 1}</div>
+        <div class="match-num">B${i + 1}</div>
         <div class="team-input-wrap">
           <input type="text" class="home-team-field" data-idx="${i}" value="${matchData.home}" placeholder="HOME TEAM" autocomplete="off" />
           <div class="suggestions-box hidden"></div>
@@ -48,6 +49,32 @@ export const UIRenderer = {
         </div>
       `;
       gridContainer.appendChild(rowItem);
+    }
+
+    // Render Top Goals
+    const topGoalsContainer = document.getElementById("topGoalsForm");
+    if (topGoalsContainer) {
+      topGoalsContainer.innerHTML = "";
+      for (let i = 0; i < 7; i++) {
+        const goalData = activeDataset.topGoals ? activeDataset.topGoals[i] || { country: "", player: "", goals: "" } : { country: "", player: "", goals: "" };
+
+        const goalRowItem = document.createElement("div");
+        goalRowItem.className = "top-goal-row-item";
+        goalRowItem.innerHTML = `
+          <div class="top-goal-num">${i + 1}</div>
+          <div class="team-input-wrap">
+            <input type="text" class="goal-country-field" data-idx="${i}" value="${goalData.country}" placeholder="COUNTRY" autocomplete="off" />
+            <div class="suggestions-box hidden"></div>
+          </div>
+          <div class="team-input-wrap">
+            <input type="text" class="goal-player-field" data-idx="${i}" value="${goalData.player}" placeholder="PLAYER NAME" autocomplete="off" />
+          </div>
+          <div class="score-box-center">
+            <input type="text" class="goal-score-field" data-idx="${i}" value="${goalData.goals}" placeholder="0" maxlength="3" />
+          </div>
+        `;
+        topGoalsContainer.appendChild(goalRowItem);
+      }
     }
 
     this.bindGridEvents();
@@ -66,15 +93,15 @@ export const UIRenderer = {
 
         if (sideKey === 'p1') {
           if (isEditorMode) {
-            MemoryManager.updateGameField(memId, gIdx, "p1", e.target.value);
+            MemoryManager.updateGameField(memId, gIdx, "p1", Security.sanitizeInput(e.target.value));
           } else {
-            StateManager.homeQuery.p1 = e.target.value;
+            StateManager.homeQuery.p1 = Security.sanitizeInput(e.target.value);
           }
         } else {
           if (isEditorMode) {
-            MemoryManager.updateMatchField(memId, gIdx, mIdx, sideKey, e.target.value);
+            MemoryManager.updateMatchField(memId, gIdx, mIdx, sideKey, Security.sanitizeInput(e.target.value));
           } else {
-            StateManager.homeQuery.matches[mIdx][sideKey] = e.target.value;
+            StateManager.homeQuery.matches[mIdx][sideKey] = Security.sanitizeInput(e.target.value);
           }
         }
 
@@ -151,6 +178,86 @@ export const UIRenderer = {
           MemoryManager.updateMatchField(memId, gIdx, mIdx, "score", val);
         } else {
           StateManager.homeQuery.matches[mIdx].score = val;
+        }
+      };
+    });
+
+    document.querySelectorAll(".top-goal-row-item").forEach((row) => {
+      const countryInput = row.querySelector(".goal-country-field");
+      const playerInput = row.querySelector(".goal-player-field");
+      const goalsInput = row.querySelector(".goal-score-field");
+      const gIdxLocal = parseInt(countryInput.dataset.idx, 10);
+
+      // We need a specific autocomplete handler for top goals since the sideKey approach is different
+      countryInput.oninput = (e) => {
+        const query = e.target.value.toLowerCase();
+        const suggestionContainer = countryInput.nextElementSibling;
+
+        if (isEditorMode) {
+          MemoryManager.updateTopGoalField(memId, gIdx, gIdxLocal, "country", Security.sanitizeInput(e.target.value));
+        } else {
+          if (!StateManager.homeQuery.topGoals) StateManager.homeQuery.topGoals = Array.from({ length: 7 }, () => ({ country: "", player: "", goals: "" }));
+          StateManager.homeQuery.topGoals[gIdxLocal].country = Security.sanitizeInput(e.target.value);
+        }
+
+        if (!query) { suggestionContainer.classList.add("hidden"); return; }
+
+        const matchedTeams = Object.entries(teamsDB).filter(([code, data]) => {
+          const aliases = countryAliases[code] || [];
+          return code.toLowerCase().startsWith(query) ||
+                 data.name.toLowerCase().startsWith(query) ||
+                 aliases.some(a => a.startsWith(query));
+        });
+
+        if (matchedTeams.length > 0) {
+          suggestionContainer.innerHTML = "";
+          suggestionContainer.classList.remove("hidden");
+          matchedTeams.slice(0, 5).forEach(([code, data]) => {
+            const div = document.createElement("div");
+            div.className = "suggestion-line";
+            div.textContent = `${data.flag} ${data.name} (${code})`;
+            div.onmousedown = () => {
+              countryInput.value = code;
+              if (isEditorMode) {
+                MemoryManager.updateTopGoalField(memId, gIdx, gIdxLocal, "country", code);
+              } else {
+                StateManager.homeQuery.topGoals[gIdxLocal].country = code;
+              }
+              suggestionContainer.classList.add("hidden");
+            };
+            suggestionContainer.appendChild(div);
+          });
+        } else {
+          suggestionContainer.classList.add("hidden");
+        }
+      };
+
+      countryInput.onblur = () => {
+        setTimeout(() => {
+          if (countryInput.nextElementSibling) {
+            countryInput.nextElementSibling.classList.add("hidden");
+          }
+        }, 200);
+      };
+
+      playerInput.oninput = (e) => {
+        if (isEditorMode) {
+          MemoryManager.updateTopGoalField(memId, gIdx, gIdxLocal, "player", Security.sanitizeInput(e.target.value));
+        } else {
+          if (!StateManager.homeQuery.topGoals) StateManager.homeQuery.topGoals = Array.from({ length: 7 }, () => ({ country: "", player: "", goals: "" }));
+          StateManager.homeQuery.topGoals[gIdxLocal].player = Security.sanitizeInput(e.target.value);
+        }
+      };
+
+      goalsInput.oninput = (e) => {
+        let val = e.target.value.replace(/[^0-9]/g, "");
+        e.target.value = val;
+
+        if (isEditorMode) {
+          MemoryManager.updateTopGoalField(memId, gIdx, gIdxLocal, "goals", val);
+        } else {
+          if (!StateManager.homeQuery.topGoals) StateManager.homeQuery.topGoals = Array.from({ length: 7 }, () => ({ country: "", player: "", goals: "" }));
+          StateManager.homeQuery.topGoals[gIdxLocal].goals = val;
         }
       };
     });

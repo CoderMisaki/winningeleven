@@ -6,7 +6,8 @@ export const StateManager = {
   // Data input temporer pencarian halaman utama
   homeQuery: {
     p1: "",
-    matches: Array.from({ length: 7 }, () => ({ home: "", score: "", away: "" }))
+    matches: Array.from({ length: 7 }, () => ({ home: "", score: "", away: "" })),
+    topGoals: Array.from({ length: 7 }, () => ({ country: "", player: "", goals: "" }))
   },
 
   // State navigasi aktif
@@ -24,7 +25,8 @@ export const StateManager = {
   clearHomeQuery() {
     this.homeQuery = {
       p1: "",
-      matches: Array.from({ length: 7 }, () => ({ home: "", score: "", away: "" }))
+      matches: Array.from({ length: 7 }, () => ({ home: "", score: "", away: "" })),
+    topGoals: Array.from({ length: 7 }, () => ({ country: "", player: "", goals: "" }))
     };
   }
 };

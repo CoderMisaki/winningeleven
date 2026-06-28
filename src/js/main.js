@@ -3,6 +3,7 @@ import { NavigationManager } from "./ui/navigation.js";
 import { UIRenderer } from "./ui/uiRenderer.js";
 import { MatchingEngine } from "./services/matchingEngine.js";
 import { ImportExportService } from "./services/importExport.js";
+import { Security } from "./utils/security.js";
 
 document.addEventListener("DOMContentLoaded", () => {
   // Hubungkan dan inisialisasi basis data sistem
@@ -65,8 +66,8 @@ document.addEventListener("DOMContentLoaded", () => {
     
     results.forEach((match, index) => {
       const isPerfect = match.similarity === 100;
-      outputHTML += `Memory     : ${match.memoryName}<br/>`;
-      outputHTML += `Game       : ${match.gameNumber}<br/>`;
+      outputHTML += `Memory     : ${Security.sanitizeInput(String(match.memoryName))}<br/>`;
+      outputHTML += `Game       : ${Security.sanitizeInput(String(match.gameNumber))}<br/>`;
 
       if (isPerfect) {
         outputHTML += `Similarity : <span class="sim-perfect">${match.similarity}%</span> <span class="sim-badge">[ PERFECT MATCH ]</span><br/>`;
