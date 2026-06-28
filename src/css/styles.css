@@ -266,3 +266,58 @@ body {
 }
 .top-goal-row-item:nth-child(even) { background: var(--row-light); }
 .top-goal-num { font-family: var(--font-retro); font-size: 0.65rem; color: var(--text-muted); text-align: center; }
+
+/* RESPONSIVE DESIGN UNTUK MOBILE */
+@media (max-width: 600px) {
+  body {
+    padding: 10px;
+  }
+
+  .we10-header h1 {
+    font-size: 1.2rem;
+  }
+
+  .btn {
+    padding: 8px 10px;
+    font-size: 0.6rem;
+  }
+
+  .editor-nav-bar {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .game-badge {
+    width: 100%;
+    margin: 5px 0;
+  }
+
+  .match-row-item {
+    grid-template-columns: 2rem 1fr 4rem 1fr;
+    gap: 5px;
+    padding: 5px;
+  }
+
+  .top-goal-row-item {
+    grid-template-columns: 2rem 1fr 1fr 3rem;
+    gap: 5px;
+    padding: 5px;
+  }
+
+  .team-input-wrap input, .score-box-center input {
+    padding: 6px;
+    font-size: 0.75rem;
+  }
+
+  .score-box-center input {
+    font-size: 0.7rem;
+  }
+
+  .action-footer {
+    flex-direction: column;
+  }
+
+  .filter-wrap {
+    justify-content: space-between;
+  }
+}

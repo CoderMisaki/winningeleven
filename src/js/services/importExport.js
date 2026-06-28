@@ -46,7 +46,15 @@ export const ImportExportService = {
     const template = {
       version: 3,
       memoryNumber: parseInt(memoryId, 10),
-      games: [],
+      games: [
+        {
+          gameNumber: 1,
+          p1: "",
+          matches: Array.from({ length: 7 }, () => ({ home: "", score: "", away: "" })),
+          topGoals: Array.from({ length: 7 }, () => ({ country: "", player: "", goals: "" })),
+          lastUpdate: new Date().toISOString()
+        }
+      ],
       lastUpdate: new Date().toISOString()
     };
     const blob = new Blob([JSON.stringify(template, null, 2)], { type: "application/json" });

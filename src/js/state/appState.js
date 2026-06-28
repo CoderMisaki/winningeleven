@@ -16,6 +16,17 @@ export const StateManager = {
 
   init() {
     this.db = StorageService.loadData();
+    if (!this.db.maxSlot) {
+      this.db.maxSlot = 7;
+      let highestKey = 7;
+      for (const key of Object.keys(this.db.memories)) {
+        const num = parseInt(key, 10);
+        if (!isNaN(num) && num > highestKey) {
+          highestKey = num;
+        }
+      }
+      this.db.maxSlot = highestKey;
+    }
   },
 
   saveTimeout: null,
