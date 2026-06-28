@@ -205,6 +205,16 @@ document.addEventListener("DOMContentLoaded", () => {
   if (dbModalList) {
     dbModalList.onclick = (e) => {
     const target = e.target;
+
+    if (target.classList.contains("btn-add-memory-slot")) {
+      StateManager.db.maxSlot = (StateManager.db.maxSlot || 7) + 1;
+      StateManager.save();
+      UIRenderer.renderDatabaseModal();
+      const list = document.getElementById("databaseModalList");
+      if(list) list.scrollTop = list.scrollHeight;
+      return;
+    }
+
     const id = target.dataset.id;
 
     if (!id) return;
@@ -242,13 +252,7 @@ document.addEventListener("DOMContentLoaded", () => {
     else if (target.classList.contains("btn-download-template")) {
       ImportExportService.downloadTemplate(id);
     }
-    else if (target.classList.contains("btn-add-memory-slot")) {
-      StateManager.db.maxSlot = (StateManager.db.maxSlot || 7) + 1;
-      StateManager.save();
-      UIRenderer.renderDatabaseModal();
-      const list = document.getElementById("databaseModalList");
-      if(list) list.scrollTop = list.scrollHeight;
-    }
+
     };
   }
 

@@ -81,6 +81,7 @@ export function setupCountryAutocomplete(inputElement) {
 
     let activeIndex = -1;
     let currentMatches = [];
+    let ignoreInput = false;
 
     const closeSuggestions = () => {
         suggestionsBox.classList.add('hidden');
@@ -117,13 +118,16 @@ export function setupCountryAutocomplete(inputElement) {
     };
 
     const selectSuggestion = (name) => {
+        ignoreInput = true;
         inputElement.value = name;
         closeSuggestions();
         const event = new Event('input', { bubbles: true });
         inputElement.dispatchEvent(event);
+        ignoreInput = false;
     };
 
     inputElement.addEventListener('input', (e) => {
+        if (ignoreInput) return;
         const query = e.target.value;
         currentMatches = findMatches(query);
         activeIndex = currentMatches.length > 0 ? 0 : -1;
