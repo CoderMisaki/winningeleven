@@ -40,6 +40,10 @@ document.addEventListener("DOMContentLoaded", () => {
     NavigationManager.triggerAddGame();
   };
 
+  document.getElementById("btnExitEditor").onclick = () => {
+    NavigationManager.switchToHomeView();
+  };
+
   // Reset Form Pencarian Utama
   document.getElementById("btnClearForm").onclick = () => {
     StateManager.clearHomeQuery();
