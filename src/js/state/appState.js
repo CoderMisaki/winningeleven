@@ -29,15 +29,8 @@ export const StateManager = {
     }
   },
 
-  saveTimeout: null,
-
   save() {
-    if (this.saveTimeout) {
-      clearTimeout(this.saveTimeout);
-    }
-    this.saveTimeout = setTimeout(() => {
-      StorageService.saveData(this.db);
-    }, 300);
+    StorageService.saveData(this.db);
   },
 
   clearHomeQuery() {

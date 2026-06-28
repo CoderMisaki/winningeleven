@@ -32,7 +32,16 @@ export const ImportExportService = {
     const targetMemory = StateManager.db.memories[memoryId];
     if (!targetMemory) return alert("Tidak dapat mengekspor memori kosong!");
 
+
     const exportData = { ...targetMemory, version: 3 };
+
+    // JSON Validation - Export check
+    const dbDataStr = JSON.stringify({ ...StateManager.db.memories[memoryId], version: 3 });
+    const exportDataStr = JSON.stringify(exportData);
+    if (dbDataStr !== exportDataStr) {
+        throw new Error("Export validation failed: Generated object differs from StateManager DB.");
+    }
+
     const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: "application/json" });
     const link = document.createElement("a");
     link.href = URL.createObjectURL(blob);
@@ -186,9 +195,18 @@ export const ImportExportService = {
         // Pastikan version diupdate
         importedData.version = 3;
 
+
         StateManager.db.memories[targetMemoryId] = importedData;
         StateManager.save();
         
+        // JSON Validation - Import check
+        const importedDataStr = JSON.stringify(importedData);
+        const dbDataStr = JSON.stringify(StateManager.db.memories[targetMemoryId]);
+        if (importedDataStr !== dbDataStr) {
+            throw new Error("Import validation failed: StateManager DB differs from imported JSON object.");
+        }
+
+
         alert(`Berhasil mengimpor berkas ke Memory ${targetMemoryId}!`);
         onComplete(targetMemoryId);
       } catch (err) {

@@ -4,6 +4,7 @@ import { UIRenderer } from "./ui/uiRenderer.js";
 import { MatchingEngine } from "./services/matchingEngine.js";
 import { ImportExportService } from "./services/importExport.js";
 import { Security } from "./utils/security.js";
+import { MemoryManager } from "./services/memoryManager.js";
 
 document.addEventListener("DOMContentLoaded", () => {
   // Hubungkan dan inisialisasi basis data sistem
@@ -90,9 +91,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
       if (field !== "") {
         if (isEditor) {
-          import("./services/memoryManager.js").then(({ MemoryManager }) => {
-            MemoryManager.updateMatchField(StateManager.activeMemoryId, StateManager.activeGameIndex, idx, field, val);
-          });
+          MemoryManager.updateMatchField(StateManager.activeMemoryId, StateManager.activeGameIndex, idx, field, val);
         } else {
           StateManager.homeQuery.matches[idx][field] = val;
         }
@@ -111,11 +110,10 @@ document.addEventListener("DOMContentLoaded", () => {
       let field = "goals";
       if (target.classList.contains("goal-country")) field = "country";
       if (target.classList.contains("goal-player")) field = "player";
+      if (target.classList.contains("goal-amount")) field = "goals";
 
       if (isEditor) {
-        import("./services/memoryManager.js").then(({ MemoryManager }) => {
-          MemoryManager.updateTopGoalField(StateManager.activeMemoryId, StateManager.activeGameIndex, idx, field, val);
-        });
+        MemoryManager.updateTopGoalField(StateManager.activeMemoryId, StateManager.activeGameIndex, idx, field, val);
       } else {
         StateManager.homeQuery.topGoals[idx][field] = val;
       }
@@ -221,11 +219,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
     if (target.classList.contains("btn-create-mem")) {
       UIRenderer.showConfirm("Lanjutkan inisialisasi Memory ini?", () => {
-        import("./services/memoryManager.js").then(({ MemoryManager }) => {
-          MemoryManager.initializeEmptyMemory(id);
-          NavigationManager.switchToEditorView(id);
-          NavigationManager.closeDatabaseModal();
-        });
+        MemoryManager.initializeEmptyMemory(id);
+        NavigationManager.switchToEditorView(id);
+        NavigationManager.closeDatabaseModal();
       });
     } else if (target.classList.contains("btn-open-mem")) {
       NavigationManager.switchToEditorView(id);
@@ -243,10 +239,8 @@ document.addEventListener("DOMContentLoaded", () => {
     }
     else if (target.classList.contains("btn-delete-mem")) {
       UIRenderer.showConfirm("Yakin ingin menghapus seluruh data Memory ini?", () => {
-        import("./services/memoryManager.js").then(({ MemoryManager }) => {
-          MemoryManager.deleteMemory(id);
-          import("./ui/uiRenderer.js").then(({UIRenderer}) => UIRenderer.renderDatabaseModal());
-        });
+        MemoryManager.deleteMemory(id);
+        UIRenderer.renderDatabaseModal();
       });
     }
     else if (target.classList.contains("btn-download-template")) {
