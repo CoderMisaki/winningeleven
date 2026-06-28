@@ -4,14 +4,14 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; font-src 'self' https://fonts.gstatic.com; style-src 'self' https://fonts.googleapis.com 'unsafe-inline'; script-src 'self';">
-    <title>WE10 Memory Research System V2</title>
+    <title>WE10 Memory Research System </title>
     <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Roboto+Mono:wght@400;700&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="src/css/styles.css" />
   </head>
   <body>
     <main class="page-shell">
       <header class="we10-header">
-        <h1>WE10 MEMORY SYSTEM V2</h1>
+        <h1>WE10 MEMORY SYSTEM </h1>
         <div class="system-sub">RESEARCH & DATASET ENGINE</div>
       </header>
 
@@ -27,7 +27,10 @@
         <div class="main-board">
           <div class="editor-nav-bar hidden" id="editorNav">
             <button class="btn btn-nav" id="btnPrevGame">◀ PREV GAME</button>
-            <div class="game-badge" id="currentGameLabel">GAME 1</div>
+            <div class="game-badge" id="currentGameLabel">
+              GAME <input type="number" id="currentGameInput" value="1" min="1" style="width: 50px; text-align: center; font-family: var(--font-retro); font-size: 0.75rem; background: var(--bg-dark); color: var(--text-light); border: 1px solid var(--border-color);">
+              <span id="totalGamesLabel">/ 1</span>
+            </div>
             <button class="btn btn-nav" id="btnNextGame">NEXT GAME ▶</button>
             <button class="btn" id="btnAddGame">+ ADD GAME</button>
             <button class="btn" id="btnExitEditor" style="background-color: #550000; color: #ff5555; border-color: #ff0000;">EXIT EDITOR</button>

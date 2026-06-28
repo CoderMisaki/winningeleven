@@ -107,7 +107,9 @@ export const UIRenderer = {
     if (!dbModalList) return;
     dbModalList.innerHTML = "";
 
-    for (let i = 1; i <= 7; i++) {
+    const maxSlot = StateManager.db.maxSlot || 7;
+
+    for (let i = 1; i <= maxSlot; i++) {
       const mem = StateManager.db.memories[i];
       const isEmpty = !mem;
 
@@ -122,12 +124,15 @@ export const UIRenderer = {
           </div>
           <div class="db-actions">
             ${isEmpty
-              ? `<button class="btn btn-open-mem" data-id="${i}">INITIATE</button>`
+              ? `<button class="btn btn-create-mem" data-id="${i}">CREATE</button>`
               : `<button class="btn btn-open-mem" data-id="${i}">OPEN EDITOR</button>
                  <button class="btn btn-export-mem" data-id="${i}">EXPORT DB</button>`}
             <button class="btn btn-import-mem" onclick="document.getElementById('jsonImportField').dataset.targetId = ${i}; document.getElementById('jsonImportField').click();">IMPORT JSON</button>
+            <button class="btn btn-download-template" data-id="${i}">DOWNLOAD JSON</button>
           </div>
         </div>`;
     }
+
+    dbModalList.innerHTML += `<button class="btn btn-primary btn-add-memory-slot" style="margin-top: 10px;">+ ADD MEMORY SLOT</button>`;
   }
 };

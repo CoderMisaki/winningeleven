@@ -33,7 +33,12 @@ export const NavigationManager = {
 
     document.getElementById("panelTitle").textContent = `EDITOR: MEMORY ${memId}`;
     document.getElementById("activeViewIndicator").textContent = `MODE: DB EDITOR (MEM ${memId})`;
-    document.getElementById("currentGameLabel").textContent = `GAME ${currentGame.gameNumber} / ${memory.games.length}`;
+    const gameInput = document.getElementById("currentGameInput");
+    const totalLabel = document.getElementById("totalGamesLabel");
+    if (gameInput && totalLabel) {
+      gameInput.value = currentGame.gameNumber;
+      totalLabel.textContent = `/ ${memory.games.length}`;
+    }
   },
 
   navigateGames(direction) {
@@ -41,14 +46,39 @@ export const NavigationManager = {
     if (!memId) return;
 
     const memory = StateManager.db.memories[memId];
-    const totalGames = memory.games.length;
     let newIndex = StateManager.activeGameIndex + direction;
 
-    if (newIndex >= 0 && newIndex < totalGames) {
+    if (newIndex >= 0) {
+      if (newIndex >= memory.games.length) {
+         // Auto create missing games
+         const diff = newIndex - memory.games.length + 1;
+         for(let i=0; i < diff; i++) {
+            MemoryManager.addNewGameToMemory(memId);
+         }
+      }
       StateManager.activeGameIndex = newIndex;
       this.updateEditorTopBar();
       UIRenderer.renderMatchGrid();
     }
+  },
+
+  jumpToGame(targetNumber) {
+    const memId = StateManager.activeMemoryId;
+    if (!memId || targetNumber < 1) return;
+
+    const targetIndex = targetNumber - 1;
+    const memory = StateManager.db.memories[memId];
+
+    if (targetIndex >= memory.games.length) {
+      const diff = targetIndex - memory.games.length + 1;
+      for (let i = 0; i < diff; i++) {
+        MemoryManager.addNewGameToMemory(memId);
+      }
+    }
+
+    StateManager.activeGameIndex = targetIndex;
+    this.updateEditorTopBar();
+    UIRenderer.renderMatchGrid();
   },
 
   triggerAddGame() {

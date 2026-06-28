@@ -42,6 +42,24 @@ document.addEventListener("DOMContentLoaded", () => {
     NavigationManager.navigateGames(1);
   });
 
+  const gameInput = document.getElementById("currentGameInput");
+  if (gameInput) {
+    gameInput.addEventListener("change", (e) => {
+      const val = parseInt(e.target.value, 10);
+      if (!isNaN(val) && val >= 1) {
+        NavigationManager.jumpToGame(val);
+      } else {
+        // Reset to current if invalid
+        const memId = import("./state/appState.js").then(({StateManager}) => {
+             if(StateManager.activeMemoryId) {
+                const currentNum = StateManager.activeGameIndex + 1;
+                e.target.value = currentNum;
+             }
+        });
+      }
+    });
+  }
+
   bindClick("btnAddGame", () => {
     NavigationManager.triggerAddGame();
   });
@@ -145,12 +163,35 @@ document.addEventListener("DOMContentLoaded", () => {
 
     if (!id) return;
 
-    if (target.classList.contains("btn-open-mem")) {
+    if (target.classList.contains("btn-create-mem")) {
+      if (confirm("Lanjutkan inisialisasi Memory ini? (Yes=OK, No=Cancel)")) {
+        import("./services/memoryManager.js").then(({ MemoryManager }) => {
+          MemoryManager.initializeEmptyMemory(id);
+          NavigationManager.switchToEditorView(id);
+          NavigationManager.closeDatabaseModal();
+        });
+      }
+    } else if (target.classList.contains("btn-open-mem")) {
       NavigationManager.switchToEditorView(id);
       NavigationManager.closeDatabaseModal();
     } 
     else if (target.classList.contains("btn-export-mem")) {
       ImportExportService.exportMemoryToJSON(id);
+    }
+    else if (target.classList.contains("btn-download-template")) {
+      ImportExportService.downloadTemplate(id);
+    }
+    else if (target.classList.contains("btn-add-memory-slot")) {
+      import("./state/appState.js").then(({StateManager}) => {
+         StateManager.db.maxSlot = (StateManager.db.maxSlot || 7) + 1;
+         StateManager.save();
+         import("./ui/uiRenderer.js").then(({UIRenderer}) => {
+             UIRenderer.renderDatabaseModal();
+             // scroll to bottom
+             const list = document.getElementById("databaseModalList");
+             if(list) list.scrollTop = list.scrollHeight;
+         });
+      });
     }
     };
   }
