@@ -3,11 +3,15 @@ import { StateManager } from "../state/appState.js";
 export const MemoryManager = {
   initializeEmptyMemory(memoryId) {
     StateManager.db.memories[memoryId] = {
+      version: 3,
+      memoryName: "Memory " + memoryId,
       memoryNumber: memoryId,
-      games: [this.generateBlankGame(1)],
-      lastUpdate: new Date().toISOString()
+      createdAt: new Date().toISOString(),
+      lastUpdate: new Date().toISOString(),
+      totalGames: 1,
+      games: [this.generateBlankGame(1)]
     };
-    StateManager.save();
+    StateManager.debouncedSave();
   },
 
   generateBlankGame(gameNum) {
@@ -27,12 +31,13 @@ export const MemoryManager = {
     const newGame = this.generateBlankGame(nextGameNumber);
     memory.games.push(newGame);
     memory.lastUpdate = new Date().toISOString();
-    StateManager.save();
+    memory.totalGames = memory.games.length;
+    StateManager.debouncedSave();
   },
 
   deleteMemory(memoryId) {
     StateManager.db.memories[memoryId] = null;
-    StateManager.save();
+    StateManager.debouncedSave();
   },
 
   updateGameField(memoryId, gameIndex, field, value) {
@@ -42,7 +47,7 @@ export const MemoryManager = {
     memory.games[gameIndex][field] = value;
     memory.games[gameIndex].lastUpdate = new Date().toISOString();
     memory.lastUpdate = new Date().toISOString();
-    StateManager.save();
+    StateManager.debouncedSave();
   },
 
 
@@ -57,7 +62,7 @@ export const MemoryManager = {
     memory.games[gameIndex].topGoals[goalIndex][field] = value;
     memory.games[gameIndex].lastUpdate = new Date().toISOString();
     memory.lastUpdate = new Date().toISOString();
-    StateManager.save();
+    StateManager.debouncedSave();
   }
 ,
 
@@ -68,6 +73,6 @@ export const MemoryManager = {
     memory.games[gameIndex].matches[matchIndex][field] = value;
     memory.games[gameIndex].lastUpdate = new Date().toISOString();
     memory.lastUpdate = new Date().toISOString();
-    StateManager.save();
+    StateManager.debouncedSave();
   }
 };

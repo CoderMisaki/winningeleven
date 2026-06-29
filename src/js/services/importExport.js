@@ -32,7 +32,14 @@ export const ImportExportService = {
     // Membaca ulang state terbaru, bukan cache
     // Clone secara mendalam menggunakan JSON untuk memastikan tidak ada referensi
     const targetMemory = JSON.parse(JSON.stringify(StateManager.db.memories[memoryId]));
-    if (!targetMemory) return alert("Tidak dapat mengekspor memori kosong!");
+    if (!targetMemory) {
+       if(typeof window !== 'undefined' && window.UIRenderer) {
+           window.UIRenderer.showAlert("Tidak dapat mengekspor memori kosong!");
+       } else {
+           alert("Tidak dapat mengekspor memori kosong!");
+       }
+       return;
+    }
 
     const exportData = { ...targetMemory, version: 3 };
 
@@ -85,8 +92,16 @@ export const ImportExportService = {
   },
 
   processImportFile(file, targetMemoryId, onComplete) {
+    const showAlert = (msg) => {
+        if(typeof window !== 'undefined' && window.UIRenderer) {
+            window.UIRenderer.showAlert(msg);
+        } else {
+            alert(msg);
+        }
+    };
+
     if (!file.name.toLowerCase().endsWith('.json')) {
-      alert("Format berkas ditolak! Harap unggah file .json");
+      showAlert("Format berkas ditolak! Harap unggah file .json");
       return;
     }
 
@@ -100,7 +115,6 @@ export const ImportExportService = {
 
       try {
         let importedData = JSON.parse(event.target.result);
-        // importedData = Security.sanitizeObject(importedData);
         
         if (!importedData.games || !Array.isArray(importedData.games)) {
           throw new Error("Struktur data Game paket didalam JSON tidak valid.");
@@ -122,8 +136,8 @@ export const ImportExportService = {
             throw new Error(`Game ${game.gameNumber} harus memiliki tepat 7 matches.`);
           }
           game.matches.forEach(m => {
-            if (m.score && !/^\d{1,2}\s*:\s*\d{1,2}$/.test(m.score) && m.score.trim() !== "") {
-              throw new Error(`Format score tidak valid pada Game ${game.gameNumber}: ${m.score}. Harus berformat x:y`);
+            if (m.score && !/^\d+:\d+$/.test(m.score.trim()) && m.score.trim() !== "") {
+              throw new Error(`Format score tidak valid pada Game ${game.gameNumber}: ${m.score}. Harus berformat x:y tanpa spasi atau karakter lain.`);
             }
             if (m.home && m.home.trim() !== "") {
               const normHome = normalizeCountry(m.home);
@@ -139,8 +153,8 @@ export const ImportExportService = {
             throw new Error(`Game ${game.gameNumber} harus memiliki tepat 7 topGoals.`);
           }
           game.topGoals.forEach(g => {
-            if (g.goals && isNaN(parseInt(g.goals, 10))) {
-              throw new Error(`Goals harus berupa angka pada Game ${game.gameNumber}`);
+            if (g.goals && (isNaN(parseInt(g.goals, 10)) || parseInt(g.goals, 10) < 0 || g.goals.includes('.'))) {
+              throw new Error(`Goals harus berupa bilangan bulat positif pada Game ${game.gameNumber}`);
             }
             if (g.country && g.country.trim() !== "") {
               const normCountry = normalizeCountry(g.country);
@@ -151,8 +165,11 @@ export const ImportExportService = {
 
         // Duplicate Game Detection
         const importedGameHashes = new Set();
+        const normalizeData = (g) => {
+            return JSON.stringify({ p1: g.p1, matches: g.matches, topGoals: g.topGoals });
+        };
+
         importedData.games.forEach(importedGame => {
-          const normalizeData = (g) => canonicalStringify({ p1: g.p1, matches: g.matches, topGoals: g.topGoals });
           const importedHash = normalizeData(importedGame);
 
           if (importedGameHashes.has(importedHash)) {
@@ -161,7 +178,7 @@ export const ImportExportService = {
           importedGameHashes.add(importedHash);
 
           for (const [memId, memory] of Object.entries(StateManager.db.memories)) {
-            if (String(memId) === String(targetMemoryId)) continue; // Skip memory slot yang akan di-overwrite
+            if (String(memId) === String(targetMemoryId)) continue;
             if (memory && memory.games) {
               for (const existingGame of memory.games) {
                 if (normalizeData(existingGame) === importedHash) {
@@ -172,50 +189,82 @@ export const ImportExportService = {
           }
         });
 
+        const performImport = () => {
+            // Terapkan paksa ID nomor memori mengikuti aturan nama file
+            importedData.memoryNumber = targetMemoryId;
+            importedData.version = 3;
+            if (!importedData.memoryName) importedData.memoryName = "Memory " + targetMemoryId;
+            if (!importedData.createdAt) importedData.createdAt = new Date().toISOString();
+            importedData.lastUpdate = new Date().toISOString();
+            importedData.totalGames = importedData.games.length;
+
+            StateManager.db.memories[targetMemoryId] = importedData;
+            StateManager.save();
+
+            // JSON Validation - Import check
+            const importedDataStr = JSON.stringify(importedData);
+            const dbDataStr = JSON.stringify(StateManager.db.memories[targetMemoryId]);
+            if (importedDataStr !== dbDataStr) {
+                // Rollback
+                if (originalMemoryData) {
+                  StateManager.db.memories[targetMemoryId] = originalMemoryData;
+                } else {
+                  StateManager.db.memories[targetMemoryId] = null;
+                }
+                StateManager.save();
+                throw new Error("Import validation failed: StateManager DB differs from imported JSON object.");
+            }
+
+            showAlert(`Berhasil mengimpor berkas ke Memory ${targetMemoryId}!`);
+            onComplete(targetMemoryId);
+        };
+
+
         // Duplicate Memory Detection
         const identicalMemId = isMemoryIdentical(importedData.games);
-        if (identicalMemId && identicalMemId !== String(targetMemoryId)) {
-          const proceed = confirm(`Memory ini identik dengan Memory ${identicalMemId}. Tetap import?`);
-          if (!proceed) return;
-        }
-
-        // Konfirmasi Overwrite apabila data pada slot memori tujuan sudah terisi
-        if (StateManager.db.memories[targetMemoryId]) {
-          const overwriteConfirmed = confirm(`Peringatan: Slot Memory ${targetMemoryId} sudah berisi dataset. Timpa (Overwrite) seluruh data?`);
-          if (!overwriteConfirmed) return;
-          if (overwriteConfirmed) {
-            alert("Sistem akan mendownload backup otomatis (backup_memo" + targetMemoryId + ".json) sebelum menimpa data.");
-            const backupData = { ...StateManager.db.memories[targetMemoryId], version: 3 };
-            const backupBlob = new Blob([JSON.stringify(backupData, null, 2)], { type: "application/json" });
-            const backupLink = document.createElement("a");
-            backupLink.href = URL.createObjectURL(backupBlob);
-            backupLink.download = `backup_memo${targetMemoryId}.json`;
-            document.body.appendChild(backupLink);
-            backupLink.click();
-            document.body.removeChild(backupLink);
-            setTimeout(() => URL.revokeObjectURL(backupLink.href), 100);
-          }
-        }
-
-        // Terapkan paksa ID nomor memori mengikuti aturan nama file
-        importedData.memoryNumber = targetMemoryId;
-        // Pastikan version diupdate
-        importedData.version = 3;
-
-
-        StateManager.db.memories[targetMemoryId] = importedData;
-        StateManager.save();
         
-        // JSON Validation - Import check
-        const importedDataStr = JSON.stringify(importedData);
-        const dbDataStr = JSON.stringify(StateManager.db.memories[targetMemoryId]);
-        if (importedDataStr !== dbDataStr) {
-            throw new Error("Import validation failed: StateManager DB differs from imported JSON object.");
+        const confirmOverwrite = () => {
+            if (StateManager.db.memories[targetMemoryId]) {
+                if(window.UIRenderer && window.UIRenderer.showConfirm) {
+                    window.UIRenderer.showConfirm(`Peringatan: Slot Memory ${targetMemoryId} sudah berisi dataset. Timpa (Overwrite) seluruh data?`, () => {
+                        showAlert("Sistem akan mendownload backup otomatis (backup_memo" + targetMemoryId + ".json) sebelum menimpa data.");
+                        const backupData = { ...StateManager.db.memories[targetMemoryId], version: 3 };
+                        const backupBlob = new Blob([JSON.stringify(backupData, null, 2)], { type: "application/json" });
+                        const backupLink = document.createElement("a");
+                        backupLink.href = URL.createObjectURL(backupBlob);
+                        backupLink.download = `backup_memo${targetMemoryId}.json`;
+                        document.body.appendChild(backupLink);
+                        backupLink.click();
+                        document.body.removeChild(backupLink);
+                        setTimeout(() => URL.revokeObjectURL(backupLink.href), 100);
+
+                        performImport();
+                    });
+                } else {
+                   const ok = confirm(`Peringatan: Slot Memory ${targetMemoryId} sudah berisi dataset. Timpa (Overwrite) seluruh data?`);
+                   if(ok) {
+                       performImport();
+                   }
+                }
+            } else {
+                performImport();
+            }
+        };
+
+        if (identicalMemId && identicalMemId !== String(targetMemoryId)) {
+            if(window.UIRenderer && window.UIRenderer.showConfirm) {
+                window.UIRenderer.showConfirm(`Memory ini identik dengan Memory ${identicalMemId}. Tetap import?`, () => {
+                    confirmOverwrite();
+                });
+            } else {
+                if(confirm(`Memory ini identik dengan Memory ${identicalMemId}. Tetap import?`)) {
+                    confirmOverwrite();
+                }
+            }
+        } else {
+            confirmOverwrite();
         }
 
-
-        alert(`Berhasil mengimpor berkas ke Memory ${targetMemoryId}!`);
-        onComplete(targetMemoryId);
       } catch (err) {
         // Rollback / Restore on fail
         if (originalMemoryData) {
@@ -223,7 +272,8 @@ export const ImportExportService = {
         } else {
           StateManager.db.memories[targetMemoryId] = null;
         }
-        alert("Gagal membaca atau mem-parsing berkas JSON: " + err.message);
+        StateManager.save();
+        showAlert("Gagal membaca atau mem-parsing berkas JSON: " + err.message);
       }
     };
 

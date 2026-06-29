@@ -4,6 +4,7 @@ import { MemoryManager } from "../services/memoryManager.js";
 
 export const NavigationManager = {
   switchToHomeView() {
+    StateManager.save();
     StateManager.activeMemoryId = null;
     
     document.getElementById("editorNav").classList.add("hidden");
@@ -43,6 +44,7 @@ export const NavigationManager = {
   },
 
   navigateGames(direction) {
+    StateManager.save();
     const memId = StateManager.activeMemoryId;
     if (!memId) return;
 
@@ -65,8 +67,9 @@ export const NavigationManager = {
   },
 
   jumpToGame(targetNumber) {
+    StateManager.save();
     if (targetNumber > 1000) {
-      alert("Maksimal game yang diizinkan adalah 1000.");
+      UIRenderer.showAlert("Maksimal game yang diizinkan adalah 1000.");
       return;
     }
     const memId = StateManager.activeMemoryId;
