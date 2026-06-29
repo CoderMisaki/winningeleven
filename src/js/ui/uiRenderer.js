@@ -4,6 +4,36 @@ import { Security } from "../utils/security.js";
 import { setupCountryAutocomplete } from "./autocomplete.js";
 
 export const UIRenderer = {
+  showAlert(message) {
+    const modal = document.getElementById("confirmModal");
+    const msgEl = document.getElementById("confirmMessage");
+    const btnYes = document.getElementById("btnConfirmYes");
+    const btnNo = document.getElementById("btnConfirmNo");
+
+    if (!modal || !msgEl || !btnYes || !btnNo) {
+      alert(message);
+      return;
+    }
+
+    // Hide No button for alert
+    btnNo.style.display = "none";
+    btnYes.textContent = "OK";
+
+    msgEl.textContent = message;
+    modal.classList.remove("hidden");
+
+    const cleanup = () => {
+      modal.classList.add("hidden");
+      btnYes.onclick = null;
+      btnYes.textContent = "Yes";
+      btnNo.style.display = "inline-block";
+    };
+
+    btnYes.onclick = () => {
+      cleanup();
+    };
+  },
+
   showConfirm(message, onYes) {
     const modal = document.getElementById("confirmModal");
     const msgEl = document.getElementById("confirmMessage");
@@ -15,6 +45,9 @@ export const UIRenderer = {
       if (confirm(message)) onYes();
       return;
     }
+
+    btnNo.style.display = "inline-block";
+    btnYes.textContent = "Yes";
 
     msgEl.textContent = message;
     modal.classList.remove("hidden");
@@ -129,11 +162,12 @@ export const UIRenderer = {
     for (let i = 1; i <= maxSlot; i++) {
       const mem = StateManager.db.memories[i];
       const isEmpty = !mem;
+      const memName = mem && mem.memoryName ? mem.memoryName : `MEMORY ${i}`;
 
       dbModalList.innerHTML += `
         <div class="db-card">
           <div class="db-card-header">
-            <span>MEMORY ${i}</span>
+            <span>${memName}</span>
             <span class="${isEmpty ? 'status-empty' : 'status-online'}">${isEmpty ? '[ EMPTY ]' : '[ ONLINE ]'}</span>
           </div>
           <div class="db-info-row">

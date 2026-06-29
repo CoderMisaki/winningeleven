@@ -57,6 +57,7 @@ const GOALS_MAX_SCORE = 7 * 10; // 70
 export const SimilarityCalculator = {
   calculate(queryGame, targetGame) {
     let matchScore = 0;
+    let maxPossiblePoints = 0;
     const explanations = [];
     
     // Evaluate Matches
@@ -66,121 +67,158 @@ export const SimilarityCalculator = {
 
       if (!qMatch || !tMatch) continue;
 
-      const qHome = (qMatch.home || "").trim().toUpperCase();
-      const qAway = (qMatch.away || "").trim().toUpperCase();
+      const qHome = (qMatch.home || "").trim();
+      const qAway = (qMatch.away || "").trim();
       const qScore = (qMatch.score || "").trim();
 
-      const tHome = (tMatch.home || "").trim().toUpperCase();
-      const tAway = (tMatch.away || "").trim().toUpperCase();
+      if (!qHome && !qAway && !qScore) continue;
+
+      const normQHome = normalizeCountry(qHome);
+      const normQAway = normalizeCountry(qAway);
+
+      const tHome = (tMatch.home || "").trim();
+      const tAway = (tMatch.away || "").trim();
       const tScore = (tMatch.score || "").trim();
+
+      const normTHome = normalizeCountry(tHome);
+      const normTAway = normalizeCountry(tAway);
+
+      maxPossiblePoints += MATCH_WEIGHTS[i];
 
       let localScoreNormal = 0;
       let homeMatchNormal = false;
       let awayMatchNormal = false;
       let scoreMatchPtsNormal = 0;
 
-      if (qHome && normalizeCountry(qHome) === normalizeCountry(tHome)) {
+      if (normQHome && normQHome === normTHome) {
         localScoreNormal += 4;
         homeMatchNormal = true;
       }
-      if (qAway && normalizeCountry(qAway) === normalizeCountry(tAway)) {
+      if (normQAway && normQAway === normTAway) {
         localScoreNormal += 4;
         awayMatchNormal = true;
       }
-      scoreMatchPtsNormal = calculateScorePoints(qScore, tScore);
-      localScoreNormal += scoreMatchPtsNormal;
+      if (qScore) {
+          scoreMatchPtsNormal = calculateScorePoints(qScore, tScore);
+          localScoreNormal += scoreMatchPtsNormal;
+      }
 
       let localScoreReverse = 0;
       let homeMatchReverse = false;
       let awayMatchReverse = false;
       let scoreMatchPtsReverse = 0;
 
-      if (qHome && normalizeCountry(qHome) === normalizeCountry(tAway)) {
+      if (normQHome && normQHome === normTAway) {
         localScoreReverse += 4;
         homeMatchReverse = true;
       }
-      if (qAway && normalizeCountry(qAway) === normalizeCountry(tHome)) {
+      if (normQAway && normQAway === normTHome) {
         localScoreReverse += 4;
         awayMatchReverse = true;
       }
-      scoreMatchPtsReverse = calculateScorePoints(qScore, reverseScore(tScore));
-      localScoreReverse += scoreMatchPtsReverse;
+      if (qScore) {
+          scoreMatchPtsReverse = calculateScorePoints(qScore, reverseScore(tScore));
+          localScoreReverse += scoreMatchPtsReverse;
+      }
 
       const isReverse = localScoreReverse > localScoreNormal;
-      const localScore = isReverse ? localScoreReverse : localScoreNormal;
+      let localScore = isReverse ? localScoreReverse : localScoreNormal;
       const homeMatch = isReverse ? homeMatchReverse : homeMatchNormal;
       const awayMatch = isReverse ? awayMatchReverse : awayMatchNormal;
       const scoreMatchPts = isReverse ? scoreMatchPtsReverse : scoreMatchPtsNormal;
 
-      const weightedScore = (localScore / 14) * MATCH_WEIGHTS[i];
+      // Calculate max local score based on what is populated in query
+      let maxLocalScore = 0;
+      if (normQHome) maxLocalScore += 4;
+      if (normQAway) maxLocalScore += 4;
+      if (qScore) maxLocalScore += 6;
+
+      if (maxLocalScore === 0) continue; // Should not reach here based on earlier check
+
+      const weightedScore = (localScore / maxLocalScore) * MATCH_WEIGHTS[i];
       matchScore += weightedScore;
 
       // Explanations for match
-      if (qHome || qAway || qScore) {
-         if (localScore === 14) {
-             if (isReverse) {
-                 explanations.push(`✔ Match ${i+1} Perfect Reverse Match (+${weightedScore.toFixed(1)} pts)`);
-             } else {
-                 explanations.push(`✔ Match ${i+1} sama persis (+${weightedScore.toFixed(1)} pts)`);
-             }
-         } else if (localScore > 0) {
-             let details = [];
-             if (homeMatch) details.push(isReverse ? 'Home -> Away sama' : 'Home sama');
-             if (awayMatch) details.push(isReverse ? 'Away -> Home sama' : 'Away sama');
-             if (scoreMatchPts === 6) details.push(isReverse ? 'Score Reverse sama' : 'Score sama');
-             else if (scoreMatchPts > 0) details.push(isReverse ? 'Score Reverse mirip' : 'Score mirip');
+      if (localScore === maxLocalScore) {
+          if (isReverse) {
+              explanations.push(`✔ Match ${i+1} Perfect Reverse Match (+${weightedScore.toFixed(1)} pts)`);
+          } else {
+              explanations.push(`✔ Match ${i+1} sama persis (+${weightedScore.toFixed(1)} pts)`);
+          }
+      } else if (localScore > 0) {
+          let details = [];
+          if (homeMatch) details.push(isReverse ? 'Home -> Away sama' : 'Home sama');
+          if (awayMatch) details.push(isReverse ? 'Away -> Home sama' : 'Away sama');
+          if (scoreMatchPts === 6) details.push(isReverse ? 'Score Reverse sama' : 'Score sama');
+          else if (scoreMatchPts > 0) details.push(isReverse ? 'Score Reverse mirip' : 'Score mirip');
 
-             if (isReverse) {
-                 explanations.push(`⚠️ Match ${i+1} parsial Reverse Match (${details.join(', ')}) (+${weightedScore.toFixed(1)} pts)`);
-             } else {
-                 explanations.push(`⚠️ Match ${i+1} parsial (${details.join(', ')}) (+${weightedScore.toFixed(1)} pts)`);
-             }
-         } else {
-             explanations.push(`❌ Match ${i+1} sama sekali beda`);
-         }
+          if (isReverse) {
+              explanations.push(`⚠️ Match ${i+1} parsial Reverse Match (${details.join(', ')}) (+${weightedScore.toFixed(1)} pts)`);
+          } else {
+              explanations.push(`⚠️ Match ${i+1} parsial (${details.join(', ')}) (+${weightedScore.toFixed(1)} pts)`);
+          }
+      } else {
+          explanations.push(`❌ Match ${i+1} sama sekali beda`);
       }
     }
 
-    // Evaluate Top Goals: 7 goals (Max 70 points)
+    // Evaluate Top Goals: 7 goals
     for (let i = 0; i < 7; i++) {
       const qGoal = queryGame.topGoals ? queryGame.topGoals[i] : null;
       const tGoal = targetGame.topGoals ? targetGame.topGoals[i] : null;
       if (!qGoal || !tGoal) continue;
 
+      if (!qGoal.country && !qGoal.player && !qGoal.goals) continue;
+
       let goalPts = 0;
+      let maxGoalPts = 0;
       let details = [];
-      if (qGoal.country && normalizeCountry(qGoal.country) === normalizeCountry(tGoal.country)) {
-         goalPts += 3;
-         details.push('Negara');
-      }
-      if (qGoal.player && fuzzyMatchString(qGoal.player, tGoal.player)) {
-         goalPts += 2;
-         details.push('Pemain');
-      }
-      if (qGoal.goals && qGoal.goals.trim() === (tGoal.goals || "").trim()) {
-         goalPts += 5;
-         details.push('Jumlah Goal');
+
+      if (qGoal.country) {
+          maxGoalPts += 3;
+          if (normalizeCountry(qGoal.country) === normalizeCountry(tGoal.country)) {
+             goalPts += 3;
+             details.push('Negara');
+          }
       }
 
+      if (qGoal.player) {
+          maxGoalPts += 2;
+          if (fuzzyMatchString(qGoal.player, tGoal.player)) {
+             goalPts += 2;
+             details.push('Pemain');
+          }
+      }
+
+      if (qGoal.goals) {
+          maxGoalPts += 5;
+          if (qGoal.goals.trim() === (tGoal.goals || "").trim()) {
+             goalPts += 5;
+             details.push('Jumlah Goal');
+          }
+      }
+
+      if (maxGoalPts === 0) continue;
+
+      maxPossiblePoints += maxGoalPts;
       matchScore += goalPts;
 
-      if (qGoal.country || qGoal.player || qGoal.goals) {
-         if (goalPts === 10) {
-             explanations.push(`✔ Top Goal #${i+1} sama persis (+10 pts)`);
-         } else if (goalPts > 0) {
-             explanations.push(`⚠️ Top Goal #${i+1} parsial (${details.join(', ')}) (+${goalPts} pts)`);
-         } else {
-             explanations.push(`❌ Top Goal #${i+1} beda`);
-         }
+      if (goalPts === maxGoalPts) {
+          explanations.push(`✔ Top Goal #${i+1} sama persis (+${goalPts} pts)`);
+      } else if (goalPts > 0) {
+          explanations.push(`⚠️ Top Goal #${i+1} parsial (${details.join(', ')}) (+${goalPts} pts)`);
+      } else {
+          explanations.push(`❌ Top Goal #${i+1} beda`);
       }
     }
 
     // P1 Bonus
     const hasQueryP1 = queryGame.p1 && queryGame.p1.trim();
-    const hasTargetP1 = targetGame.p1 && targetGame.p1.trim();
     
-    if (hasQueryP1 && hasTargetP1) {
-      if (normalizeCountry(queryGame.p1) === normalizeCountry(targetGame.p1)) {
+    if (hasQueryP1) {
+      maxPossiblePoints += 20;
+      const hasTargetP1 = targetGame.p1 && targetGame.p1.trim();
+      if (hasTargetP1 && normalizeCountry(queryGame.p1) === normalizeCountry(targetGame.p1)) {
         matchScore += 20;
         explanations.push(`✔ P1 sama (+20 pts)`);
       } else {
@@ -188,8 +226,10 @@ export const SimilarityCalculator = {
       }
     }
 
-    const totalMatchWeights = MATCH_WEIGHTS.reduce((a, b) => a + b, 0); // 100
-    const maxPossiblePoints = totalMatchWeights + GOALS_MAX_SCORE + (hasQueryP1 ? 20 : 0);
+    if (maxPossiblePoints === 0) {
+       return { percentage: 0, explanations: [] };
+    }
+
     const calculatedPercentage = (matchScore / maxPossiblePoints) * 100;
     
     return {

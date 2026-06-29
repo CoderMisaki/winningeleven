@@ -1,7 +1,7 @@
 import { teamsDB } from '../data/teams.js';
 import { countryAliases } from '../data/countryAliases.js';
 
-const searchData = Object.keys(teamsDB).map(code => {
+const searchData = Object.keys(teamsDB).map((code, originalIndex) => {
     const name = teamsDB[code].name;
     const flag = teamsDB[code].flag;
     const aliases = countryAliases[code] || [];
@@ -9,7 +9,8 @@ const searchData = Object.keys(teamsDB).map(code => {
         code,
         name,
         flag,
-        searchTerms: [name.toLowerCase(), ...aliases.map(a => a.toLowerCase())]
+        searchTerms: [name.toLowerCase(), ...aliases.map(a => a.toLowerCase())],
+        originalIndex
     };
 });
 
@@ -37,7 +38,7 @@ function findMatches(query) {
             results.push({
                 data,
                 score: bestScore,
-                originalIndex: searchData.indexOf(data)
+                originalIndex: data.originalIndex
             });
         }
     }
@@ -51,6 +52,7 @@ function findMatches(query) {
 
     return results.slice(0, 8).map(r => r.data);
 }
+
 
 // Global click handler to close suggestions
 document.addEventListener('click', (e) => {

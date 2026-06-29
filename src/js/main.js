@@ -7,6 +7,8 @@ import { Security } from "./utils/security.js";
 import { MemoryManager } from "./services/memoryManager.js";
 
 document.addEventListener("DOMContentLoaded", () => {
+  window.UIRenderer = UIRenderer;
+
   // Hubungkan dan inisialisasi basis data sistem
   StateManager.init();
 
@@ -122,80 +124,106 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Eksekusi Pencocokan Dataset (Matching Engine)
   bindClick("btnRunMatch", () => {
-    const results = MatchingEngine.executeSearch(StateManager.homeQuery);
+    const btn = document.getElementById("btnRunMatch");
+    btn.disabled = true;
+    const oldText = btn.textContent;
+    btn.textContent = "SEARCHING...";
+
     const resultsPanel = document.getElementById("resultsPanel");
     const resultsOutput = document.getElementById("resultsOutput");
-
-    const minSimInput = document.getElementById("minSimilarity");
-    const minSimThreshold = minSimInput ? parseInt(minSimInput.value, 10) || 0 : 0;
-
-    const filteredResults = results.filter(r => r.similarity >= minSimThreshold);
-
     resultsPanel.classList.remove("hidden");
-    resultsOutput.innerHTML = ""; // Clear existing
+    resultsOutput.innerHTML = "<div style='text-align:center; padding: 20px;'>Loading...</div>";
 
-    if (filteredResults.length === 0) {
-      const errMsg = document.createElement("div");
-      errMsg.className = "error-msg";
-      errMsg.textContent = "Tidak ditemukan kecocokan pada seluruh Memory (dengan filter yang diberikan).";
-      resultsOutput.appendChild(errMsg);
-      return;
-    }
+    // Allow UI to update before heavy computation
+    setTimeout(() => {
+        const results = MatchingEngine.executeSearch(StateManager.homeQuery);
 
-    const pre = document.createElement("pre");
-    pre.className = "log-output";
-    
-    const header = document.createElement("div");
-    header.innerHTML = "================================<br/>   MATCH FOUND REPORT SYSTEMS<br/>================================<br/><br/>";
-    pre.appendChild(header);
+        const minSimInput = document.getElementById("minSimilarity");
+        const minSimThreshold = minSimInput ? parseInt(minSimInput.value, 10) || 0 : 0;
 
-    filteredResults.forEach((match, index) => {
-      const isPerfect = match.similarity === 100;
+        const filteredResults = results.filter(r => r.similarity >= minSimThreshold);
+        resultsOutput.innerHTML = ""; // Clear existing
 
-      const matchBlock = document.createElement("div");
+        btn.disabled = false;
+        btn.textContent = oldText;
 
-      const rankingText = document.createElement("div");
-      rankingText.textContent = `Rank       : #${index + 1}`;
-      matchBlock.appendChild(rankingText);
+        if (filteredResults.length === 0) {
+          const errMsg = document.createElement("div");
+          errMsg.className = "error-msg";
+          errMsg.textContent = "Tidak ditemukan kecocokan pada seluruh Memory (dengan filter yang diberikan).";
+          resultsOutput.appendChild(errMsg);
+          return;
+        }
 
-      const memText = document.createElement("div");
-      memText.textContent = `Memory     : ${match.memoryName}`;
-      matchBlock.appendChild(memText);
+        const pre = document.createElement("pre");
+        pre.className = "log-output";
 
-      const gameText = document.createElement("div");
-      gameText.textContent = `Game       : ${match.gameNumber}`;
-      matchBlock.appendChild(gameText);
+        const header = document.createElement("div");
+        header.innerHTML = "================================<br/>   MATCH FOUND REPORT SYSTEMS<br/>================================<br/><br/>";
+        pre.appendChild(header);
 
-      const simText = document.createElement("div");
-      if (isPerfect) {
-        simText.innerHTML = `Similarity : <span class="sim-perfect">${match.similarity}%</span> <span class="sim-badge">[ PERFECT MATCH ]</span>`;
-      } else {
-        simText.innerHTML = `Similarity : <span class="sim-normal">${match.similarity}%</span>`;
-      }
-      matchBlock.appendChild(simText);
+        filteredResults.forEach((match, index) => {
+          const isPerfect = match.similarity === 100;
+          const isExcellent = match.similarity >= 95 && match.similarity < 100;
+          const isHigh = match.similarity >= 90 && match.similarity < 95;
 
-      if (match.explanations && match.explanations.length > 0) {
-        const explText = document.createElement("div");
-        explText.style.marginTop = "5px";
-        explText.style.color = "#aaa";
-        explText.style.fontSize = "0.75rem";
-        explText.innerHTML = match.explanations.map(e => `<div>${e}</div>`).join("");
-        matchBlock.appendChild(explText);
-      }
+          const matchBlock = document.createElement("div");
 
-      if (index < filteredResults.length - 1) {
-        const divider = document.createElement("div");
-        divider.innerHTML = `--------------------------------<br/>`;
-        matchBlock.appendChild(divider);
-      }
+          const rankingText = document.createElement("div");
+          rankingText.textContent = `Rank       : #${index + 1}`;
+          matchBlock.appendChild(rankingText);
 
-      pre.appendChild(matchBlock);
-    });
+          const memText = document.createElement("div");
+          memText.innerHTML = `Memory     : <span class="mem-link" style="cursor:pointer; text-decoration:underline; color:#0f0;" data-mem="${match.memoryId}" data-game="${match.gameNumber}">${match.memoryName} (Game ${match.gameNumber})</span>`;
+          matchBlock.appendChild(memText);
 
-    resultsOutput.appendChild(pre);
-    
-    // Tarik scroll layar agar hasil langsung terlihat di perangkat mobile
-    resultsPanel.scrollIntoView({ behavior: "smooth" });
+          const simText = document.createElement("div");
+          if (isPerfect) {
+            simText.innerHTML = `Similarity : <span class="sim-perfect">${match.similarity}%</span> <span class="sim-badge" style="background:#0f0; color:#000; padding:2px 5px; font-size:0.7rem;">[ PERFECT MATCH ]</span>`;
+          } else if (isExcellent) {
+            simText.innerHTML = `Similarity : <span class="sim-normal">${match.similarity}%</span> <span class="sim-badge" style="background:#ff0; color:#000; padding:2px 5px; font-size:0.7rem;">[ EXCELLENT ]</span>`;
+          } else if (isHigh) {
+             simText.innerHTML = `Similarity : <span class="sim-normal">${match.similarity}%</span> <span class="sim-badge" style="background:#f90; color:#000; padding:2px 5px; font-size:0.7rem;">[ HIGH MATCH ]</span>`;
+          } else {
+            simText.innerHTML = `Similarity : <span class="sim-normal">${match.similarity}%</span> <span class="sim-badge" style="background:#333; color:#fff; padding:2px 5px; font-size:0.7rem;">[ NORMAL ]</span>`;
+          }
+          matchBlock.appendChild(simText);
+
+          if (match.explanations && match.explanations.length > 0) {
+            const explText = document.createElement("div");
+            explText.style.marginTop = "5px";
+            explText.style.color = "#aaa";
+            explText.style.fontSize = "0.75rem";
+            explText.innerHTML = match.explanations.map(e => `<div>${e}</div>`).join("");
+            matchBlock.appendChild(explText);
+          }
+
+          if (index < filteredResults.length - 1) {
+            const divider = document.createElement("div");
+            divider.innerHTML = `--------------------------------<br/>`;
+            matchBlock.appendChild(divider);
+          }
+
+          pre.appendChild(matchBlock);
+        });
+
+        resultsOutput.appendChild(pre);
+
+        // Setup click handler for jumping to editor
+        pre.querySelectorAll('.mem-link').forEach(link => {
+            link.addEventListener('click', (e) => {
+                const memId = e.target.dataset.mem;
+                const gameNum = parseInt(e.target.dataset.game, 10);
+                NavigationManager.switchToEditorView(memId);
+                NavigationManager.jumpToGame(gameNum);
+                // Scroll to top to see editor
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            });
+        });
+
+        // Tarik scroll layar agar hasil langsung terlihat di perangkat mobile
+        resultsPanel.scrollIntoView({ behavior: "smooth" });
+    }, 50);
   });
 
   // Delegasi Event Klik Dinamis di dalam Modal Database

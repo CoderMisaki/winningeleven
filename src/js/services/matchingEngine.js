@@ -12,7 +12,7 @@ export const MatchingEngine = {
       const currentMemory = StateManager.db.memories[memoryId];
       if (!currentMemory || !currentMemory.games) continue;
 
-      currentMemory.games.forEach((game) => {
+      for (const game of currentMemory.games) {
         // Pre-filter berdasarkan P1 dan Home 1 (index sederhana)
         // Jika dataset sudah puluhan ribu, ini akan sangat mempercepat
         const queryP1 = normalizeCountry(query.p1 || "");
@@ -24,13 +24,13 @@ export const MatchingEngine = {
 
         // Jika query memiliki P1 tapi target tidak punya atau berbeda total
         if (queryP1 && targetP1 && queryP1 !== targetP1) {
-           return;
+           continue;
         }
 
         // Jika query memiliki Home1 tapi target tidak punya atau berbeda total
         // We now check if it matches either home1 or away1 to support reverse match
         if (queryHome1 && targetHome1 && queryHome1 !== targetHome1 && queryHome1 !== targetAway1) {
-           return;
+           continue;
         }
 
         const simResult = SimilarityCalculator.calculate(query, game);
@@ -39,13 +39,13 @@ export const MatchingEngine = {
         if (simResult.percentage > 0) {
           results.push({
             memoryId: parseInt(memoryId, 10),
-            memoryName: currentMemory.name || `Memory ${memoryId}`,
+            memoryName: currentMemory.memoryName || `Memory ${memoryId}`,
             gameNumber: game.gameNumber,
             similarity: simResult.percentage,
             explanations: simResult.explanations
           });
         }
-      });
+      }
     }
 
     // Pengurutan menurun berdasarkan persentase kemiripan tertinggi (Similarity DESC, Game Number ASC, Memory ASC)
