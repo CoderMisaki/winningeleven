@@ -40,20 +40,26 @@ export const MemoryManager = {
     StateManager.debouncedSave();
   },
 
-  updateGameField(memoryId, gameIndex, field, value) {
+  updateGameField(memoryId, gameIndex, field, value, immediate = false) {
     const memory = StateManager.db.memories[memoryId];
     if (!memory || !memory.games[gameIndex]) return;
     
     memory.games[gameIndex][field] = value;
     memory.games[gameIndex].lastUpdate = new Date().toISOString();
     memory.lastUpdate = new Date().toISOString();
-    StateManager.debouncedSave();
+    if (immediate) {
+        StateManager.save();
+    } else {
+        StateManager.debouncedSave();
+    }
   },
 
 
-  updateTopGoalField(memoryId, gameIndex, goalIndex, field, value) {
+  updateTopGoalField(memoryId, gameIndex, goalIndex, field, value, immediate = false) {
     const memory = StateManager.db.memories[memoryId];
     if (!memory || !memory.games[gameIndex]) return;
+
+    if (goalIndex < 0 || goalIndex >= 7) return;
 
     if (!memory.games[gameIndex].topGoals) {
       memory.games[gameIndex].topGoals = Array.from({ length: 7 }, () => ({ country: "", player: "", goals: "" }));
@@ -62,17 +68,27 @@ export const MemoryManager = {
     memory.games[gameIndex].topGoals[goalIndex][field] = value;
     memory.games[gameIndex].lastUpdate = new Date().toISOString();
     memory.lastUpdate = new Date().toISOString();
-    StateManager.debouncedSave();
+    if (immediate) {
+        StateManager.save();
+    } else {
+        StateManager.debouncedSave();
+    }
   }
 ,
 
-  updateMatchField(memoryId, gameIndex, matchIndex, field, value) {
+  updateMatchField(memoryId, gameIndex, matchIndex, field, value, immediate = false) {
     const memory = StateManager.db.memories[memoryId];
     if (!memory || !memory.games[gameIndex]) return;
+
+    if (matchIndex < 0 || matchIndex >= 7) return;
 
     memory.games[gameIndex].matches[matchIndex][field] = value;
     memory.games[gameIndex].lastUpdate = new Date().toISOString();
     memory.lastUpdate = new Date().toISOString();
-    StateManager.debouncedSave();
+    if (immediate) {
+        StateManager.save();
+    } else {
+        StateManager.debouncedSave();
+    }
   }
 };

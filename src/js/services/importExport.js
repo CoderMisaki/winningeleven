@@ -44,15 +44,15 @@ export const ImportExportService = {
     const exportData = { ...targetMemory, version: 3 };
 
     // JSON Validation - Export check
-    const dbDataStr = JSON.stringify({ ...StateManager.db.memories[memoryId], version: 3 });
-    const exportDataStr = JSON.stringify(exportData);
+    const dbDataStr = canonicalStringify({ ...StateManager.db.memories[memoryId], version: 3 });
+    const exportDataStr = canonicalStringify(exportData);
     if (dbDataStr !== exportDataStr) {
         throw new Error("Export validation failed: Generated object differs from StateManager DB.");
     }
 
     // Parse back check
-    const parsedData = JSON.parse(exportDataStr);
-    if (JSON.stringify(parsedData) !== dbDataStr) {
+    const parsedData = JSON.parse(JSON.stringify(exportData));
+    if (canonicalStringify(parsedData) !== dbDataStr) {
         throw new Error("Export validation failed: Parsed JSON differs from StateManager DB.");
     }
 
@@ -166,7 +166,7 @@ export const ImportExportService = {
         // Duplicate Game Detection
         const importedGameHashes = new Set();
         const normalizeData = (g) => {
-            return JSON.stringify({ p1: g.p1, matches: g.matches, topGoals: g.topGoals });
+            return canonicalStringify({ p1: g.p1, matches: g.matches, topGoals: g.topGoals });
         };
 
         importedData.games.forEach(importedGame => {
@@ -202,8 +202,8 @@ export const ImportExportService = {
             StateManager.save();
 
             // JSON Validation - Import check
-            const importedDataStr = JSON.stringify(importedData);
-            const dbDataStr = JSON.stringify(StateManager.db.memories[targetMemoryId]);
+            const importedDataStr = canonicalStringify(importedData);
+            const dbDataStr = canonicalStringify(StateManager.db.memories[targetMemoryId]);
             if (importedDataStr !== dbDataStr) {
                 // Rollback
                 if (originalMemoryData) {
