@@ -1,17 +1,40 @@
 import { teamsDB } from '../data/teams.js';
 import { countryAliases } from '../data/countryAliases.js';
 
-const searchData = Object.keys(teamsDB).map((code, originalIndex) => {
+// Pre-calculate search index
+const searchData = [];
+const exactMatches = new Map();
+const prefixMatches = new Map();
+const includeMatches = new Map();
+
+Object.keys(teamsDB).forEach((code, originalIndex) => {
     const name = teamsDB[code].name;
     const flag = teamsDB[code].flag;
     const aliases = countryAliases[code] || [];
-    return {
+
+    const entry = {
         code,
         name,
         flag,
-        searchTerms: [name.toLowerCase(), ...aliases.map(a => a.toLowerCase())],
         originalIndex
     };
+
+    searchData.push(entry);
+
+    const terms = [name.toLowerCase(), ...aliases.map(a => a.toLowerCase())];
+
+    terms.forEach(term => {
+        exactMatches.set(term, entry);
+
+        // Build prefix map for fast prefix lookups
+        for (let i = 1; i <= term.length; i++) {
+            const prefix = term.substring(0, i);
+            if (!prefixMatches.has(prefix)) {
+                prefixMatches.set(prefix, new Set());
+            }
+            prefixMatches.get(prefix).add(entry);
+        }
+    });
 });
 
 function findMatches(query) {
@@ -20,26 +43,39 @@ function findMatches(query) {
     if (!q) return [];
 
     let results = [];
+    const seen = new Set();
 
-    for (const data of searchData) {
-        let bestScore = -1;
-        for (const term of data.searchTerms) {
-            if (term === q) {
-                bestScore = 100;
-                break;
-            } else if (term.startsWith(q)) {
-                bestScore = Math.max(bestScore, 50);
-            } else if (term.includes(q)) {
-                bestScore = Math.max(bestScore, 10);
-            }
+    const addResult = (entry, score) => {
+        if (!seen.has(entry.code)) {
+            seen.add(entry.code);
+            results.push({ data: entry, score, originalIndex: entry.originalIndex });
         }
+    };
 
-        if (bestScore > 0) {
-            results.push({
-                data,
-                score: bestScore,
-                originalIndex: data.originalIndex
-            });
+    // 1. Exact matches (100)
+    if (exactMatches.has(q)) {
+        addResult(exactMatches.get(q), 100);
+    }
+
+    // 2. Prefix matches (50)
+    if (prefixMatches.has(q)) {
+        for (const entry of prefixMatches.get(q)) {
+            addResult(entry, 50);
+        }
+    }
+
+    // 3. Includes matches (10)
+    for (const entry of searchData) {
+        if (seen.has(entry.code)) continue;
+        const terms = [entry.name.toLowerCase()];
+        const aliases = countryAliases[entry.code] || [];
+        terms.push(...aliases.map(a => a.toLowerCase()));
+
+        for (const term of terms) {
+            if (term.includes(q)) {
+                addResult(entry, 10);
+                break;
+            }
         }
     }
 
@@ -68,7 +104,7 @@ document.addEventListener('click', (e) => {
     });
 });
 
-export function setupCountryAutocomplete(inputElement) {
+export function setupCountryAutocomplete(inputElement, onSelect = null) {
     if (!inputElement) return;
 
     if (inputElement.dataset.acAttached) return;
@@ -123,9 +159,15 @@ export function setupCountryAutocomplete(inputElement) {
         ignoreInput = true;
         inputElement.value = name;
         closeSuggestions();
-        const event = new Event('input', { bubbles: true });
-        inputElement.dispatchEvent(event);
-        ignoreInput = false;
+        if (onSelect) {
+            onSelect(name);
+        } else {
+            // Fallback for missing callback
+            const event = new Event('input', { bubbles: true });
+            inputElement.dispatchEvent(event);
+        }
+        // Need a small timeout to let any lingering input events ignore the change before clearing flag
+        setTimeout(() => { ignoreInput = false; }, 10);
     };
 
     inputElement.addEventListener('input', (e) => {

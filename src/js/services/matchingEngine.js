@@ -13,25 +13,7 @@ export const MatchingEngine = {
       if (!currentMemory || !currentMemory.games) continue;
 
       for (const game of currentMemory.games) {
-        // Pre-filter berdasarkan P1 dan Home 1 (index sederhana)
-        // Jika dataset sudah puluhan ribu, ini akan sangat mempercepat
-        const queryP1 = normalizeCountry(query.p1 || "");
-        const queryHome1 = normalizeCountry(query.matches && query.matches[0] ? query.matches[0].home || "" : "");
-
-        const targetP1 = normalizeCountry(game.p1 || "");
-        const targetHome1 = normalizeCountry(game.matches && game.matches[0] ? game.matches[0].home || "" : "");
-        const targetAway1 = normalizeCountry(game.matches && game.matches[0] ? game.matches[0].away || "" : "");
-
-        // Jika query memiliki P1 tapi target tidak punya atau berbeda total
-        if (queryP1 && targetP1 && queryP1 !== targetP1) {
-           continue;
-        }
-
-        // Jika query memiliki Home1 tapi target tidak punya atau berbeda total
-        // We now check if it matches either home1 or away1 to support reverse match
-        if (queryHome1 && targetHome1 && queryHome1 !== targetHome1 && queryHome1 !== targetAway1) {
-           continue;
-        }
+        // Pre-filters removed intentionally to prevent early rejection of potentially high-scoring but partially mismatched candidates
 
         const simResult = SimilarityCalculator.calculate(query, game);
         // simResult is now an object { percentage, explanations }

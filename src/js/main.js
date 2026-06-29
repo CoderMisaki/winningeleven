@@ -93,7 +93,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
       if (field !== "") {
         if (isEditor) {
-          MemoryManager.updateMatchField(StateManager.activeMemoryId, StateManager.activeGameIndex, idx, field, val);
+          MemoryManager.updateMatchField(StateManager.activeMemoryId, StateManager.activeGameIndex, idx, field, val, false);
         } else {
           StateManager.homeQuery.matches[idx][field] = val;
         }
@@ -115,7 +115,7 @@ document.addEventListener("DOMContentLoaded", () => {
       if (target.classList.contains("goal-amount")) field = "goals";
 
       if (isEditor) {
-        MemoryManager.updateTopGoalField(StateManager.activeMemoryId, StateManager.activeGameIndex, idx, field, val);
+        MemoryManager.updateTopGoalField(StateManager.activeMemoryId, StateManager.activeGameIndex, idx, field, val, false);
       } else {
         StateManager.homeQuery.topGoals[idx][field] = val;
       }
