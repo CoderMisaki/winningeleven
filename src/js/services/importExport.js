@@ -29,9 +29,10 @@ function isMemoryIdentical(importedGames) {
 
 export const ImportExportService = {
   exportMemoryToJSON(memoryId) {
-    const targetMemory = StateManager.db.memories[memoryId];
+    // Membaca ulang state terbaru, bukan cache
+    // Clone secara mendalam menggunakan JSON untuk memastikan tidak ada referensi
+    const targetMemory = JSON.parse(JSON.stringify(StateManager.db.memories[memoryId]));
     if (!targetMemory) return alert("Tidak dapat mengekspor memori kosong!");
-
 
     const exportData = { ...targetMemory, version: 3 };
 
@@ -40,6 +41,12 @@ export const ImportExportService = {
     const exportDataStr = JSON.stringify(exportData);
     if (dbDataStr !== exportDataStr) {
         throw new Error("Export validation failed: Generated object differs from StateManager DB.");
+    }
+
+    // Parse back check
+    const parsedData = JSON.parse(exportDataStr);
+    if (JSON.stringify(parsedData) !== dbDataStr) {
+        throw new Error("Export validation failed: Parsed JSON differs from StateManager DB.");
     }
 
     const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: "application/json" });

@@ -15,9 +15,16 @@ export const StorageService = {
 
   saveData(data) {
     try {
-      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(data));
+      const dataStr = JSON.stringify(data);
+      localStorage.setItem(LOCAL_STORAGE_KEY, dataStr);
+
+      const saved = localStorage.getItem(LOCAL_STORAGE_KEY);
+      if (saved !== dataStr) {
+        throw new Error("LocalStorage validation failed: Data saved differs from memory.");
+      }
     } catch (e) {
       console.error("Gagal menyimpan ke LocalStorage", e);
+      throw e;
     }
   },
 
