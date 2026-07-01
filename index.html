@@ -75,6 +75,17 @@
         <div class="results-header">RESULT OUTPUT</div>
         <div class="results-body" id="resultsOutput"></div>
       </section>
+
+      <section class="ai-qa-panel" id="aiQAPanel" style="margin-top: 20px; border: 1px solid var(--border-color); padding: 15px; background: var(--bg-panel);">
+        <div class="section-title" style="margin-bottom: 10px;">AI ASSISTANT (GLM-5.2)</div>
+        <div id="aiChatWindow" style="height: 200px; overflow-y: auto; background: var(--bg-dark); border: 1px solid #555; padding: 10px; margin-bottom: 10px; font-family: var(--font-mono); font-size: 0.8rem; display: flex; flex-direction: column; gap: 10px;">
+          <div style="color: #aaa;">[SYSTEM] AI Assistant Ready. Ask any question...</div>
+        </div>
+        <div style="display: flex; gap: 10px;">
+          <input type="text" id="aiChatInput" placeholder="Type your message..." style="flex-grow: 1; padding: 8px; font-family: var(--font-retro); font-size: 0.7rem; background: var(--bg-dark); color: var(--text-light); border: 1px solid #555;" autocomplete="off" />
+          <button class="btn btn-primary" id="btnSendAiChat" style="padding: 8px 15px;">SEND</button>
+        </div>
+      </section>
     </main>
 
     <div class="modal-overlay hidden" id="databaseModal">

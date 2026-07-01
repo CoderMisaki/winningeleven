@@ -305,4 +305,87 @@ document.addEventListener("DOMContentLoaded", () => {
     e.target.dataset.targetId = "";
     };
   }
+
+  // --- AI CHAT FUNCTIONALITY ---
+  const btnSendAiChat = document.getElementById("btnSendAiChat");
+  const aiChatInput = document.getElementById("aiChatInput");
+  const aiChatWindow = document.getElementById("aiChatWindow");
+
+  let chatHistory = [];
+
+  async function handleSendAiMessage() {
+    const text = aiChatInput.value.trim();
+    if (!text) return;
+
+    // Append user message to UI
+    const userMsg = document.createElement("div");
+    userMsg.style.color = "#fff";
+    userMsg.innerHTML = `<strong style="color: #0f0;">YOU:</strong> ${text}`;
+    aiChatWindow.appendChild(userMsg);
+    aiChatWindow.scrollTop = aiChatWindow.scrollHeight;
+
+    aiChatInput.value = "";
+    aiChatInput.disabled = true;
+    btnSendAiChat.disabled = true;
+
+    // Add to history
+    chatHistory.push({ role: "user", content: text });
+
+    // Append loading indicator
+    const loadingMsg = document.createElement("div");
+    loadingMsg.style.color = "#aaa";
+    loadingMsg.textContent = "AI is thinking...";
+    aiChatWindow.appendChild(loadingMsg);
+    aiChatWindow.scrollTop = aiChatWindow.scrollHeight;
+
+    try {
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages: chatHistory })
+      });
+
+      aiChatWindow.removeChild(loadingMsg);
+
+      if (!response.ok) {
+        throw new Error(`Server returned ${response.status}: ${await response.text()}`);
+      }
+
+      const data = await response.json();
+      const aiReply = data.choices && data.choices[0] && data.choices[0].message ? data.choices[0].message.content : "No response.";
+
+      chatHistory.push({ role: "assistant", content: aiReply });
+
+      const aiMsg = document.createElement("div");
+      aiMsg.style.color = "#0ff";
+      // Basic formatting for newlines
+      aiMsg.innerHTML = `<strong style="color: #ff0;">AI:</strong> ${aiReply.replace(/\n/g, '<br/>')}`;
+      aiChatWindow.appendChild(aiMsg);
+
+    } catch (err) {
+      if (aiChatWindow.contains(loadingMsg)) aiChatWindow.removeChild(loadingMsg);
+      const errMsg = document.createElement("div");
+      errMsg.style.color = "#f55";
+      errMsg.innerHTML = `<strong>ERROR:</strong> ${err.message}`;
+      aiChatWindow.appendChild(errMsg);
+    } finally {
+      aiChatInput.disabled = false;
+      btnSendAiChat.disabled = false;
+      aiChatInput.focus();
+      aiChatWindow.scrollTop = aiChatWindow.scrollHeight;
+    }
+  }
+
+  if (btnSendAiChat) {
+    btnSendAiChat.addEventListener("click", handleSendAiMessage);
+  }
+
+  if (aiChatInput) {
+    aiChatInput.addEventListener("keypress", (e) => {
+      if (e.key === "Enter") {
+        handleSendAiMessage();
+      }
+    });
+  }
+
 });
