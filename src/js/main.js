@@ -319,6 +319,69 @@ function escapeHtml(unsafe) {
 }
 
 // --- AI CHAT FUNCTIONALITY ---
+  const btnUploadAiChat = document.getElementById("btnUploadAiChat");
+  const aiChatUploadMenu = document.getElementById("aiChatUploadMenu");
+  const aiChatFile = document.getElementById("aiChatFile");
+  const aiChatAttachmentPreview = document.getElementById("aiChatAttachmentPreview");
+  let currentAttachment = null;
+
+  if (btnUploadAiChat && aiChatUploadMenu) {
+    btnUploadAiChat.addEventListener("click", () => {
+      if (aiChatUploadMenu.style.display === "none" || !aiChatUploadMenu.style.display) {
+        aiChatUploadMenu.style.display = "flex";
+      } else {
+        aiChatUploadMenu.style.display = "none";
+      }
+    });
+  }
+
+  if (aiChatUploadMenu && aiChatFile) {
+    const menuButtons = aiChatUploadMenu.querySelectorAll("button");
+    menuButtons.forEach(btn => {
+      btn.addEventListener("click", (e) => {
+        const type = e.target.dataset.type;
+        if (type === "image") aiChatFile.accept = "image/*";
+        else if (type === "audio") aiChatFile.accept = "audio/*";
+        else if (type === "video") aiChatFile.accept = "video/*";
+        else if (type === "document") aiChatFile.accept = "application/pdf";
+
+        aiChatUploadMenu.style.display = "none";
+        aiChatFile.dataset.fileType = type;
+        aiChatFile.click();
+      });
+    });
+  }
+
+  if (aiChatFile) {
+    aiChatFile.addEventListener("change", (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const base64Data = event.target.result.split(",")[1];
+        currentAttachment = {
+          type: aiChatFile.dataset.fileType,
+          base64: base64Data,
+          mimeType: file.type || "application/octet-stream",
+          filename: file.name
+        };
+
+        if (aiChatAttachmentPreview) {
+          aiChatAttachmentPreview.innerHTML = `<span>📎 ${escapeHtml(file.name)}</span> <button id="btnRemoveAttachment" style="background: none; border: none; color: #f55; cursor: pointer; font-weight: bold;">X</button>`;
+          aiChatAttachmentPreview.style.display = "flex";
+          document.getElementById("btnRemoveAttachment").addEventListener("click", () => {
+            currentAttachment = null;
+            aiChatFile.value = "";
+            aiChatAttachmentPreview.style.display = "none";
+            aiChatAttachmentPreview.innerHTML = "";
+          });
+        }
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+
   const btnSendAiChat = document.getElementById("btnSendAiChat");
   const aiChatInput = document.getElementById("aiChatInput");
   const aiChatWindow = document.getElementById("aiChatWindow");
@@ -354,7 +417,7 @@ function escapeHtml(unsafe) {
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: chatHistory })
+        body: JSON.stringify({ messages: chatHistory, attachment: currentAttachment })
       });
 
       aiChatWindow.removeChild(loadingMsg);
@@ -367,6 +430,15 @@ function escapeHtml(unsafe) {
       const aiReply = data.choices && data.choices[0] && data.choices[0].message ? data.choices[0].message.content : "No response.";
 
       chatHistory.push({ role: "assistant", content: aiReply });
+      if (currentAttachment) {
+        currentAttachment = null;
+        if (aiChatFile) aiChatFile.value = "";
+        if (aiChatAttachmentPreview) {
+          aiChatAttachmentPreview.style.display = "none";
+          aiChatAttachmentPreview.innerHTML = "";
+        }
+      }
+
 
       const aiMsg = document.createElement("div");
       aiMsg.style.color = "#0ff";

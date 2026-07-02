@@ -81,10 +81,20 @@
         <div id="aiChatWindow" style="height: 200px; overflow-y: auto; background: var(--bg-dark); border: 1px solid #555; padding: 10px; margin-bottom: 10px; font-family: var(--font-mono); font-size: 0.8rem; display: flex; flex-direction: column; gap: 10px;">
           <div style="color: #aaa;">[SYSTEM] AI Assistant Ready. Ask any question...</div>
         </div>
-        <div style="display: flex; gap: 10px;">
+        <div id="aiChatAttachmentPreview" style="display: none; background: #333; padding: 5px; margin-bottom: 5px; font-size: 0.7rem; color: #fff; border: 1px solid #555; align-items: center; justify-content: space-between;"></div>
+        <div style="display: flex; gap: 10px; position: relative; align-items: center;">
           <input type="text" id="aiChatInput" placeholder="Type your message..." style="flex-grow: 1; padding: 8px; font-family: var(--font-retro); font-size: 0.7rem; background: var(--bg-dark); color: var(--text-light); border: 1px solid #555;" autocomplete="off" />
+          <button class="btn" id="btnUploadAiChat" style="padding: 8px 10px;" title="Attach File">📎</button>
           <button class="btn btn-primary" id="btnSendAiChat" style="padding: 8px 15px;">SEND</button>
+          <div id="aiChatUploadMenu" style="display: none; position: absolute; bottom: 40px; right: 90px; background: #222; border: 1px solid #555; padding: 5px; flex-direction: column; gap: 5px; z-index: 100;">
+             <button class="btn btn-menu" data-type="image" style="font-size: 0.6rem; padding: 5px;">Image</button>
+             <button class="btn btn-menu" data-type="audio" style="font-size: 0.6rem; padding: 5px;">Audio</button>
+             <button class="btn btn-menu" data-type="video" style="font-size: 0.6rem; padding: 5px;">Video</button>
+             <button class="btn btn-menu" data-type="document" style="font-size: 0.6rem; padding: 5px;">Document</button>
+          </div>
         </div>
+        <input type="file" id="aiChatFile" style="display: none;" />
+
       </section>
     </main>
 

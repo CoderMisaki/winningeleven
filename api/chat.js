@@ -1,13 +1,16 @@
+import { GoogleGenAI } from "@google/genai";
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const apiKey = process.env.minimax3;
-  const { messages } = req.body;
 
-  if (!apiKey) {
-    return res.status(500).json({ error: 'API key not configured' });
+  const apiKey = process.env.minimax3;
+  const geminiKey = process.env.gemini35;
+  const { messages, attachment } = req.body;
+
+  if (!apiKey && !geminiKey) {
+    return res.status(500).json({ error: 'API keys not configured' });
   }
 
   // Security Audit: Validate messages payload to prevent abuse
@@ -45,6 +48,58 @@ export default async function handler(req, res) {
     });
   }
 
+  // Fallback function to call Gemini API
+  async function callGemini(messagesToPass, fileAttachment = null) {
+    try {
+      if (!geminiKey) {
+          throw new Error('Gemini API key not configured.');
+      }
+      const ai = new GoogleGenAI({ apiKey: geminiKey });
+
+      let systemPrompt = "";
+      let historyTexts = [];
+      let lastUserMsg = "";
+
+      for (const m of messagesToPass) {
+          if (m.role === 'system') systemPrompt += m.content + "\n";
+          else if (m.role === 'user') lastUserMsg = m.content;
+          historyTexts.push(`${m.role}: ${m.content}`);
+      }
+
+      if (fileAttachment) {
+          const inputArr = [
+              { type: "text", text: `\n\nSystem Context:\n${systemPrompt}\n\nChat History:\n${historyTexts.join('\n')}\n\nCurrent Request: ${lastUserMsg}` },
+              { type: fileAttachment.type, data: fileAttachment.base64, mime_type: fileAttachment.mimeType }
+          ];
+          const interaction = await ai.interactions.create({
+              model: "gemini-3.5-flash",
+              input: inputArr,
+          });
+          return { choices: [{ message: { content: interaction.output_text } }] };
+      } else {
+          // No attachment fallback
+          const combinedPrompt = `System Context:\n${systemPrompt}\n\nChat History:\n${historyTexts.join('\n')}\n\nCurrent Request: ${lastUserMsg}`;
+          const response = await ai.models.generateContent({
+              model: "gemini-3.5-flash",
+              contents: combinedPrompt
+          });
+          return { choices: [{ message: { content: response.text } }] };
+      }
+    } catch (err) {
+        console.error("Gemini Fallback Error:", err);
+        throw err;
+    }
+  }
+
+  if (attachment) {
+      try {
+          const result = await callGemini(sanitizedMessages, attachment);
+          return res.status(200).json(result);
+      } catch (err) {
+          return res.status(500).json({ error: 'Gemini API Error with Attachment', details: err.message });
+      }
+  }
+
   try {
     const response = await fetch('https://integrate.api.nvidia.com/v1/chat/completions', {
       method: 'POST',
@@ -64,14 +119,25 @@ export default async function handler(req, res) {
     });
 
     if (!response.ok) {
-      const errorText = await response.text();
-      return res.status(response.status).json({ error: `NVIDIA API Error: ${errorText}` });
+      console.warn("NVIDIA API Failed, falling back to Gemini...");
+      try {
+          const fallbackResult = await callGemini(sanitizedMessages);
+          return res.status(200).json(fallbackResult);
+      } catch (fallbackErr) {
+          const errorText = await response.text();
+          return res.status(response.status).json({ error: `NVIDIA API Error: ${errorText}. Fallback also failed: ${fallbackErr.message}` });
+      }
     }
 
     const data = await response.json();
     return res.status(200).json(data);
   } catch (error) {
-    console.error('Error proxying request:', error);
-    return res.status(500).json({ error: 'Internal Server Error', details: error.message });
+    console.warn('Error proxying request, falling back to Gemini:', error);
+    try {
+        const fallbackResult = await callGemini(sanitizedMessages);
+        return res.status(200).json(fallbackResult);
+    } catch (fallbackErr) {
+        return res.status(500).json({ error: 'Internal Server Error', details: error.message });
+    }
   }
 }
