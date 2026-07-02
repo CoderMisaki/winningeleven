@@ -84,9 +84,9 @@
         <div id="aiChatAttachmentPreview" style="display: none; background: #333; padding: 5px; margin-bottom: 5px; font-size: 0.7rem; color: #fff; border: 1px solid #555; align-items: center; justify-content: space-between;"></div>
         <div style="display: flex; gap: 10px; position: relative; align-items: center;">
           <input type="text" id="aiChatInput" placeholder="Type your message..." style="flex-grow: 1; padding: 8px; font-family: var(--font-retro); font-size: 0.7rem; background: var(--bg-dark); color: var(--text-light); border: 1px solid #555;" autocomplete="off" />
-          <button class="btn" id="btnUploadAiChat" style="padding: 8px 10px;" title="Attach File">📎</button>
-          <button class="btn btn-primary" id="btnSendAiChat" style="padding: 8px 15px;">SEND</button>
-          <div id="aiChatUploadMenu" style="display: none; position: absolute; bottom: 40px; right: 90px; background: #222; border: 1px solid #555; padding: 5px; flex-direction: column; gap: 5px; z-index: 100;">
+          <button class="btn" id="btnUploadAiChat" style="padding: 8px 10px; flex-shrink: 0;" title="Attach File">📎</button>
+          <button class="btn btn-primary" id="btnSendAiChat" style="padding: 8px 15px; flex-shrink: 0;">SEND</button>
+          <div id="aiChatUploadMenu" style="display: none; position: absolute; bottom: 100%; right: 0; margin-bottom: 10px; background: #222; border: 1px solid #555; padding: 5px; flex-direction: column; gap: 5px; z-index: 100;">
              <button class="btn btn-menu" data-type="image" style="font-size: 0.6rem; padding: 5px;">Image</button>
              <button class="btn btn-menu" data-type="audio" style="font-size: 0.6rem; padding: 5px;">Audio</button>
              <button class="btn btn-menu" data-type="video" style="font-size: 0.6rem; padding: 5px;">Video</button>
