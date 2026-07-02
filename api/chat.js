@@ -1,4 +1,6 @@
 import { GoogleGenAI } from "@google/genai";
+import fs from "fs";
+import path from "path";
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
@@ -22,10 +24,29 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'Invalid payload: too many messages' });
   }
 
+
   const validRoles = ['user', 'assistant', 'system'];
 
   const sanitizedMessages = [];
+
+  // Inject Knowledge Context
+  try {
+    const knowledgePath = path.join(process.cwd(), 'src/js/knowledge.json');
+    if (fs.existsSync(knowledgePath)) {
+      const knowledgeData = fs.readFileSync(knowledgePath, 'utf8');
+      sanitizedMessages.push({
+        role: 'system',
+        content: `You are an AI assistant for the WE10 Memory Research System. Here is the knowledge data you must remember and use to answer questions:
+
+${knowledgeData}`
+      });
+    }
+  } catch (err) {
+    console.error('Failed to load knowledge.json:', err);
+  }
+
   for (const msg of messages) {
+
     if (!msg || typeof msg !== 'object') {
       return res.status(400).json({ error: 'Invalid payload: message must be an object' });
     }
@@ -96,7 +117,7 @@ export default async function handler(req, res) {
           const result = await callGemini(sanitizedMessages, attachment);
           return res.status(200).json(result);
       } catch (err) {
-          return res.status(500).json({ error: 'Gemini API Error with Attachment', details: err.message });
+          return res.status(200).json({ choices: [{ message: { content: "Mohon maaf, sistem AI sedang mengalami gangguan. Silakan coba beberapa saat lagi." } }] });
       }
   }
 
@@ -125,7 +146,7 @@ export default async function handler(req, res) {
           return res.status(200).json(fallbackResult);
       } catch (fallbackErr) {
           const errorText = await response.text();
-          return res.status(response.status).json({ error: `NVIDIA API Error: ${errorText}. Fallback also failed: ${fallbackErr.message}` });
+          return res.status(200).json({ choices: [{ message: { content: "Mohon maaf, sistem AI sedang mengalami gangguan. Silakan coba beberapa saat lagi." } }] });
       }
     }
 
@@ -137,7 +158,7 @@ export default async function handler(req, res) {
         const fallbackResult = await callGemini(sanitizedMessages);
         return res.status(200).json(fallbackResult);
     } catch (fallbackErr) {
-        return res.status(500).json({ error: 'Internal Server Error', details: error.message });
+        return res.status(200).json({ choices: [{ message: { content: "Mohon maaf, sistem AI sedang mengalami gangguan. Silakan coba beberapa saat lagi." } }] });
     }
   }
 }

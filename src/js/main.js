@@ -426,10 +426,18 @@ function escapeHtml(unsafe) {
         throw new Error(`Server returned ${response.status}: ${await response.text()}`);
       }
 
+
       const data = await response.json();
-      const aiReply = data.choices && data.choices[0] && data.choices[0].message ? data.choices[0].message.content : "No response.";
+      let aiReply = "No response.";
+
+      if (data.error) {
+        aiReply = data.error;
+      } else if (data.choices && data.choices[0] && data.choices[0].message) {
+        aiReply = data.choices[0].message.content;
+      }
 
       chatHistory.push({ role: "assistant", content: aiReply });
+
       if (currentAttachment) {
         currentAttachment = null;
         if (aiChatFile) aiChatFile.value = "";
