@@ -1,1 +1,1 @@
-{"type": "module"}
+{"type":"module","dependencies":{"@google/genai":"^2.10.0"},"name":"app","version":"1.0.0","description":"","main":"index.js","devDependencies":{},"scripts":{"test":"echo \"Error: no test specified\" && exit 1"},"repository":{"type":"git","url":"git+https://github.com/CoderMisaki/winningeleven.git"},"keywords":[],"author":"","license":"ISC","bugs":{"url":"https://github.com/CoderMisaki/winningeleven/issues"},"homepage":"https://github.com/CoderMisaki/winningeleven#readme"}
