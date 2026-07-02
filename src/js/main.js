@@ -436,6 +436,9 @@ function escapeHtml(unsafe) {
         aiReply = data.choices[0].message.content;
       }
 
+      // Remove markdown strong/italic indicators (*) just in case
+      aiReply = aiReply.replace(/\*\*/g, '').replace(/\*/g, '');
+
       chatHistory.push({ role: "assistant", content: aiReply });
 
       if (currentAttachment) {
