@@ -306,7 +306,19 @@ document.addEventListener("DOMContentLoaded", () => {
     };
   }
 
-  // --- AI CHAT FUNCTIONALITY ---
+
+// HTML escape function to prevent XSS
+function escapeHtml(unsafe) {
+    if (!unsafe) return "";
+    return unsafe
+         .replace(/&/g, "&amp;")
+         .replace(/</g, "&lt;")
+         .replace(/>/g, "&gt;")
+         .replace(/"/g, "&quot;")
+         .replace(/'/g, "&#039;");
+}
+
+// --- AI CHAT FUNCTIONALITY ---
   const btnSendAiChat = document.getElementById("btnSendAiChat");
   const aiChatInput = document.getElementById("aiChatInput");
   const aiChatWindow = document.getElementById("aiChatWindow");
@@ -320,7 +332,7 @@ document.addEventListener("DOMContentLoaded", () => {
     // Append user message to UI
     const userMsg = document.createElement("div");
     userMsg.style.color = "#fff";
-    userMsg.innerHTML = `<strong style="color: #0f0;">YOU:</strong> ${text}`;
+    userMsg.innerHTML = `<strong style="color: #0f0;">YOU:</strong> ${escapeHtml(text)}`;
     aiChatWindow.appendChild(userMsg);
     aiChatWindow.scrollTop = aiChatWindow.scrollHeight;
 
@@ -359,7 +371,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const aiMsg = document.createElement("div");
       aiMsg.style.color = "#0ff";
       // Basic formatting for newlines
-      aiMsg.innerHTML = `<strong style="color: #ff0;">AI:</strong> ${aiReply.replace(/\n/g, '<br/>')}`;
+      aiMsg.innerHTML = `<strong style="color: #ff0;">AI:</strong> ${escapeHtml(aiReply).replace(/\n/g, '<br/>')}`;
       aiChatWindow.appendChild(aiMsg);
 
     } catch (err) {
