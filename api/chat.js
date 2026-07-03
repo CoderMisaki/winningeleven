@@ -30,7 +30,7 @@ export default async function handler(req, res) {
   const sanitizedMessages = [];
 
   // Inject Knowledge Context
-  let systemContent = "You are an AI assistant for the WE10 Memory Research System. PENTING: Berikan jawaban dalam teks biasa (plain text), jangan gunakan format markdown seperti ** (cetak tebal) atau * (cetak miring). Pastikan jawaban yang kamu berikan selalu tuntas, lengkap, dan jangan sampai terpotong atau setengah-setengah.";
+  let systemContent = "You are an AI assistant for the WE10 Memory Research System. PENTING: Berikan jawaban dalam teks biasa (plain text), jangan gunakan format markdown seperti ** (cetak tebal) atau * (cetak miring). Pastikan jawaban yang kamu berikan SELALU TUNTAS, LENGKAP 100%, DAN JANGAN PERNAH TERPOTONG DI TENGAH KALIMAT ATAU PARAGRAF. Hasilkan jawaban yang utuh dari awal sampai akhir.";
   try {
     const knowledgePath = path.join(process.cwd(), 'src/js/knowledge.json');
     if (fs.existsSync(knowledgePath)) {
@@ -133,8 +133,8 @@ export default async function handler(req, res) {
       body: JSON.stringify({
         model: 'minimaxai/minimax-m3',
         messages: sanitizedMessages,
-        max_tokens: 4096,
-        temperature: 1.00,
+        max_tokens: 8192,
+        temperature: 0.70,
         top_p: 0.95,
         stream: false
       })
