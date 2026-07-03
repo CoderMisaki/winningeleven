@@ -7,6 +7,16 @@ export default async function handler(req, res) {
   }
 
 
+  // Deep Payload Validation (Defense-in-Depth)
+  const contentType = req.headers['content-type'] || '';
+  if (!contentType.includes('application/json')) {
+    return res.status(400).json({ error: 'Invalid content type. Must be application/json' });
+  }
+
+  if (!req.body || typeof req.body !== 'object') {
+    return res.status(400).json({ error: 'Invalid request body payload' });
+  }
+
   const apiKey = process.env.minimax3;
   const geminiKey = process.env.gemini35;
   const { messages, attachment } = req.body;
@@ -79,31 +89,35 @@ export default async function handler(req, res) {
       const ai = new GoogleGenAI({ apiKey: geminiKey });
 
       let systemPrompt = "";
-      let historyTexts = [];
       let lastUserMsg = "";
 
       for (const m of messagesToPass) {
-          if (m.role === 'system') systemPrompt += m.content + "\n";
-          else if (m.role === 'user') lastUserMsg = m.content;
-          historyTexts.push(`${m.role}: ${m.content}`);
+          if (m.role === 'system') {
+              systemPrompt += m.content + "\n";
+          } else if (m.role === 'user') {
+              lastUserMsg = m.content;
+          }
       }
 
       if (fileAttachment) {
-          const inputArr = [
-              { type: "text", text: `\n\nSystem Context:\n${systemPrompt}\n\nChat History:\n${historyTexts.join('\n')}\n\nCurrent Request: ${lastUserMsg}` },
-              { type: fileAttachment.type, data: fileAttachment.base64, mime_type: fileAttachment.mimeType }
-          ];
-          const interaction = await ai.interactions.create({
-              model: "gemini-3.5-flash",
-              input: inputArr,
-          });
-          return { choices: [{ message: { content: interaction.output_text } }] };
-      } else {
-          // No attachment fallback
-          const combinedPrompt = `System Context:\n${systemPrompt}\n\nChat History:\n${historyTexts.join('\n')}\n\nCurrent Request: ${lastUserMsg}`;
           const response = await ai.models.generateContent({
               model: "gemini-3.5-flash",
-              contents: combinedPrompt
+              contents: [
+                  { text: lastUserMsg },
+                  { inlineData: { data: fileAttachment.base64, mimeType: fileAttachment.mimeType } }
+              ],
+              config: {
+                  systemInstruction: systemPrompt
+              }
+          });
+          return { choices: [{ message: { content: response.text } }] };
+      } else {
+          const response = await ai.models.generateContent({
+              model: "gemini-3.5-flash",
+              contents: lastUserMsg,
+              config: {
+                  systemInstruction: systemPrompt
+              }
           });
           return { choices: [{ message: { content: response.text } }] };
       }
