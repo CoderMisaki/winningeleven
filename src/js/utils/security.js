@@ -1,9 +1,12 @@
 export const Security = {
   sanitizeInput(input) {
     if (typeof input !== 'string') return input;
-    // Do not HTML encode, just return the string. We will sanitize on render if needed (though innerText/textContent handles it).
-    // The requirement is: "Sanitizer hanya digunakan pada tampilan HTML. Jangan mengubah data asli negara yang akan dipakai Matching Engine."
-    return input;
+    return input
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#039;");
   },
 
   sanitizeHTML(html) {

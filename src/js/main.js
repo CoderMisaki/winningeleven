@@ -194,7 +194,11 @@ document.addEventListener("DOMContentLoaded", () => {
             explText.style.marginTop = "5px";
             explText.style.color = "#aaa";
             explText.style.fontSize = "0.75rem";
-            explText.innerHTML = match.explanations.map(e => `<div>${e}</div>`).join("");
+            match.explanations.forEach(e => {
+              const div = document.createElement("div");
+              div.textContent = e;
+              explText.appendChild(div);
+            });
             matchBlock.appendChild(explText);
           }
 
@@ -309,13 +313,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
 // HTML escape function to prevent XSS
 function escapeHtml(unsafe) {
-    if (!unsafe) return "";
-    return unsafe
-         .replace(/&/g, "&amp;")
-         .replace(/</g, "&lt;")
-         .replace(/>/g, "&gt;")
-         .replace(/"/g, "&quot;")
-         .replace(/'/g, "&#039;");
+    return Security.sanitizeInput(unsafe);
 }
 
 // --- AI CHAT FUNCTIONALITY ---
