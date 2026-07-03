@@ -409,7 +409,7 @@ function escapeHtml(unsafe) {
     // Append loading indicator
     const loadingMsg = document.createElement("div");
     loadingMsg.style.color = "#aaa";
-    loadingMsg.textContent = "AI is thinking...";
+    loadingMsg.innerHTML = `<div class="ai-typing-indicator"><span></span><span></span><span></span></div>`;
     aiChatWindow.appendChild(loadingMsg);
     aiChatWindow.scrollTop = aiChatWindow.scrollHeight;
 
