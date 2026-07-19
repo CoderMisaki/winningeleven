@@ -693,3 +693,52 @@ body {
     border-bottom: 1px solid #555;
   }
 }
+
+/* V6 UI Enhancements & Responsive Sidebar */
+
+/* Hamburger menu button (hidden by default on desktop) */
+#btnToggleSidebar {
+  display: none;
+  background: none;
+  border: none;
+  color: #fff;
+  font-size: 1.2rem;
+  cursor: pointer;
+  padding: 5px;
+}
+
+/* Sidebar Drawer for mobile */
+@media (max-width: 768px) {
+  #btnToggleSidebar {
+    display: block;
+  }
+
+  #aiQAPanel {
+    position: relative;
+    overflow: hidden; /* contain the absolute sidebar */
+    height: 800px;
+  }
+
+  #aiSidebar {
+    position: absolute;
+    top: 0;
+    left: -250px;
+    width: 250px;
+    height: 100%;
+    z-index: 1000;
+    background: #0a0a0a;
+    transition: left 0.3s ease;
+    border-right: 1px solid #555;
+    border-bottom: none;
+  }
+
+  #aiSidebar.drawer-open {
+    left: 0;
+  }
+}
+
+/* Code Wrap Toggle Class */
+.ai-code-block pre.wrap-text {
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}

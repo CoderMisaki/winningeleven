@@ -372,6 +372,7 @@ function escapeHtml(unsafe) {
           <div class="ai-code-header">
             <span class="ai-code-lang">${langStr}</span>
             <div class="ai-code-controls">
+              <button class="btn-code-control btn-toggle-wrap">▤ Wrap</button>
               <button class="btn-code-control btn-toggle-code">▼ Collapse</button>
               <button class="btn-code-control btn-copy-code" data-code="${rawCode}">⧉ Copy</button>
             </div>
@@ -556,6 +557,7 @@ function escapeHtml(unsafe) {
                 <div class="chat-session-meta">${new Date(session.updatedAt).toLocaleDateString()} • ${session.messages.length} msgs</div>
              </div>
              <div class="session-actions">
+                <button class="btn-ren" title="Rename">✏️</button>
                 <button class="btn-pin ${session.pinned ? 'pin-active' : ''}" title="Pin">📌</button>
                 <button class="btn-fav" style="${session.favorite ? 'color: gold;' : ''}" title="Favorite">★</button>
                 <button class="btn-del" title="Delete">🗑</button>
@@ -570,6 +572,16 @@ function escapeHtml(unsafe) {
               renderChatWindow();
           });
 
+          div.querySelector('.btn-ren').addEventListener('click', (e) => {
+              e.stopPropagation();
+              const newTitle = prompt("Enter new chat title:", session.title);
+              if (newTitle !== null && newTitle.trim() !== "") {
+                  sessionManager.sessions[session.id].title = newTitle.trim();
+                  sessionManager.save();
+                  renderSidebar();
+                  if(sessionManager.currentSessionId === session.id) renderChatWindow();
+              }
+          });
           div.querySelector('.btn-pin').addEventListener('click', (e) => { e.stopPropagation(); sessionManager.sessions[session.id].pinned = !session.pinned; sessionManager.save(); renderSidebar(); });
           div.querySelector('.btn-fav').addEventListener('click', (e) => { e.stopPropagation(); sessionManager.sessions[session.id].favorite = !session.favorite; sessionManager.save(); renderSidebar(); });
           div.querySelector('.btn-del').addEventListener('click', (e) => {
@@ -642,7 +654,10 @@ function escapeHtml(unsafe) {
           let actionsHtml = `<div class="bubble-actions">`;
           actionsHtml += `<button class="btn-fork" data-idx="${index}">⑂ Fork Chat</button>`;
           if (msg.role === 'user') actionsHtml += `<button class="btn-edit" data-idx="${index}">✎ Edit</button>`;
-          if (msg.role === 'assistant') actionsHtml += `<button class="btn-copy-msg">⧉ Copy Text</button>`;
+          if (msg.role === 'assistant') {
+              actionsHtml += `<button class="btn-copy-msg">⧉ Copy Text</button>`;
+              actionsHtml += `<button class="btn-regen" data-idx="${index}">↻ Regenerate</button>`;
+          }
           actionsHtml += `</div>`;
 
           container.innerHTML = metaHtml;
@@ -662,12 +677,30 @@ function escapeHtml(unsafe) {
               container.querySelector('.btn-copy-msg').addEventListener('click', () => {
                   navigator.clipboard.writeText(msg.content).then(() => Toast.show("Copied!"));
               });
+              container.querySelector('.btn-regen').addEventListener('click', () => {
+                  if (isGenerating) return;
+                  // Remove this message and all after it
+                  session.messages = session.messages.slice(0, index);
+                  sessionManager.updateCurrentSession(session);
+                  // Grab the last user message to put back in input for flow
+                  const lastUser = session.messages[session.messages.length - 1];
+                  if(lastUser) {
+                      aiChatInput.value = lastUser.content;
+                      session.messages.pop(); // remove user message so it can be re-sent
+                      sessionManager.updateCurrentSession(session);
+                      handleSendAiMessage(); // trigger resend automatically
+                  }
+              });
           } else if (msg.role === 'user') {
               container.querySelector('.btn-edit').addEventListener('click', () => {
                   if (isGenerating) return;
                   aiChatInput.value = msg.content;
                   aiChatInput.focus();
-                  // In a full implementation, this might truncate history. For now, it just loads text.
+                  // Truncate history before this message so user can edit and branch from here
+                  session.messages = session.messages.slice(0, index);
+                  sessionManager.updateCurrentSession(session);
+                  renderSidebar();
+                  renderChatWindow();
               });
           }
 
@@ -831,7 +864,6 @@ function escapeHtml(unsafe) {
       });
   }
 
-
   if (aiChatInput) {
     aiChatInput.addEventListener("input", function() {
       this.style.height = "auto";
@@ -845,6 +877,165 @@ function escapeHtml(unsafe) {
       }
     });
   }
+
+  document.getElementById("btnNewChat")?.addEventListener("click", () => {
+      if(isGenerating) return;
+      sessionManager.createNewSession();
+      renderSidebar();
+      renderChatWindow();
+  });
+
+  document.getElementById("chatSearchInput")?.addEventListener("input", renderSidebar);
+
+  document.getElementById("btnExportChats")?.addEventListener("click", () => {
+      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(sessionManager.sessions, null, 2));
+      const downloadAnchorNode = document.createElement('a');
+      downloadAnchorNode.setAttribute("href", dataStr);
+      downloadAnchorNode.setAttribute("download", "we10_ai_sessions.json");
+      document.body.appendChild(downloadAnchorNode);
+      downloadAnchorNode.click();
+      downloadAnchorNode.remove();
+  });
+
+  const importChatsFile = document.getElementById("importChatsFile");
+  document.getElementById("btnImportChats")?.addEventListener("click", () => {
+      importChatsFile?.click();
+  });
+
+  importChatsFile?.addEventListener("change", (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (event) => {
+          try {
+              const importedData = JSON.parse(event.target.result);
+              // Merge sessions
+              sessionManager.sessions = { ...sessionManager.sessions, ...importedData };
+              sessionManager.save();
+              Toast.show("Chats Imported Successfully!");
+              renderSidebar();
+              renderChatWindow();
+          } catch (err) {
+              Toast.show("Error parsing JSON file");
+          }
+      };
+      reader.readAsText(file);
+      importChatsFile.value = ""; // reset
+  });
+
+
+  document.getElementById("btnClearChats")?.addEventListener("click", () => {
+      if(confirm("Clear ALL chat sessions? This cannot be undone.")) {
+          sessionManager.clearAll();
+          renderSidebar();
+          renderChatWindow();
+      }
+  });
+
+  // Attachments logic
+  if (btnUploadAiChat && aiChatUploadMenu) {
+    btnUploadAiChat.addEventListener("click", () => {
+      aiChatUploadMenu.style.display = aiChatUploadMenu.style.display === "none" ? "flex" : "none";
+    });
+  }
+
+  function renderSidebar() {
+      if(!chatSessionList) return;
+      chatSessionList.innerHTML = '';
+
+      const searchQ = (document.getElementById("chatSearchInput")?.value || "").toLowerCase();
+
+      const sortedSessions = Object.values(sessionManager.sessions).sort((a, b) => {
+          if (a.pinned !== b.pinned) return b.pinned ? 1 : -1;
+          return b.updatedAt - a.updatedAt;
+      });
+
+      sortedSessions.forEach(session => {
+          if (searchQ) {
+              const inTitle = session.title.toLowerCase().includes(searchQ);
+              const inMsgs = session.messages.some(m => m.content.toLowerCase().includes(searchQ));
+              if (!inTitle && !inMsgs) return;
+          }
+
+          const div = document.createElement("div");
+          div.className = `chat-session-item ${session.id === sessionManager.currentSessionId ? 'active' : ''}`;
+          div.innerHTML = `
+             <div style="flex-grow: 1; overflow: hidden;" class="session-click-area">
+                <div class="chat-session-title">${escapeHtml(session.title)} ${session.pinned ? '📌' : ''} ${session.favorite ? '⭐' : ''}</div>
+                <div class="chat-session-meta">${new Date(session.updatedAt).toLocaleDateString()} • ${session.messages.length} msgs</div>
+             </div>
+             <div class="session-actions">
+                <button class="btn-pin ${session.pinned ? 'pin-active' : ''}" title="Pin">📌</button>
+                <button class="btn-fav" style="${session.favorite ? 'color: gold;' : ''}" title="Favorite">★</button>
+                <button class="btn-del" title="Delete">🗑</button>
+             </div>
+          `;
+
+          div.querySelector('.session-click-area').addEventListener('click', () => {
+              if (isGenerating) return;
+              sessionManager.currentSessionId = session.id;
+              sessionManager.save();
+              renderSidebar();
+              renderChatWindow();
+          });
+
+          div.querySelector('.btn-pin').addEventListener('click', (e) => { e.stopPropagation(); sessionManager.sessions[session.id].pinned = !session.pinned; sessionManager.save(); renderSidebar(); });
+          div.querySelector('.btn-fav').addEventListener('click', (e) => { e.stopPropagation(); sessionManager.sessions[session.id].favorite = !session.favorite; sessionManager.save(); renderSidebar(); });
+          div.querySelector('.btn-del').addEventListener('click', (e) => {
+              e.stopPropagation();
+              if(confirm("Delete this chat session?")) {
+                  sessionManager.deleteSession(session.id);
+                  renderSidebar();
+                  renderChatWindow();
+              }
+          });
+
+          chatSessionList.appendChild(div);
+      });
+  }
+
+  // Delegate event listener for Copy Code & Collapse buttons
+  if (aiChatWindow) {
+    aiChatWindow.addEventListener("click", (e) => {
+      if (e.target.classList.contains("btn-copy-code")) {
+        const codeToCopy = decodeURIComponent(e.target.dataset.code);
+        navigator.clipboard.writeText(codeToCopy).then(() => {
+          const originalText = e.target.textContent;
+          e.target.textContent = "✓ Copied";
+          Toast.show("Code Copied!");
+          setTimeout(() => { e.target.textContent = originalText; }, 2000);
+        });
+            } else if (e.target.classList.contains("btn-toggle-wrap")) {
+        const pre = e.target.closest('.ai-code-block').querySelector('pre');
+        if (pre) {
+            pre.classList.toggle('wrap-text');
+        }
+      } else if (e.target.classList.contains("btn-toggle-code")) {
+        const block = e.target.closest('.ai-code-block');
+        if (block) {
+            block.classList.toggle('code-collapsed');
+            e.target.textContent = block.classList.contains('code-collapsed') ? "▶ Expand" : "▼ Collapse";
+        }
+      }
+    });
+  }
+
+  // View Branches Dummy Handler
+  document.getElementById("btnViewBranches")?.addEventListener("click", () => {
+      const session = sessionManager.getCurrentSession();
+      let treeInfo = `Current Branch ID: ${session.id}\nParent: ${session.parentId || 'Root'}\nChildren: ${session.children.join(', ') || 'None'}`;
+      alert(`Conversation Tree Info:\n\n${treeInfo}\n\n(UI for tree visualization to be implemented)`);
+  });
+
+
+  document.getElementById("btnToggleSidebar")?.addEventListener("click", () => {
+      const sidebar = document.getElementById("aiSidebar");
+      if (sidebar) sidebar.classList.toggle("drawer-open");
+  });
+
+  // Initial Render
+  renderSidebar();
+  renderChatWindow();
 
   document.getElementById("btnNewChat")?.addEventListener("click", () => {
       if(isGenerating) return;
