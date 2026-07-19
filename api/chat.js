@@ -19,9 +19,10 @@ export default async function handler(req, res) {
 
   const apiKey = process.env.minimax3;
   const geminiKey = process.env.gemini35;
+  const glmKey = process.env.glm52;
   const { messages, attachment, mode } = req.body;
 
-  if (!apiKey && !geminiKey) {
+  if (!apiKey && !geminiKey && !glmKey) {
     return res.status(500).json({ error: 'API keys not configured' });
   }
 
@@ -42,7 +43,7 @@ export default async function handler(req, res) {
   // Inject Knowledge Context
   let systemContent = "You are an AI assistant for the WE10 Memory Research System.\n";
   if (mode === 'coding') {
-    systemContent += "MODE CODING: Anda adalah ahli pemrograman tingkat dewa. Berikan jawaban dengan menyertakan kode dalam format markdown code block (```language ... ```). Berikan jawaban LENGKAP dan PASTIKAN KODE TIDAK PERNAH TERPOTONG. TULIS SAMPAI SELESAI.\n";
+    systemContent += "MODE CODING: Anda adalah ahli pemrograman tingkat dewa. Berikan jawaban dengan menyertakan kode dalam format markdown code block (```language ... ```). Berikan jawaban LENGKAP dan PASTIKAN KODE TIDAK PERNAH TERPOTONG. TULIS SAMPAI SELESAI. DILARANG KERAS memberikan hasil coding dengan typo atau kesalahan logic yang tidak benar yang bisa menyebabkan bug. Pastikan kode berjalan dengan sempurna.\n";
   } else if (mode === 'bola') {
     systemContent += "MODE BOLA: Anda adalah ahli sepak bola global. Anda boleh dan harus menjawab SEMUA pertanyaan tentang sepak bola, pemain, taktik, sejarah, liga, meskipun tidak ada di database.\n";
   } else {
@@ -86,6 +87,155 @@ export default async function handler(req, res) {
       role: msg.role,
       content: msg.content
     });
+  }
+
+  async function fetchWithTimeout(resource, options = {}) {
+    const { timeout = 60000 } = options;
+    const controller = new AbortController();
+    const id = setTimeout(() => controller.abort(), timeout);
+    const response = await fetch(resource, {
+      ...options,
+      signal: controller.signal
+    });
+    clearTimeout(id);
+    return response;
+  }
+
+  async function callMiniMax(messagesToPass, fileAttachment = null) {
+    if (!apiKey) throw new Error('MiniMax API key not configured.');
+
+    let finalMessages = [...messagesToPass];
+
+    if (fileAttachment && fileAttachment.mimeType.startsWith('image/')) {
+        // Find last user message
+        const lastUserIdx = finalMessages.map(m => m.role).lastIndexOf('user');
+        if (lastUserIdx !== -1) {
+             const originalText = finalMessages[lastUserIdx].content;
+             const dataUri = `data:${fileAttachment.mimeType};base64,${fileAttachment.base64}`;
+             finalMessages[lastUserIdx] = {
+                 role: 'user',
+                 content: [
+                     { type: "text", text: originalText },
+                     { type: "image_url", image_url: { url: dataUri } }
+                 ]
+             };
+        }
+    }
+
+    const response = await fetchWithTimeout('https://integrate.api.nvidia.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model: 'minimaxai/minimax-m3',
+        messages: finalMessages,
+        max_tokens: 8192,
+        temperature: 0.70,
+        top_p: 0.95,
+        stream: false
+      }),
+      timeout: 60000
+    });
+
+    if (!response.ok) {
+        throw new Error(`MiniMax API failed with status ${response.status}`);
+    }
+    return await response.json();
+  }
+
+  async function callGLM(messagesToPass) {
+    if (!glmKey) throw new Error('GLM API key not configured.');
+
+    const response = await fetchWithTimeout('https://integrate.api.nvidia.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'Authorization': `Bearer ${glmKey}`
+      },
+      body: JSON.stringify({
+        model: 'z-ai/glm-5.2',
+        messages: messagesToPass,
+        max_tokens: 16384,
+        temperature: 1,
+        top_p: 1,
+        seed: 42,
+        stream: false
+      }),
+      timeout: 60000
+    });
+
+    if (!response.ok) {
+        throw new Error(`GLM API failed with status ${response.status}`);
+    }
+    return await response.json();
+  }
+
+  async function smartRouter(messagesToPass, fileAttachment = null) {
+    let requestType = 'TEXT';
+    if (fileAttachment) {
+       if (fileAttachment.mimeType.startsWith('image/')) requestType = 'IMAGE';
+       else if (fileAttachment.mimeType.startsWith('audio/')) requestType = 'AUDIO';
+       else if (fileAttachment.mimeType.startsWith('video/')) requestType = 'VIDEO';
+       else requestType = 'DOCUMENT';
+    }
+
+    console.log('[Router]');
+    console.log(`Request Type : ${requestType}`);
+    console.log('Primary : MiniMax M3');
+
+    // Attempt 1: MiniMax
+    try {
+        const result = await callMiniMax(messagesToPass, fileAttachment);
+        console.log('Model Used : MiniMax M3');
+        return result;
+    } catch (e) {
+        console.warn('MiniMax failed.');
+
+        if (requestType === 'TEXT') {
+            console.log('Switching to GLM...');
+            // Attempt 2: GLM
+            try {
+                const resultGLM = await callGLM(messagesToPass);
+                console.log('Model Used : GLM 5.2');
+                return resultGLM;
+            } catch (e2) {
+                console.warn('GLM failed.');
+                console.log('Switching to Gemini...');
+                // Attempt 3: Gemini
+                try {
+                   const resultGemini = await callGemini(messagesToPass, fileAttachment);
+                   console.log('Model Used : Gemini 3.5 Flash');
+                   return resultGemini;
+                } catch (e3) {
+                   console.warn('Gemini failed too.');
+                }
+            }
+        } else {
+            console.log('Switching to Gemini...');
+            // Attempt 2: Gemini
+            try {
+                const resultGemini = await callGemini(messagesToPass, fileAttachment);
+                console.log('Model Used : Gemini 3.5 Flash');
+                return resultGemini;
+            } catch (e2) {
+                console.warn('Gemini failed too.');
+            }
+        }
+    }
+
+    return {
+      choices: [
+        {
+          message: {
+            content: "Mohon maaf, seluruh layanan AI sedang tidak tersedia. Silakan coba beberapa saat lagi."
+          }
+        }
+      ]
+    };
   }
 
   // Fallback function to call Gemini API
@@ -143,53 +293,6 @@ export default async function handler(req, res) {
     }
   }
 
-  if (attachment) {
-      try {
-          const result = await callGemini(sanitizedMessages, attachment);
-          return res.status(200).json(result);
-      } catch (err) {
-          return res.status(200).json({ choices: [{ message: { content: "Mohon maaf, sistem AI sedang mengalami gangguan. Silakan coba beberapa saat lagi." } }] });
-      }
-  }
-
-  try {
-    const response = await fetch('https://integrate.api.nvidia.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-        'Authorization': `Bearer ${apiKey}`
-      },
-      body: JSON.stringify({
-        model: 'minimaxai/minimax-m3',
-        messages: sanitizedMessages,
-        max_tokens: 8192,
-        temperature: 0.70,
-        top_p: 0.95,
-        stream: false
-      })
-    });
-
-    if (!response.ok) {
-      console.warn("NVIDIA API Failed, falling back to Gemini...");
-      try {
-          const fallbackResult = await callGemini(sanitizedMessages);
-          return res.status(200).json(fallbackResult);
-      } catch (fallbackErr) {
-          const errorText = await response.text();
-          return res.status(200).json({ choices: [{ message: { content: "Mohon maaf, sistem AI sedang mengalami gangguan. Silakan coba beberapa saat lagi." } }] });
-      }
-    }
-
-    const data = await response.json();
-    return res.status(200).json(data);
-  } catch (error) {
-    console.warn('Error proxying request, falling back to Gemini:', error);
-    try {
-        const fallbackResult = await callGemini(sanitizedMessages);
-        return res.status(200).json(fallbackResult);
-    } catch (fallbackErr) {
-        return res.status(200).json({ choices: [{ message: { content: "Mohon maaf, sistem AI sedang mengalami gangguan. Silakan coba beberapa saat lagi." } }] });
-    }
-  }
+  const routerResult = await smartRouter(sanitizedMessages, attachment);
+  return res.status(200).json(routerResult);
 }
