@@ -106,6 +106,7 @@
              <div style="display: flex; align-items: center; gap: 10px;">
                 <button id="btnToggleSidebar">☰</button>
                 <div id="currentChatTitle" style="font-family: var(--font-retro); font-size: 0.8rem; font-weight: bold; color: #fff;">New Chat</div>
+                <div id="offlineIndicator" style="display: none; background: #f55; color: #fff; padding: 2px 5px; font-family: var(--font-retro); font-size: 0.5rem; border-radius: 3px; margin-left: 10px;">OFFLINE</div>
              </div>
              <div>
                 <button class="btn btn-menu" id="btnViewBranches" style="font-size: 0.6rem; padding: 4px 8px; display: none;">View Branches</button>
@@ -143,8 +144,13 @@
                  <button class="btn btn-menu" data-type="document" style="font-size: 0.6rem; padding: 5px;">Document</button>
               </div>
             </div>
-            <div style="font-size: 0.55rem; color: #888; text-align: center; font-family: var(--font-retro);">
-              Shift+Enter for newline.
+            <div style="display: flex; justify-content: space-between; align-items: center; padding: 0 5px;">
+              <div style="font-size: 0.55rem; color: #888; font-family: var(--font-retro);">
+                Shift+Enter for newline.
+              </div>
+              <div id="contextBudgetIndicator" style="font-size: 0.55rem; color: #888; font-family: var(--font-mono);">
+                Est. Context: 0 / 8192 tokens
+              </div>
             </div>
           </div>
           <input type="file" id="aiChatFile" style="display: none;" />

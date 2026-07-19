@@ -709,12 +709,46 @@ function escapeHtml(unsafe) {
 
       aiChatWindow.scrollTop = aiChatWindow.scrollHeight;
 
+      updateContextBudget();
       // Update View Branches button visibility
       const btnViewBranches = document.getElementById("btnViewBranches");
       if (btnViewBranches) {
          const hasBranches = session.children && session.children.length > 0 || session.parentId !== null;
          btnViewBranches.style.display = hasBranches ? "block" : "none";
       }
+  }
+
+
+  // --- Prompt Injection Firewall ---
+  function checkPromptInjection(text) {
+      const lower = text.toLowerCase();
+      const blockedPhrases = [
+          "ignore previous instructions", "system prompt", "show hidden prompt",
+          "print source", "dump project", "reveal memory", "bypass security",
+          "roleplay admin", "developer message", "process.env"
+      ];
+      for (const phrase of blockedPhrases) {
+          if (lower.includes(phrase)) {
+              return true;
+          }
+      }
+      return false;
+  }
+
+
+  // --- Secret Scanner ---
+  function scanForSecrets(text) {
+      const blockedPatterns = [
+          "process.env", "API_KEY", "JWT", "Bearer", "knowledge.json",
+          "system prompt", "router source", "hidden endpoint", "database credential"
+      ];
+      for (const pattern of blockedPatterns) {
+          // simple check
+          if (text.includes(pattern)) {
+              return true;
+          }
+      }
+      return false;
   }
 
   // --- Send Message & Streaming Simulation ---
@@ -736,8 +770,16 @@ function escapeHtml(unsafe) {
                   return;
               }
 
+
               currentRaw += tokens[i];
               i++;
+
+              // Secret Scanner
+              if (scanForSecrets(currentRaw)) {
+                  currentRaw = "[REDACTED: SENSITIVE INFORMATION DETECTED]";
+                  clearInterval(interval);
+              }
+
 
               // Render intermediate (might break markdown temporarily, but gives the effect)
               // For safe streaming rendering, we parse the current chunk
@@ -748,10 +790,19 @@ function escapeHtml(unsafe) {
       });
   }
 
+
   async function handleSendAiMessage() {
     if (isGenerating) return;
     const text = aiChatInput.value.trim();
     if (!text) return;
+
+    // Security Check: Prompt Injection
+    if (checkPromptInjection(text)) {
+        Toast.show("Security Violation: Malicious prompt detected and blocked.");
+        aiChatInput.value = "";
+        return;
+    }
+
 
     // Save mode config
     if (aiChatMode) {
@@ -809,8 +860,15 @@ function escapeHtml(unsafe) {
       const data = await response.json();
       let aiReply = "No response.";
 
+
       if (data.error) aiReply = data.error;
       else if (data.choices && data.choices[0] && data.choices[0].message) aiReply = data.choices[0].message.content;
+
+      // Final Secret Scan
+      if (scanForSecrets(aiReply)) {
+          aiReply = "[REDACTED: SENSITIVE INFORMATION DETECTED IN FINAL PAYLOAD]";
+      }
+
 
       // Update model badge if possible
       const modelBadge = container.querySelector('.badge-model');
@@ -853,6 +911,42 @@ function escapeHtml(unsafe) {
 
   // --- Event Listeners ---
 
+  // --- Keyboard Shortcuts (Accessibility+) ---
+  document.addEventListener('keydown', (e) => {
+      // Esc: Stop Generating
+      if (e.key === 'Escape' && isGenerating) {
+          if (btnStopAiChat) btnStopAiChat.click();
+      }
+
+      // Ctrl+K or Cmd+K: Focus Search
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+          e.preventDefault();
+          const searchInput = document.getElementById("chatSearchInput");
+          if (searchInput) searchInput.focus();
+      }
+
+      // Ctrl+Shift+C or Cmd+Shift+C: Copy latest code block
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'c') {
+          e.preventDefault();
+          const codeBlocks = aiChatWindow.querySelectorAll('.btn-copy-code');
+          if (codeBlocks.length > 0) {
+              const lastCodeBlockBtn = codeBlocks[codeBlocks.length - 1];
+              lastCodeBlockBtn.click();
+          }
+      }
+  });
+
+  // Ctrl+Enter for textarea handled specifically
+  if (aiChatInput) {
+      aiChatInput.addEventListener('keydown', (e) => {
+          if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+              e.preventDefault();
+              handleSendAiMessage();
+          }
+      });
+  }
+
+
   if (btnSendAiChat) btnSendAiChat.addEventListener("click", handleSendAiMessage);
 
   if (btnStopAiChat) {
@@ -875,6 +969,12 @@ function escapeHtml(unsafe) {
         e.preventDefault();
         handleSendAiMessage();
       }
+  });
+
+  // Attachments logic
+  if (btnUploadAiChat && aiChatUploadMenu) {
+    btnUploadAiChat.addEventListener("click", () => {
+      aiChatUploadMenu.style.display = aiChatUploadMenu.style.display === "none" ? "flex" : "none";
     });
   }
 
@@ -923,128 +1023,6 @@ function escapeHtml(unsafe) {
       importChatsFile.value = ""; // reset
   });
 
-
-  document.getElementById("btnClearChats")?.addEventListener("click", () => {
-      if(confirm("Clear ALL chat sessions? This cannot be undone.")) {
-          sessionManager.clearAll();
-          renderSidebar();
-          renderChatWindow();
-      }
-  });
-
-  // Attachments logic
-  if (btnUploadAiChat && aiChatUploadMenu) {
-    btnUploadAiChat.addEventListener("click", () => {
-      aiChatUploadMenu.style.display = aiChatUploadMenu.style.display === "none" ? "flex" : "none";
-    });
-  }
-
-  function renderSidebar() {
-      if(!chatSessionList) return;
-      chatSessionList.innerHTML = '';
-
-      const searchQ = (document.getElementById("chatSearchInput")?.value || "").toLowerCase();
-
-      const sortedSessions = Object.values(sessionManager.sessions).sort((a, b) => {
-          if (a.pinned !== b.pinned) return b.pinned ? 1 : -1;
-          return b.updatedAt - a.updatedAt;
-      });
-
-      sortedSessions.forEach(session => {
-          if (searchQ) {
-              const inTitle = session.title.toLowerCase().includes(searchQ);
-              const inMsgs = session.messages.some(m => m.content.toLowerCase().includes(searchQ));
-              if (!inTitle && !inMsgs) return;
-          }
-
-          const div = document.createElement("div");
-          div.className = `chat-session-item ${session.id === sessionManager.currentSessionId ? 'active' : ''}`;
-          div.innerHTML = `
-             <div style="flex-grow: 1; overflow: hidden;" class="session-click-area">
-                <div class="chat-session-title">${escapeHtml(session.title)} ${session.pinned ? '📌' : ''} ${session.favorite ? '⭐' : ''}</div>
-                <div class="chat-session-meta">${new Date(session.updatedAt).toLocaleDateString()} • ${session.messages.length} msgs</div>
-             </div>
-             <div class="session-actions">
-                <button class="btn-pin ${session.pinned ? 'pin-active' : ''}" title="Pin">📌</button>
-                <button class="btn-fav" style="${session.favorite ? 'color: gold;' : ''}" title="Favorite">★</button>
-                <button class="btn-del" title="Delete">🗑</button>
-             </div>
-          `;
-
-          div.querySelector('.session-click-area').addEventListener('click', () => {
-              if (isGenerating) return;
-              sessionManager.currentSessionId = session.id;
-              sessionManager.save();
-              renderSidebar();
-              renderChatWindow();
-          });
-
-          div.querySelector('.btn-pin').addEventListener('click', (e) => { e.stopPropagation(); sessionManager.sessions[session.id].pinned = !session.pinned; sessionManager.save(); renderSidebar(); });
-          div.querySelector('.btn-fav').addEventListener('click', (e) => { e.stopPropagation(); sessionManager.sessions[session.id].favorite = !session.favorite; sessionManager.save(); renderSidebar(); });
-          div.querySelector('.btn-del').addEventListener('click', (e) => {
-              e.stopPropagation();
-              if(confirm("Delete this chat session?")) {
-                  sessionManager.deleteSession(session.id);
-                  renderSidebar();
-                  renderChatWindow();
-              }
-          });
-
-          chatSessionList.appendChild(div);
-      });
-  }
-
-  // Delegate event listener for Copy Code & Collapse buttons
-  if (aiChatWindow) {
-    aiChatWindow.addEventListener("click", (e) => {
-      if (e.target.classList.contains("btn-copy-code")) {
-        const codeToCopy = decodeURIComponent(e.target.dataset.code);
-        navigator.clipboard.writeText(codeToCopy).then(() => {
-          const originalText = e.target.textContent;
-          e.target.textContent = "✓ Copied";
-          Toast.show("Code Copied!");
-          setTimeout(() => { e.target.textContent = originalText; }, 2000);
-        });
-            } else if (e.target.classList.contains("btn-toggle-wrap")) {
-        const pre = e.target.closest('.ai-code-block').querySelector('pre');
-        if (pre) {
-            pre.classList.toggle('wrap-text');
-        }
-      } else if (e.target.classList.contains("btn-toggle-code")) {
-        const block = e.target.closest('.ai-code-block');
-        if (block) {
-            block.classList.toggle('code-collapsed');
-            e.target.textContent = block.classList.contains('code-collapsed') ? "▶ Expand" : "▼ Collapse";
-        }
-      }
-    });
-  }
-
-  // View Branches Dummy Handler
-  document.getElementById("btnViewBranches")?.addEventListener("click", () => {
-      const session = sessionManager.getCurrentSession();
-      let treeInfo = `Current Branch ID: ${session.id}\nParent: ${session.parentId || 'Root'}\nChildren: ${session.children.join(', ') || 'None'}`;
-      alert(`Conversation Tree Info:\n\n${treeInfo}\n\n(UI for tree visualization to be implemented)`);
-  });
-
-
-  document.getElementById("btnToggleSidebar")?.addEventListener("click", () => {
-      const sidebar = document.getElementById("aiSidebar");
-      if (sidebar) sidebar.classList.toggle("drawer-open");
-  });
-
-  // Initial Render
-  renderSidebar();
-  renderChatWindow();
-
-  document.getElementById("btnNewChat")?.addEventListener("click", () => {
-      if(isGenerating) return;
-      sessionManager.createNewSession();
-      renderSidebar();
-      renderChatWindow();
-  });
-
-  document.getElementById("chatSearchInput")?.addEventListener("input", renderSidebar);
 
   document.getElementById("btnClearChats")?.addEventListener("click", () => {
       if(confirm("Clear ALL chat sessions? This cannot be undone.")) {
@@ -1119,6 +1097,11 @@ function escapeHtml(unsafe) {
           Toast.show("Code Copied!");
           setTimeout(() => { e.target.textContent = originalText; }, 2000);
         });
+            } else if (e.target.classList.contains("btn-toggle-wrap")) {
+        const pre = e.target.closest('.ai-code-block').querySelector('pre');
+        if (pre) {
+            pre.classList.toggle('wrap-text');
+        }
       } else if (e.target.classList.contains("btn-toggle-code")) {
         const block = e.target.closest('.ai-code-block');
         if (block) {
@@ -1135,6 +1118,62 @@ function escapeHtml(unsafe) {
       let treeInfo = `Current Branch ID: ${session.id}\nParent: ${session.parentId || 'Root'}\nChildren: ${session.children.join(', ') || 'None'}`;
       alert(`Conversation Tree Info:\n\n${treeInfo}\n\n(UI for tree visualization to be implemented)`);
   });
+
+
+  document.getElementById("btnToggleSidebar")?.addEventListener("click", () => {
+      const sidebar = document.getElementById("aiSidebar");
+      if (sidebar) sidebar.classList.toggle("drawer-open");
+  });
+
+
+  // --- Offline Mode ---
+  function updateOnlineStatus() {
+      const isOnline = navigator.onLine;
+      const indicator = document.getElementById("offlineIndicator");
+      if (indicator) {
+          indicator.style.display = isOnline ? "none" : "block";
+      }
+      if (aiChatInput) {
+          aiChatInput.disabled = !isOnline;
+          aiChatInput.placeholder = isOnline ? "Message AI..." : "Offline mode - Chat disabled";
+      }
+      if (btnSendAiChat) btnSendAiChat.disabled = !isOnline;
+      if (btnUploadAiChat) btnUploadAiChat.disabled = !isOnline;
+  }
+
+  window.addEventListener('online', updateOnlineStatus);
+  window.addEventListener('offline', updateOnlineStatus);
+  updateOnlineStatus(); // init
+
+
+  // --- Token Budget Estimator ---
+  function updateContextBudget() {
+      const session = sessionManager.getCurrentSession();
+      if (!session) return;
+
+      const indicator = document.getElementById("contextBudgetIndicator");
+      if (!indicator) return;
+
+      // Rough estimation: 4 chars = 1 token
+      let totalChars = 0;
+      session.messages.forEach(m => {
+          totalChars += m.content.length;
+      });
+
+      const estTokens = Math.round(totalChars / 4);
+      const MAX_TOKENS = 8192;
+
+      indicator.textContent = `Est. Context: ${estTokens} / ${MAX_TOKENS} tokens`;
+
+      if (estTokens > MAX_TOKENS * 0.9) {
+          indicator.style.color = "#f55";
+          indicator.textContent += " (Approaching Limit!)";
+      } else if (estTokens > MAX_TOKENS * 0.75) {
+          indicator.style.color = "gold";
+      } else {
+          indicator.style.color = "#888";
+      }
+  }
 
   // Initial Render
   renderSidebar();
