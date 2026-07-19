@@ -421,3 +421,275 @@ body {
   outline: none;
   border-color: #0ff;
 }
+
+/* CHAT V4 STYLES */
+
+/* Sidebar Sessions */
+.chat-session-item {
+  padding: 10px;
+  border-bottom: 1px solid #333;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  transition: background 0.2s;
+}
+.chat-session-item:hover {
+  background: #222;
+}
+.chat-session-item.active {
+  background: #333;
+  border-left: 3px solid #0ff;
+}
+.chat-session-title {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  font-weight: bold;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 150px;
+}
+.chat-session-meta {
+  font-size: 0.6rem;
+  color: #888;
+  margin-top: 4px;
+}
+.session-actions button {
+  background: none;
+  border: none;
+  color: #888;
+  cursor: pointer;
+  font-size: 0.7rem;
+  padding: 2px;
+}
+.session-actions button:hover {
+  color: #fff;
+}
+.session-actions .pin-active {
+  color: #0ff;
+}
+
+/* Chat Bubbles */
+.chat-bubble-container {
+  display: flex;
+  flex-direction: column;
+  max-width: 85%;
+}
+.chat-bubble-container.user {
+  align-self: flex-end;
+  align-items: flex-end;
+}
+.chat-bubble-container.ai {
+  align-self: flex-start;
+  align-items: flex-start;
+}
+.chat-bubble-meta {
+  font-size: 0.6rem;
+  color: #888;
+  margin-bottom: 4px;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+.chat-bubble {
+  padding: 12px 15px;
+  border-radius: 8px;
+  line-height: 1.5;
+  position: relative;
+  word-wrap: break-word;
+}
+.chat-bubble.user {
+  background: #2b2b2b;
+  border: 1px solid #444;
+  color: #e0e0e0;
+  border-bottom-right-radius: 2px;
+}
+.chat-bubble.ai {
+  background: transparent;
+  border: 1px solid transparent;
+  color: #e0e0e0;
+}
+.bubble-actions {
+  display: flex;
+  gap: 5px;
+  margin-top: 5px;
+  opacity: 0.3;
+  transition: opacity 0.2s;
+}
+.chat-bubble-container:hover .bubble-actions {
+  opacity: 1;
+}
+.bubble-actions button {
+  background: none;
+  border: 1px solid #555;
+  color: #aaa;
+  border-radius: 3px;
+  font-size: 0.6rem;
+  padding: 2px 6px;
+  cursor: pointer;
+}
+.bubble-actions button:hover {
+  background: #333;
+  color: #fff;
+}
+
+/* Model/Mode Badges */
+.badge {
+  padding: 2px 5px;
+  border-radius: 3px;
+  font-family: var(--font-retro);
+  font-size: 0.5rem;
+  text-transform: uppercase;
+}
+.badge-mode { background: #333; border: 1px solid #555; }
+.badge-model { background: #1a3a3a; border: 1px solid #0ff; color: #0ff; }
+
+/* Markdown Content Styling */
+.markdown-body h1, .markdown-body h2, .markdown-body h3, .markdown-body h4 {
+  margin-top: 15px;
+  margin-bottom: 10px;
+  color: #fff;
+}
+.markdown-body p { margin-bottom: 10px; }
+.markdown-body ul, .markdown-body ol { margin-bottom: 10px; padding-left: 20px; }
+.markdown-body li { margin-bottom: 4px; }
+.markdown-body a { color: #0ff; text-decoration: none; }
+.markdown-body a:hover { text-decoration: underline; }
+.markdown-body table { width: 100%; border-collapse: collapse; margin-bottom: 10px; display: block; overflow-x: auto; }
+.markdown-body th, .markdown-body td { border: 1px solid #555; padding: 6px 10px; }
+.markdown-body th { background: #222; }
+.markdown-body blockquote { border-left: 4px solid #555; padding-left: 10px; margin-left: 0; color: #aaa; }
+.markdown-body img { max-width: 100%; border-radius: 4px; }
+.markdown-body p code, .markdown-body li code {
+  background: #2a2a2a;
+  padding: 2px 4px;
+  border-radius: 3px;
+  font-family: var(--font-mono);
+  font-size: 0.85em;
+  color: #ff9d00;
+}
+
+/* Redefined Code Block for V4 */
+.ai-code-block {
+  background-color: #0d1117;
+  border: 1px solid #30363d;
+  border-radius: 6px;
+  margin: 15px 0;
+  overflow: hidden;
+  box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+}
+.ai-code-header {
+  background-color: #161b22;
+  padding: 8px 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid #30363d;
+}
+.ai-code-lang {
+  color: #8b949e;
+  font-size: 0.75rem;
+  font-family: var(--font-mono);
+  font-weight: bold;
+}
+.ai-code-controls {
+  display: flex;
+  gap: 8px;
+}
+.btn-code-control {
+  background: transparent;
+  color: #8b949e;
+  border: none;
+  font-size: 0.7rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.btn-code-control:hover {
+  color: #c9d1d9;
+}
+.ai-code-block pre {
+  margin: 0;
+  padding: 12px;
+  overflow-x: auto;
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  line-height: 1.45;
+  background-color: #0d1117; /* GitHub Dark theme bg */
+}
+/* Ensure Highlight.js doesn't override our padding/margin */
+.ai-code-block pre code.hljs {
+  padding: 0;
+  background: transparent;
+}
+.code-collapsed pre {
+  display: none;
+}
+
+/* Blinking Cursor for Streaming */
+.blink-cursor {
+  display: inline-block;
+  width: 8px;
+  height: 15px;
+  background-color: #fff;
+  vertical-align: middle;
+  animation: blink 1s step-end infinite;
+  margin-left: 2px;
+}
+@keyframes blink { 50% { opacity: 0; } }
+
+/* Toast */
+#toast-container {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.toast {
+  background: #0ff;
+  color: #000;
+  padding: 10px 20px;
+  border-radius: 4px;
+  font-family: var(--font-retro);
+  font-size: 0.7rem;
+  box-shadow: 0 4px 6px rgba(0,0,0,0.5);
+  animation: slideIn 0.3s ease-out forwards, fadeOut 0.3s ease-in 2s forwards;
+}
+@keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+@keyframes fadeOut { from { opacity: 1; } to { opacity: 0; } }
+
+/* Branch View Modal override */
+#branchList {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.branch-item {
+  padding: 10px;
+  background: #222;
+  border: 1px solid #555;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+}
+.branch-item:hover { background: #333; border-color: #0ff; }
+.branch-item.active { border-left: 4px solid #0ff; }
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  #aiQAPanel {
+    flex-direction: column;
+    height: 800px;
+  }
+  #aiSidebar {
+    width: 100%;
+    height: 200px;
+    border-right: none;
+    border-bottom: 1px solid #555;
+  }
+}

@@ -19,7 +19,6 @@ export default async function handler(req, res) {
 
   const apiKey = process.env.minimax3;
   const geminiKey = process.env.gemini35;
-  const glmKey = process.env.glm52;
   const { messages, attachment, mode } = req.body;
 
   if (!apiKey && !geminiKey && !glmKey) {
@@ -43,7 +42,7 @@ export default async function handler(req, res) {
   // Inject Knowledge Context
   let systemContent = "You are an AI assistant for the WE10 Memory Research System.\n";
   if (mode === 'coding') {
-    systemContent += "MODE CODING: Anda adalah ahli pemrograman tingkat dewa. Berikan jawaban dengan menyertakan kode dalam format markdown code block (```language ... ```). Berikan jawaban LENGKAP dan PASTIKAN KODE TIDAK PERNAH TERPOTONG. TULIS SAMPAI SELESAI. DILARANG KERAS memberikan hasil coding dengan typo atau kesalahan logic yang tidak benar yang bisa menyebabkan bug. Pastikan kode berjalan dengan sempurna.\n";
+    systemContent += "MODE CODING: Anda adalah ahli pemrograman tingkat dewa. Berikan jawaban dengan menyertakan kode dalam format markdown code block (```language ... ```). Berikan jawaban LENGKAP dan PASTIKAN KODE TIDAK PERNAH TERPOTONG. TULIS SAMPAI SELESAI.\n";
   } else if (mode === 'bola') {
     systemContent += "MODE BOLA: Anda adalah ahli sepak bola global. Anda boleh dan harus menjawab SEMUA pertanyaan tentang sepak bola, pemain, taktik, sejarah, liga, meskipun tidak ada di database.\n";
   } else {
