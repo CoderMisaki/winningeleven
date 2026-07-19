@@ -44,9 +44,9 @@ export default async function handler(req, res) {
   if (mode === 'coding') {
     systemContent += "MODE CODING: Anda adalah ahli pemrograman tingkat dewa. Berikan jawaban dengan menyertakan kode dalam format markdown code block (```language ... ```). Berikan jawaban LENGKAP dan PASTIKAN KODE TIDAK PERNAH TERPOTONG. TULIS SAMPAI SELESAI.\n";
   } else if (mode === 'bola') {
-    systemContent += "MODE BOLA: Anda adalah ahli sepak bola global. Anda boleh dan harus menjawab SEMUA pertanyaan tentang sepak bola, pemain, taktik, sejarah, liga, meskipun tidak ada di database.\n";
+    systemContent += "MODE BOLA: Anda adalah ahli sepak bola global. Gunakan format Markdown standar untuk mempercantik jawaban (bold, list, tabel). Anda boleh dan harus menjawab SEMUA pertanyaan tentang sepak bola.\n";
   } else {
-    systemContent += "MODE NORMAL: Jawablah dengan wajar. Jangan gunakan format markdown untuk cetak tebal/miring, tapi gunakan markdown code block (```) jika memang memberikan kode.\n";
+    systemContent += "MODE NORMAL: Jawablah dengan wajar dan profesional. Gunakan format Markdown standar (seperti **bold**, *italic*, ## heading, dan list). Jika memberikan kode atau struktur data, SELALU gunakan fenced code block (```language ... ```).\n";
   }
 
   // --- AI SECURITY POLICY ---
