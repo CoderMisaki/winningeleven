@@ -19,7 +19,7 @@ export default async function handler(req, res) {
 
   const apiKey = process.env.minimax3;
   const geminiKey = process.env.gemini35;
-  const { messages, attachment } = req.body;
+  const { messages, attachment, mode } = req.body;
 
   if (!apiKey && !geminiKey) {
     return res.status(500).json({ error: 'API keys not configured' });
@@ -40,7 +40,15 @@ export default async function handler(req, res) {
   const sanitizedMessages = [];
 
   // Inject Knowledge Context
-  let systemContent = "You are an AI assistant for the WE10 Memory Research System. PENTING: Berikan jawaban dalam teks biasa (plain text), jangan gunakan format markdown seperti ** (cetak tebal) atau * (cetak miring). Pastikan jawaban yang kamu berikan SELALU TUNTAS, LENGKAP 100%, DAN JANGAN PERNAH TERPOTONG DI TENGAH KALIMAT ATAU PARAGRAF. Hasilkan jawaban yang utuh dari awal sampai akhir.";
+  let systemContent = "You are an AI assistant for the WE10 Memory Research System.\n";
+  if (mode === 'coding') {
+    systemContent += "MODE CODING: Anda adalah ahli pemrograman tingkat dewa. Berikan jawaban dengan menyertakan kode dalam format markdown code block (```language ... ```). Berikan jawaban LENGKAP dan PASTIKAN KODE TIDAK PERNAH TERPOTONG. TULIS SAMPAI SELESAI.\n";
+  } else if (mode === 'bola') {
+    systemContent += "MODE BOLA: Anda adalah ahli sepak bola global. Anda boleh dan harus menjawab SEMUA pertanyaan tentang sepak bola, pemain, taktik, sejarah, liga, meskipun tidak ada di database.\n";
+  } else {
+    systemContent += "MODE NORMAL: Jawablah dengan wajar. Jangan gunakan format markdown untuk cetak tebal/miring, tapi gunakan markdown code block (```) jika memang memberikan kode.\n";
+  }
+  systemContent += "SANGAT PENTING: Pastikan jawaban yang kamu berikan SELALU TUNTAS, LENGKAP 100%, DAN JANGAN PERNAH TERPOTONG DI TENGAH KALIMAT, KODE, ATAU PARAGRAF. HASILKAN JAWABAN YANG UTUH DARI AWAL SAMPAI AKHIR.\n";
   try {
     const knowledgePath = path.join(process.cwd(), 'src/js/knowledge.json');
     if (fs.existsSync(knowledgePath)) {
@@ -91,19 +99,27 @@ export default async function handler(req, res) {
       let systemPrompt = "";
       let lastUserMsg = "";
 
+      let geminiHistory = [];
       for (const m of messagesToPass) {
           if (m.role === 'system') {
               systemPrompt += m.content + "\n";
-          } else if (m.role === 'user') {
-              lastUserMsg = m.content;
+          } else if (m.role === 'user' || m.role === 'assistant') {
+              // Note: Gemini API requires 'model' instead of 'assistant' in contents array if using history
+              // But since we are using inlineData for images, we might just pass a formatted string of the whole history
+              // Or use proper Gemini format. Since `contents` accepts a string for simple text generation:
+              if (m.role === 'user') lastUserMsg = m.content;
+              geminiHistory.push(`${m.role.toUpperCase()}: ${m.content}`);
           }
       }
+      const fullPrompt = geminiHistory.join("\n\n");
+
 
       if (fileAttachment) {
           const response = await ai.models.generateContent({
               model: "gemini-3.5-flash",
               contents: [
-                  { text: lastUserMsg },
+                  { text: fullPrompt },
+
                   { inlineData: { data: fileAttachment.base64, mimeType: fileAttachment.mimeType } }
               ],
               config: {
@@ -114,7 +130,7 @@ export default async function handler(req, res) {
       } else {
           const response = await ai.models.generateContent({
               model: "gemini-3.5-flash",
-              contents: lastUserMsg,
+              contents: fullPrompt,
               config: {
                   systemInstruction: systemPrompt
               }
