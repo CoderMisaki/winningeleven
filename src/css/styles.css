@@ -474,7 +474,8 @@ body {
 .chat-bubble-container {
   display: flex;
   flex-direction: column;
-  max-width: 85%;
+  max-width: 90%;
+  min-width: 0;
 }
 .chat-bubble-container.user {
   align-self: flex-end;
@@ -498,6 +499,10 @@ body {
   line-height: 1.5;
   position: relative;
   word-wrap: break-word;
+  overflow-wrap: break-word;
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: auto;
 }
 .chat-bubble.user {
   background: #2b2b2b;
@@ -578,6 +583,7 @@ body {
   margin: 15px 0;
   overflow: hidden;
   box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+  max-width: 100%;
 }
 .ai-code-header {
   background-color: #161b22;
@@ -849,4 +855,10 @@ body {
 .markdown-body .task-list-item {
     display: flex;
     align-items: flex-start;
+}
+
+
+/* Prevent main chat area overflow */
+#aiMainChat {
+  min-width: 0;
 }
