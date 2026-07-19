@@ -347,37 +347,53 @@ function escapeHtml(unsafe) {
   }
 
   // --- Markdown & Code Block Configuration ---
+  // --- Markdown & Code Block Configuration ---
+  const languageNames = {
+      html: 'HTML', css: 'CSS', javascript: 'JavaScript', js: 'JavaScript',
+      typescript: 'TypeScript', ts: 'TypeScript', cpp: 'C++', c: 'C',
+      csharp: 'C#', cs: 'C#', java: 'Java', python: 'Python', py: 'Python',
+      ruby: 'Ruby', php: 'PHP', go: 'Go', rust: 'Rust', rs: 'Rust',
+      swift: 'Swift', kotlin: 'Kotlin', bash: 'Bash', sh: 'Bash',
+      shell: 'Bash', json: 'JSON', sql: 'SQL', yaml: 'YAML', yml: 'YAML',
+      xml: 'XML', markdown: 'Markdown', md: 'Markdown', plaintext: 'Plain Text'
+  };
+
   if (window.marked && window.hljs) {
+    // Configure marked without syntax highlighting in the parse step to follow the strict pipeline
     marked.setOptions({
-      highlight: function (code, lang) {
-        const language = hljs.getLanguage(lang) ? lang : 'plaintext';
-        return hljs.highlight(code, { language }).value;
-      },
-      langPrefix: 'hljs language-',
       breaks: true,
       gfm: true
     });
 
     const renderer = new marked.Renderer();
+
+    // Override Link to always open in new tab securely
+    renderer.link = function(href, title, text) {
+        return `<a target="_blank" rel="noopener noreferrer" href="${href}" title="${title || ''}">${text}</a>`;
+    };
+
+    // Override Code Block
     renderer.code = function(code, language, isEscaped) {
       const validLang = !!(language && hljs.getLanguage(language));
-      const langStr = validLang ? language : 'plaintext';
-      // marked already highlights via the highlight option, but we need raw code for copying
-      const rawCode = encodeURIComponent(code);
+      const langId = validLang ? language : 'plaintext';
+      const friendlyName = languageNames[langId.toLowerCase()] || languageNames.plaintext;
 
-      const highlightedCode = validLang ? hljs.highlight(code, { language }).value : escapeHtml(code);
+      const rawCode = encodeURIComponent(code);
+      // Syntax highlighting happens here inside the renderer for simplicity,
+      // but DOMPurify will sanitize the output.
+      const highlightedCode = validLang ? hljs.highlight(code, { language: langId }).value : escapeHtml(code);
 
       return `
         <div class="ai-code-block">
           <div class="ai-code-header">
-            <span class="ai-code-lang">${langStr}</span>
+            <span class="ai-code-lang">${friendlyName}</span>
             <div class="ai-code-controls">
               <button class="btn-code-control btn-toggle-wrap">▤ Wrap</button>
               <button class="btn-code-control btn-toggle-code">▼ Collapse</button>
               <button class="btn-code-control btn-copy-code" data-code="${rawCode}">⧉ Copy</button>
             </div>
           </div>
-          <pre><code class="hljs language-${langStr}">${highlightedCode}</code></pre>
+          <pre><code class="hljs language-${langId}">${highlightedCode}</code></pre>
         </div>
       `;
     };

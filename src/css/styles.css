@@ -817,3 +817,36 @@ body {
     width: auto;
   }
 }
+
+/* V7 Markdown Enhancements */
+.markdown-body table {
+    display: block;
+    width: 100%;
+    overflow-x: auto;
+    white-space: nowrap;
+    border-collapse: collapse;
+}
+
+.markdown-body blockquote {
+    background: #1e1e1e;
+    border-left: 5px solid #0ff;
+    padding: 10px 15px;
+    margin: 10px 0;
+    color: #ccc;
+    font-style: italic;
+    border-radius: 0 4px 4px 0;
+}
+
+.markdown-body input[type="checkbox"] {
+    margin-right: 8px;
+    cursor: pointer;
+}
+
+.markdown-body ul.contains-task-list {
+    list-style: none;
+    padding-left: 0;
+}
+.markdown-body .task-list-item {
+    display: flex;
+    align-items: flex-start;
+}
