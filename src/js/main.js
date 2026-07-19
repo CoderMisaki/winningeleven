@@ -859,8 +859,7 @@ function escapeHtml(unsafe) {
           }
 
           const chunk = decoder.decode(value, { stream: true });
-          const lines = chunk.split('
-');
+          const lines = chunk.split('\n'); // PERBAIKAN DI SINI: \n tidak boleh terpotong ke bawah
 
           for (const line of lines) {
               if (line.trim() === '') continue;
@@ -888,8 +887,7 @@ function escapeHtml(unsafe) {
                           // Real-time render
                           let intermediateHtml = window.marked && window.DOMPurify
                               ? DOMPurify.sanitize(marked.parse(currentRaw), { ADD_ATTR: ['target'] })
-                              : escapeHtml(currentRaw).replace(/
-/g, '<br/>');
+                              : escapeHtml(currentRaw).replace(/\n/g, '<br/>'); // PERBAIKAN DI SINI
 
                           bubbleTarget.innerHTML = intermediateHtml + '<span class="blink-cursor"></span>';
                           aiChatWindow.scrollTop = aiChatWindow.scrollHeight;
@@ -904,8 +902,7 @@ function escapeHtml(unsafe) {
       // Final render without blink cursor
       let finalHtml = window.marked && window.DOMPurify
           ? DOMPurify.sanitize(marked.parse(currentRaw), { ADD_ATTR: ['target'] })
-          : escapeHtml(currentRaw).replace(/
-/g, '<br/>');
+          : escapeHtml(currentRaw).replace(/\n/g, '<br/>'); // PERBAIKAN DI SINI
       bubbleTarget.innerHTML = finalHtml;
       aiChatWindow.scrollTop = aiChatWindow.scrollHeight;
 
