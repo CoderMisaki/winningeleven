@@ -267,34 +267,114 @@ export default async function handler(req, res) {
 
 
       if (fileAttachment) {
-          const response = await ai.models.generateContent({
+          const resultStream = await ai.models.generateContentStream({
               model: "gemini-3.5-flash",
               contents: [
                   { text: fullPrompt },
-
                   { inlineData: { data: fileAttachment.base64, mimeType: fileAttachment.mimeType } }
               ],
               config: {
                   systemInstruction: systemPrompt
               }
           });
-          return { choices: [{ message: { content: response.text } }] };
+          for await (const chunk of resultStream) {
+              res.write(`data: ${JSON.stringify({ content: chunk.text })}\n\n`);
+          }
+          res.write(`data: [DONE]\n\n`);
+          res.end();
       } else {
-          const response = await ai.models.generateContent({
+          const resultStream = await ai.models.generateContentStream({
               model: "gemini-3.5-flash",
               contents: fullPrompt,
               config: {
                   systemInstruction: systemPrompt
               }
           });
-          return { choices: [{ message: { content: response.text } }] };
+          for await (const chunk of resultStream) {
+              res.write(`data: ${JSON.stringify({ content: chunk.text })}\n\n`);
+          }
+          res.write(`data: [DONE]\n\n`);
+          res.end();
       }
     } catch (err) {
         console.error("Gemini Fallback Error:", err);
-        throw err;
+        res.write(`data: ${JSON.stringify({ error: "Mohon maaf, sistem AI sedang mengalami gangguan." })}\n\n`);
+        res.end();
     }
   }
 
-  const routerResult = await smartRouter(sanitizedMessages, attachment);
-  return res.status(200).json(routerResult);
+  // Set SSE Headers
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache, no-transform');
+  res.setHeader('Connection', 'keep-alive');
+  res.flushHeaders();
+
+  if (attachment) {
+      return callGemini(sanitizedMessages, attachment);
+  }
+
+  try {
+    const response = await fetch('https://integrate.api.nvidia.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'text/event-stream',
+        'Authorization': `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model: 'minimaxai/minimax-m3',
+        messages: sanitizedMessages,
+        max_tokens: 8192,
+        temperature: 0.70,
+        top_p: 0.95,
+        stream: true
+      })
+    });
+
+    if (!response.ok) {
+      console.warn("NVIDIA API Failed, falling back to Gemini...");
+      return callGemini(sanitizedMessages);
+    }
+
+    if (!response.body) {
+        throw new Error("No response body from Nvidia API");
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder("utf-8");
+
+    while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value, { stream: true });
+        const lines = chunk.split('\n');
+
+        for (const line of lines) {
+            if (line.trim() === '') continue;
+            if (line.startsWith('data: ')) {
+                const dataStr = line.replace(/^data: /, '');
+                if (dataStr === '[DONE]') {
+                    res.write(`data: [DONE]\n\n`);
+                    continue;
+                }
+                try {
+                    const parsed = JSON.parse(dataStr);
+                    if (parsed.choices && parsed.choices[0] && parsed.choices[0].delta && parsed.choices[0].delta.content) {
+                        res.write(`data: ${JSON.stringify({ content: parsed.choices[0].delta.content })}\n\n`);
+                    }
+                } catch (e) {
+                    console.error("Error parsing streaming JSON", e);
+                }
+            }
+        }
+    }
+
+    res.write(`data: [DONE]\n\n`);
+    res.end();
+
+  } catch (error) {
+    console.warn('Error proxying request, falling back to Gemini:', error);
+    return callGemini(sanitizedMessages);
+  }
 }

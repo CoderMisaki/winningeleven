@@ -769,42 +769,7 @@ function escapeHtml(unsafe) {
 
   // --- Send Message & Streaming Simulation ---
 
-  async function simulateStreaming(text, containerBubble) {
-      return new Promise((resolve) => {
-          let i = 0;
-          // approximate tokens by splitting words and spaces
-          const tokens = text.match(/(\s+|\S+)/g) || [text];
-          let currentRaw = "";
 
-          const interval = setInterval(() => {
-              if (i >= tokens.length || !isGenerating) {
-                  clearInterval(interval);
-                  // Final render
-                  let finalHtml = window.marked && window.DOMPurify ? DOMPurify.sanitize(marked.parse(currentRaw)) : escapeHtml(currentRaw).replace(/\n/g, '<br/>');
-                  containerBubble.innerHTML = finalHtml;
-                  resolve(currentRaw);
-                  return;
-              }
-
-
-              currentRaw += tokens[i];
-              i++;
-
-              // Secret Scanner
-              if (scanForSecrets(currentRaw)) {
-                  currentRaw = "[REDACTED: SENSITIVE INFORMATION DETECTED]";
-                  clearInterval(interval);
-              }
-
-
-              // Render intermediate (might break markdown temporarily, but gives the effect)
-              // For safe streaming rendering, we parse the current chunk
-              let intermediateHtml = window.marked && window.DOMPurify ? DOMPurify.sanitize(marked.parse(currentRaw)) : escapeHtml(currentRaw).replace(/\n/g, '<br/>');
-              containerBubble.innerHTML = intermediateHtml + '<span class="blink-cursor"></span>';
-              aiChatWindow.scrollTop = aiChatWindow.scrollHeight;
-          }, 30); // ms per chunk
-      });
-  }
 
 
   async function handleSendAiMessage() {
@@ -873,29 +838,80 @@ function escapeHtml(unsafe) {
         throw new Error(`Server returned ${response.status}`);
       }
 
-      const data = await response.json();
-      let aiReply = "No response.";
-
-
-      if (data.error) aiReply = data.error;
-      else if (data.choices && data.choices[0] && data.choices[0].message) aiReply = data.choices[0].message.content;
-
-      // Final Secret Scan
-      if (scanForSecrets(aiReply)) {
-          aiReply = "[REDACTED: SENSITIVE INFORMATION DETECTED IN FINAL PAYLOAD]";
+      if (!response.body) {
+        throw new Error("ReadableStream not supported in this browser.");
       }
 
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder("utf-8");
+      let currentRaw = "";
+      let doneReading = false;
 
       // Update model badge if possible
       const modelBadge = container.querySelector('.badge-model');
-      if (modelBadge) modelBadge.textContent = "AI Model"; // Adjust based on actual header info if backend provides
+      if (modelBadge) modelBadge.textContent = "AI Model";
 
-      // Simulate streaming the response
-      const finalRawText = await simulateStreaming(aiReply, bubbleTarget);
+      while (!doneReading) {
+          const { value, done } = await reader.read();
+          if (done) {
+              doneReading = true;
+              break;
+          }
+
+          const chunk = decoder.decode(value, { stream: true });
+          const lines = chunk.split('
+');
+
+          for (const line of lines) {
+              if (line.trim() === '') continue;
+              if (line.startsWith('data: ')) {
+                  const dataStr = line.replace(/^data: /, '');
+                  if (dataStr === '[DONE]') {
+                      doneReading = true;
+                      break;
+                  }
+                  try {
+                      const parsed = JSON.parse(dataStr);
+                      if (parsed.error) {
+                          throw new Error(parsed.error);
+                      }
+                      if (parsed.content) {
+                          currentRaw += parsed.content;
+
+                          // Secret Scanner
+                          if (scanForSecrets(currentRaw)) {
+                              currentRaw = "[REDACTED: SENSITIVE INFORMATION DETECTED]";
+                              abortController.abort(); // Stop fetching
+                              break;
+                          }
+
+                          // Real-time render
+                          let intermediateHtml = window.marked && window.DOMPurify
+                              ? DOMPurify.sanitize(marked.parse(currentRaw), { ADD_ATTR: ['target'] })
+                              : escapeHtml(currentRaw).replace(/
+/g, '<br/>');
+
+                          bubbleTarget.innerHTML = intermediateHtml + '<span class="blink-cursor"></span>';
+                          aiChatWindow.scrollTop = aiChatWindow.scrollHeight;
+                      }
+                  } catch (e) {
+                      console.error("Error parsing stream chunk", e, dataStr);
+                  }
+              }
+          }
+      }
+
+      // Final render without blink cursor
+      let finalHtml = window.marked && window.DOMPurify
+          ? DOMPurify.sanitize(marked.parse(currentRaw), { ADD_ATTR: ['target'] })
+          : escapeHtml(currentRaw).replace(/
+/g, '<br/>');
+      bubbleTarget.innerHTML = finalHtml;
+      aiChatWindow.scrollTop = aiChatWindow.scrollHeight;
 
       // Save to history
-      if (isGenerating) { // only save if not fully aborted before stream finished
-          sessionManager.addMessage("assistant", finalRawText);
+      if (isGenerating && currentRaw.trim() !== "") {
+          sessionManager.addMessage("assistant", currentRaw);
       }
 
       if (currentAttachment) {
