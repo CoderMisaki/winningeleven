@@ -384,7 +384,23 @@ function escapeHtml(unsafe) {
   const aiChatInput = document.getElementById("aiChatInput");
   const aiChatWindow = document.getElementById("aiChatWindow");
 
-  let chatHistory = [];
+  let chatHistory = JSON.parse(localStorage.getItem("we10_ai_chat_history")) || [];
+
+  // Render initial chat history
+  chatHistory.forEach(msg => {
+    const msgDiv = document.createElement("div");
+    if (msg.role === "user") {
+      msgDiv.style.color = "#fff";
+      msgDiv.innerHTML = `<strong style="color: #0f0;">YOU:</strong> ${escapeHtml(msg.content).replace(/\n/g, "<br/>")}`;
+    } else {
+      msgDiv.style.color = "#0ff";
+      let replyHtml = msg.content;
+      // Ensure formatting is preserved somewhat for initial load (won't parse codeblocks yet but will fix later)
+      msgDiv.innerHTML = `<strong style="color: #ff0;">AI:</strong> ${escapeHtml(replyHtml).replace(/\n/g, "<br/>")}`;
+    }
+    aiChatWindow.appendChild(msgDiv);
+  });
+  aiChatWindow.scrollTop = aiChatWindow.scrollHeight;
 
   async function handleSendAiMessage() {
     const text = aiChatInput.value.trim();
@@ -403,6 +419,7 @@ function escapeHtml(unsafe) {
 
     // Add to history
     chatHistory.push({ role: "user", content: text });
+    localStorage.setItem("we10_ai_chat_history", JSON.stringify(chatHistory));
 
     // Append loading indicator
     const loadingMsg = document.createElement("div");
@@ -415,7 +432,7 @@ function escapeHtml(unsafe) {
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: chatHistory, attachment: currentAttachment })
+        body: JSON.stringify({ messages: chatHistory, attachment: currentAttachment, mode: document.getElementById('aiChatMode')?.value || 'normal' })
       });
 
       aiChatWindow.removeChild(loadingMsg);
@@ -434,10 +451,11 @@ function escapeHtml(unsafe) {
         aiReply = data.choices[0].message.content;
       }
 
-      // Remove markdown strong/italic indicators (*) just in case
-      aiReply = aiReply.replace(/\*\*/g, '').replace(/\*/g, '');
+      // Do not remove markdown completely, just handle code blocks
+      // Removed strict replacement
 
       chatHistory.push({ role: "assistant", content: aiReply });
+      localStorage.setItem("we10_ai_chat_history", JSON.stringify(chatHistory));
 
       if (currentAttachment) {
         currentAttachment = null;
@@ -451,8 +469,21 @@ function escapeHtml(unsafe) {
 
       const aiMsg = document.createElement("div");
       aiMsg.style.color = "#0ff";
-      // Basic formatting for newlines
-      aiMsg.innerHTML = `<strong style="color: #ff0;">AI:</strong> ${escapeHtml(aiReply).replace(/\n/g, '<br/>')}`;
+
+      let formattedReply = escapeHtml(aiReply);
+      formattedReply = formattedReply.replace(/```(?:([a-z0-9]+)\n)?([\s\S]*?)```/g, (match, lang, code) => {
+          lang = lang ? lang : 'code';
+          const cleanCode = code.trim();
+          return `<div class="ai-code-block"><div class="ai-code-header"><span class="ai-code-lang">${lang}</span><button class="btn btn-copy-code" data-code="${encodeURIComponent(cleanCode)}">Copy Code</button></div><pre><code>${cleanCode}</code></pre></div>`;
+      });
+      formattedReply = formattedReply.split(/(<div class="ai-code-block">[\s\S]*?<\/div>)/g).map(part => {
+          if (part.startsWith('<div class="ai-code-block">')) {
+              return part;
+          }
+          return part.replace(/\n/g, '<br/>').replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/\*(.*?)\*/g, '<em>$1</em>');
+      }).join('');
+      aiMsg.innerHTML = `<strong style="color: #ff0;">AI:</strong> <div style="margin-top: 5px;">${formattedReply}</div>`;
+
       aiChatWindow.appendChild(aiMsg);
 
     } catch (err) {
@@ -469,16 +500,44 @@ function escapeHtml(unsafe) {
     }
   }
 
-  if (btnSendAiChat) {
-    btnSendAiChat.addEventListener("click", handleSendAiMessage);
-  }
 
-  if (aiChatInput) {
-    aiChatInput.addEventListener("keypress", (e) => {
-      if (e.key === "Enter") {
-        handleSendAiMessage();
+  // Delegate event listener for Copy Code buttons
+  if (aiChatWindow) {
+    aiChatWindow.addEventListener("click", (e) => {
+      if (e.target.classList.contains("btn-copy-code")) {
+        const codeToCopy = decodeURIComponent(e.target.dataset.code);
+        navigator.clipboard.writeText(codeToCopy).then(() => {
+          const originalText = e.target.textContent;
+          e.target.textContent = "Copied!";
+          setTimeout(() => {
+            e.target.textContent = originalText;
+          }, 2000);
+        }).catch(err => {
+          console.error("Failed to copy code: ", err);
+        });
       }
     });
   }
 
+  if (btnSendAiChat) {
+    btnSendAiChat.addEventListener("click", handleSendAiMessage);
+  }
+
+
+  if (aiChatInput) {
+    aiChatInput.addEventListener("input", function() {
+      this.style.height = "auto";
+      this.style.height = (this.scrollHeight) + "px";
+      if(this.value === "") {
+         this.style.height = "auto";
+      }
+    });
+
+    aiChatInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        handleSendAiMessage();
+      }
+    });
+  }
 });

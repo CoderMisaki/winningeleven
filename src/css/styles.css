@@ -357,3 +357,67 @@ body {
     opacity: 1;
   }
 }
+
+/* AI Chat Code Blocks */
+.ai-code-block {
+  background-color: #1e1e1e;
+  border: 1px solid #555;
+  border-radius: 4px;
+  margin: 10px 0;
+  overflow: hidden;
+}
+
+.ai-code-header {
+  background-color: #2d2d2d;
+  padding: 5px 10px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid #555;
+}
+
+.ai-code-lang {
+  color: #ccc;
+  font-size: 0.7rem;
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+}
+
+.btn-copy-code {
+  background: #444;
+  color: #fff;
+  border: 1px solid #666;
+  padding: 4px 8px;
+  font-size: 0.6rem;
+  cursor: pointer;
+  border-radius: 3px;
+  font-family: var(--font-retro);
+}
+
+.btn-copy-code:hover {
+  background: #555;
+}
+
+.ai-code-block pre {
+  margin: 0;
+  padding: 10px;
+  overflow-x: auto;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: #d4d4d4;
+  line-height: 1.4;
+}
+
+.ai-code-block pre code {
+  font-family: inherit;
+}
+
+/* Chat Input Styling */
+#aiChatInput {
+  color: var(--text-light);
+}
+
+#aiChatInput:focus {
+  outline: none;
+  border-color: #0ff;
+}
