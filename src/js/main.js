@@ -969,12 +969,6 @@ function escapeHtml(unsafe) {
         e.preventDefault();
         handleSendAiMessage();
       }
-  });
-
-  // Attachments logic
-  if (btnUploadAiChat && aiChatUploadMenu) {
-    btnUploadAiChat.addEventListener("click", () => {
-      aiChatUploadMenu.style.display = aiChatUploadMenu.style.display === "none" ? "flex" : "none";
     });
   }
 
@@ -1120,10 +1114,17 @@ function escapeHtml(unsafe) {
   });
 
 
+
   document.getElementById("btnToggleSidebar")?.addEventListener("click", () => {
       const sidebar = document.getElementById("aiSidebar");
       if (sidebar) sidebar.classList.toggle("drawer-open");
   });
+
+  document.getElementById("btnCloseSidebar")?.addEventListener("click", () => {
+      const sidebar = document.getElementById("aiSidebar");
+      if (sidebar) sidebar.classList.remove("drawer-open");
+  });
+
 
 
   // --- Offline Mode ---

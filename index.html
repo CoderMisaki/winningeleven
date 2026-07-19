@@ -86,7 +86,10 @@
         <!-- SIDEBAR: CHAT SESSION MANAGER -->
         <div id="aiSidebar" style="width: 250px; border-right: 1px solid #555; display: flex; flex-direction: column; background: #0a0a0a;">
           <div style="padding: 10px; border-bottom: 1px solid #555;">
-             <button class="btn btn-primary" id="btnNewChat" style="width: 100%; margin-bottom: 10px;">+ New Chat</button>
+             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                <button class="btn btn-primary" id="btnNewChat" style="flex-grow: 1; margin-right: 5px;">+ New Chat</button>
+                <button class="btn" id="btnCloseSidebar" style="display: none; padding: 5px 10px; background: #550000; color: #ff5555; border-color: #ff0000;">X</button>
+             </div>
              <input type="text" id="chatSearchInput" placeholder="Search chats..." style="width: 100%; padding: 5px; font-family: var(--font-retro); font-size: 0.6rem; background: #222; color: #fff; border: 1px solid #555;">
              <div style="display: flex; gap: 5px; margin-top: 5px;">
                <button class="btn btn-menu" id="btnExportChats" style="flex-grow: 1; font-size: 0.5rem; padding: 4px;">Export</button>
@@ -123,17 +126,17 @@
 
           <!-- Input Area -->
           <div style="padding: 10px; background: #1a1a1a; border-top: 1px solid #555; display: flex; flex-direction: column; gap: 5px;">
-            <div style="display: flex; gap: 10px; align-items: flex-end; position: relative;">
-              <select id="aiChatMode" style="padding: 8px; font-family: var(--font-retro); font-size: 0.6rem; background: var(--bg-dark); color: var(--text-light); border: 1px solid #555; height: 35px;">
+            <div class="chat-input-wrapper">
+              <select id="aiChatMode" class="chat-mode-select">
                 <option value="normal">Normal</option>
                 <option value="coding">Coding</option>
                 <option value="bola">Bola</option>
               </select>
-              <textarea id="aiChatInput" placeholder="Message AI..." style="flex-grow: 1; min-width: 0; padding: 8px; font-family: var(--font-retro); font-size: 0.7rem; background: #000; color: #fff; border: 1px solid #555; resize: none; overflow-y: auto; max-height: 150px; line-height: 1.4; box-sizing: border-box; border-radius: 4px;" rows="1" autocomplete="off"></textarea>
-              <div style="display: flex; flex-direction: column; gap: 5px;">
-                <button class="btn" id="btnUploadAiChat" style="padding: 8px 10px; height: 35px;" title="Attach File">📎</button>
-                <button class="btn btn-primary" id="btnSendAiChat" style="padding: 8px 10px; height: 35px; width: 60px;">SEND</button>
-                <button class="btn" id="btnStopAiChat" style="padding: 8px 10px; height: 35px; width: 60px; display: none; background-color: #550000; color: #ff5555; border-color: #ff0000;">STOP</button>
+              <textarea id="aiChatInput" class="chat-textarea" placeholder="Message AI..." rows="1" autocomplete="off"></textarea>
+              <div class="chat-action-buttons">
+                <button class="btn" id="btnUploadAiChat" title="Attach File">📎</button>
+                <button class="btn btn-primary" id="btnSendAiChat">SEND</button>
+                <button class="btn" id="btnStopAiChat" style="display: none; background-color: #550000; color: #ff5555; border-color: #ff0000;">STOP</button>
               </div>
 
               <!-- Upload Menu -->

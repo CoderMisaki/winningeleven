@@ -708,37 +708,112 @@ body {
 }
 
 /* Sidebar Drawer for mobile */
+
+
+/* Code Wrap Toggle Class */
+.ai-code-block pre.wrap-text {
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+/* V7 Responsive Layout Fixes */
+.chat-input-wrapper {
+  display: flex;
+  gap: 10px;
+  align-items: flex-end;
+  position: relative;
+  width: 100%;
+}
+.chat-mode-select {
+  padding: 8px;
+  font-family: var(--font-retro);
+  font-size: 0.6rem;
+  background: var(--bg-dark);
+  color: var(--text-light);
+  border: 1px solid #555;
+  height: 35px;
+  flex-shrink: 0;
+}
+.chat-textarea {
+  flex-grow: 1;
+  min-width: 0; /* Important for flexbox truncating */
+  width: 100%;
+  padding: 8px;
+  font-family: var(--font-retro);
+  font-size: 0.7rem;
+  background: #000;
+  color: #fff;
+  border: 1px solid #555;
+  resize: none;
+  overflow-y: auto;
+  max-height: 150px;
+  line-height: 1.4;
+  box-sizing: border-box;
+  border-radius: 4px;
+}
+.chat-action-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  flex-shrink: 0;
+}
+.chat-action-buttons button {
+  padding: 8px 10px;
+  height: 35px;
+  width: 65px;
+}
+
 @media (max-width: 768px) {
   #btnToggleSidebar {
     display: block;
   }
 
+  #btnCloseSidebar {
+    display: block !important;
+  }
+
   #aiQAPanel {
     position: relative;
-    overflow: hidden; /* contain the absolute sidebar */
-    height: 800px;
+    overflow: hidden;
+    height: 85vh; /* better height for mobile */
   }
 
   #aiSidebar {
     position: absolute;
     top: 0;
-    left: -250px;
-    width: 250px;
+    left: -100%;
+    width: 100%; /* take full width on mobile for easier tapping */
+    max-width: 300px;
     height: 100%;
     z-index: 1000;
     background: #0a0a0a;
     transition: left 0.3s ease;
     border-right: 1px solid #555;
     border-bottom: none;
+    box-shadow: 2px 0 10px rgba(0,0,0,0.5);
   }
 
   #aiSidebar.drawer-open {
     left: 0;
   }
-}
 
-/* Code Wrap Toggle Class */
-.ai-code-block pre.wrap-text {
-  white-space: pre-wrap;
-  word-wrap: break-word;
+  .chat-input-wrapper {
+    flex-wrap: wrap; /* allow wrapping on very small screens */
+  }
+
+  .chat-mode-select {
+    width: 100%; /* take full width */
+    height: 30px;
+  }
+
+  .chat-action-buttons {
+    flex-direction: row; /* horizontal buttons on mobile */
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .chat-action-buttons button {
+    flex-grow: 1;
+    width: auto;
+  }
 }
