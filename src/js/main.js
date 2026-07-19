@@ -831,6 +831,7 @@ function escapeHtml(unsafe) {
       });
   }
 
+
   if (aiChatInput) {
     aiChatInput.addEventListener("input", function() {
       this.style.height = "auto";
