@@ -316,20 +316,720 @@ function escapeHtml(unsafe) {
     return Security.sanitizeInput(unsafe);
 }
 
-// --- AI CHAT FUNCTIONALITY ---
+// --- AI CHAT FUNCTIONALITY V4 ---
+
+  // --- Utilities & Toast ---
+  const Toast = {
+    show: (msg) => {
+      let container = document.getElementById('toast-container');
+      if (!container) {
+        container = document.createElement('div');
+        container.id = 'toast-container';
+        document.body.appendChild(container);
+      }
+      const toast = document.createElement('div');
+      toast.className = 'toast';
+      toast.textContent = msg;
+      container.appendChild(toast);
+      setTimeout(() => toast.remove(), 2500);
+    }
+  };
+
+  // HTML Escape for fallback
+  function escapeHtml(unsafe) {
+    if(typeof unsafe !== 'string') return unsafe;
+    return unsafe.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+  }
+
+  // Generate Unique ID
+  function generateId() {
+    return Math.random().toString(36).substr(2, 9) + Date.now().toString(36);
+  }
+
+  // --- Markdown & Code Block Configuration ---
+  if (window.marked && window.hljs) {
+    marked.setOptions({
+      highlight: function (code, lang) {
+        const language = hljs.getLanguage(lang) ? lang : 'plaintext';
+        return hljs.highlight(code, { language }).value;
+      },
+      langPrefix: 'hljs language-',
+      breaks: true,
+      gfm: true
+    });
+
+    const renderer = new marked.Renderer();
+    renderer.code = function(code, language, isEscaped) {
+      const validLang = !!(language && hljs.getLanguage(language));
+      const langStr = validLang ? language : 'plaintext';
+      // marked already highlights via the highlight option, but we need raw code for copying
+      const rawCode = encodeURIComponent(code);
+
+      const highlightedCode = validLang ? hljs.highlight(code, { language }).value : escapeHtml(code);
+
+      return `
+        <div class="ai-code-block">
+          <div class="ai-code-header">
+            <span class="ai-code-lang">${langStr}</span>
+            <div class="ai-code-controls">
+              <button class="btn-code-control btn-toggle-wrap">▤ Wrap</button>
+              <button class="btn-code-control btn-toggle-code">▼ Collapse</button>
+              <button class="btn-code-control btn-copy-code" data-code="${rawCode}">⧉ Copy</button>
+            </div>
+          </div>
+          <pre><code class="hljs language-${langStr}">${highlightedCode}</code></pre>
+        </div>
+      `;
+    };
+    marked.use({ renderer });
+  }
+
+  // --- Session Manager ---
+  class ChatSessionManager {
+    constructor() {
+      this.sessions = JSON.parse(localStorage.getItem("we10_ai_sessions")) || {};
+      this.currentSessionId = localStorage.getItem("we10_current_session") || null;
+
+      // Migration/Initialization
+      if (Object.keys(this.sessions).length === 0) {
+         // Check if old history exists
+         const oldHistory = JSON.parse(localStorage.getItem("we10_ai_chat_history"));
+         if (oldHistory && oldHistory.length > 0) {
+             const newId = generateId();
+             this.sessions[newId] = this.createNewSessionObj(newId, null, 0, "Imported Session", oldHistory);
+             this.currentSessionId = newId;
+             this.save();
+         }
+      }
+
+      if (!this.currentSessionId || !this.sessions[this.currentSessionId]) {
+         this.createNewSession();
+      }
+    }
+
+    save() {
+      localStorage.setItem("we10_ai_sessions", JSON.stringify(this.sessions));
+      if (this.currentSessionId) {
+        localStorage.setItem("we10_current_session", this.currentSessionId);
+      }
+    }
+
+    createNewSessionObj(id, parentId = null, branchId = 0, title = "New Chat", messages = []) {
+      return {
+        id: id,
+        parentId: parentId,
+        branchId: branchId,
+        title: title,
+        mode: document.getElementById("aiChatMode") ? document.getElementById("aiChatMode").value : "normal",
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+        messages: messages,
+        attachments: [],
+        modelUsed: "MiniMax",
+        favorite: false,
+        pinned: false,
+        children: []
+      };
+    }
+
+    createNewSession() {
+      const id = generateId();
+      this.sessions[id] = this.createNewSessionObj(id);
+      this.currentSessionId = id;
+      this.save();
+      return id;
+    }
+
+    forkSession(messageIndex) {
+      const current = this.getCurrentSession();
+      if (!current) return;
+
+      const newId = generateId();
+      // Calculate new branch ID (count siblings)
+      let siblingsCount = 0;
+      for (const key in this.sessions) {
+        if (this.sessions[key].parentId === current.id) siblingsCount++;
+      }
+
+      const forkedMessages = JSON.parse(JSON.stringify(current.messages.slice(0, messageIndex + 1)));
+      const newSession = this.createNewSessionObj(newId, current.id, siblingsCount + 1, `${current.title} (Branch ${siblingsCount + 1})`, forkedMessages);
+
+      current.children.push(newId);
+      this.sessions[newId] = newSession;
+      this.currentSessionId = newId;
+
+      this.sessions[current.id] = current; // update parent's children
+      this.save();
+      return newId;
+    }
+
+    getCurrentSession() {
+      return this.sessions[this.currentSessionId];
+    }
+
+    updateCurrentSession(updates) {
+      if(this.currentSessionId && this.sessions[this.currentSessionId]) {
+         this.sessions[this.currentSessionId] = { ...this.sessions[this.currentSessionId], ...updates, updatedAt: Date.now() };
+         this.save();
+      }
+    }
+
+    addMessage(role, content) {
+       const session = this.getCurrentSession();
+       if(session) {
+          session.messages.push({ role, content, timestamp: Date.now() });
+
+          // Auto Title
+          if (session.messages.length === 2 && session.title === "New Chat") {
+             const userMsg = session.messages.find(m => m.role === 'user');
+             if (userMsg) {
+                 const words = userMsg.content.split(' ').slice(0, 4).join(' ');
+                 session.title = words + (userMsg.content.split(' ').length > 4 ? '...' : '');
+             }
+          }
+          this.updateCurrentSession(session);
+       }
+    }
+
+    deleteSession(id) {
+       if (this.sessions[id]) {
+           delete this.sessions[id];
+           if (this.currentSessionId === id) {
+               const remaining = Object.keys(this.sessions);
+               if (remaining.length > 0) this.currentSessionId = remaining[0];
+               else this.createNewSession();
+           }
+           this.save();
+       }
+    }
+
+    clearAll() {
+       this.sessions = {};
+       this.createNewSession();
+    }
+  }
+
+  const sessionManager = new ChatSessionManager();
+  let isGenerating = false;
+  let abortController = null;
+
+  // --- UI Elements ---
+  const aiChatWindow = document.getElementById("aiChatWindow");
+  const aiChatInput = document.getElementById("aiChatInput");
+  const btnSendAiChat = document.getElementById("btnSendAiChat");
+  const btnStopAiChat = document.getElementById("btnStopAiChat");
+  const chatSessionList = document.getElementById("chatSessionList");
+  const currentChatTitle = document.getElementById("currentChatTitle");
+  const aiChatMode = document.getElementById("aiChatMode");
+
+  // Attachments
   const btnUploadAiChat = document.getElementById("btnUploadAiChat");
   const aiChatUploadMenu = document.getElementById("aiChatUploadMenu");
   const aiChatFile = document.getElementById("aiChatFile");
   const aiChatAttachmentPreview = document.getElementById("aiChatAttachmentPreview");
   let currentAttachment = null;
 
+  // --- Render Functions ---
+
+  function renderSidebar() {
+      if(!chatSessionList) return;
+      chatSessionList.innerHTML = '';
+
+      const searchQ = (document.getElementById("chatSearchInput")?.value || "").toLowerCase();
+
+      const sortedSessions = Object.values(sessionManager.sessions).sort((a, b) => {
+          if (a.pinned !== b.pinned) return b.pinned ? 1 : -1;
+          return b.updatedAt - a.updatedAt;
+      });
+
+      sortedSessions.forEach(session => {
+          if (searchQ) {
+              const inTitle = session.title.toLowerCase().includes(searchQ);
+              const inMsgs = session.messages.some(m => m.content.toLowerCase().includes(searchQ));
+              if (!inTitle && !inMsgs) return;
+          }
+
+          const div = document.createElement("div");
+          div.className = `chat-session-item ${session.id === sessionManager.currentSessionId ? 'active' : ''}`;
+          div.innerHTML = `
+             <div style="flex-grow: 1; overflow: hidden;" class="session-click-area">
+                <div class="chat-session-title">${escapeHtml(session.title)} ${session.pinned ? '📌' : ''} ${session.favorite ? '⭐' : ''}</div>
+                <div class="chat-session-meta">${new Date(session.updatedAt).toLocaleDateString()} • ${session.messages.length} msgs</div>
+             </div>
+             <div class="session-actions">
+                <button class="btn-ren" title="Rename">✏️</button>
+                <button class="btn-pin ${session.pinned ? 'pin-active' : ''}" title="Pin">📌</button>
+                <button class="btn-fav" style="${session.favorite ? 'color: gold;' : ''}" title="Favorite">★</button>
+                <button class="btn-del" title="Delete">🗑</button>
+             </div>
+          `;
+
+          div.querySelector('.session-click-area').addEventListener('click', () => {
+              if (isGenerating) return;
+              sessionManager.currentSessionId = session.id;
+              sessionManager.save();
+              renderSidebar();
+              renderChatWindow();
+          });
+
+          div.querySelector('.btn-ren').addEventListener('click', (e) => {
+              e.stopPropagation();
+              const newTitle = prompt("Enter new chat title:", session.title);
+              if (newTitle !== null && newTitle.trim() !== "") {
+                  sessionManager.sessions[session.id].title = newTitle.trim();
+                  sessionManager.save();
+                  renderSidebar();
+                  if(sessionManager.currentSessionId === session.id) renderChatWindow();
+              }
+          });
+          div.querySelector('.btn-pin').addEventListener('click', (e) => { e.stopPropagation(); sessionManager.sessions[session.id].pinned = !session.pinned; sessionManager.save(); renderSidebar(); });
+          div.querySelector('.btn-fav').addEventListener('click', (e) => { e.stopPropagation(); sessionManager.sessions[session.id].favorite = !session.favorite; sessionManager.save(); renderSidebar(); });
+          div.querySelector('.btn-del').addEventListener('click', (e) => {
+              e.stopPropagation();
+              if(confirm("Delete this chat session?")) {
+                  sessionManager.deleteSession(session.id);
+                  renderSidebar();
+                  renderChatWindow();
+              }
+          });
+
+          chatSessionList.appendChild(div);
+      });
+  }
+
+  function formatTime(ts) {
+      if(!ts) return "";
+      const d = new Date(ts);
+      return d.getHours().toString().padStart(2, '0') + ":" + d.getMinutes().toString().padStart(2, '0');
+  }
+
+  function renderChatWindow() {
+      if(!aiChatWindow) return;
+      aiChatWindow.innerHTML = '';
+      const session = sessionManager.getCurrentSession();
+      if (!session) return;
+
+      if(currentChatTitle) currentChatTitle.textContent = session.title;
+      if(aiChatMode && session.mode) aiChatMode.value = session.mode;
+
+      if (session.messages.length === 0) {
+          aiChatWindow.innerHTML = `<div style="color: #aaa; text-align: center; font-size: 0.7rem; margin-top: 20px;">[SYSTEM] AI Assistant Ready. Start typing to begin.</div>`;
+          return;
+      }
+
+      session.messages.forEach((msg, index) => {
+          const container = document.createElement("div");
+          container.className = `chat-bubble-container ${msg.role === 'user' ? 'user' : 'ai'}`;
+
+          let metaHtml = ``;
+          if (msg.role === 'assistant') {
+             metaHtml = `<div class="chat-bubble-meta">
+                           <span class="badge badge-model">${session.modelUsed || 'AI'}</span>
+                           <span>${formatTime(msg.timestamp)}</span>
+                         </div>`;
+          } else {
+             metaHtml = `<div class="chat-bubble-meta">
+                           <span>YOU</span>
+                           <span>${formatTime(msg.timestamp)}</span>
+                         </div>`;
+          }
+
+          let contentHtml = "";
+          if (msg.role === 'user') {
+              contentHtml = escapeHtml(msg.content).replace(/\n/g, '<br/>');
+          } else {
+              // Parse Markdown and Sanitize
+              if (window.marked && window.DOMPurify) {
+                  const rawHtml = marked.parse(msg.content);
+                  contentHtml = DOMPurify.sanitize(rawHtml, { ADD_ATTR: ['target'] });
+              } else {
+                  contentHtml = escapeHtml(msg.content).replace(/\n/g, '<br/>');
+              }
+          }
+
+          const bubble = document.createElement("div");
+          bubble.className = `chat-bubble ${msg.role === 'user' ? 'user' : 'ai'} markdown-body`;
+          bubble.innerHTML = contentHtml;
+
+          let actionsHtml = `<div class="bubble-actions">`;
+          actionsHtml += `<button class="btn-fork" data-idx="${index}">⑂ Fork Chat</button>`;
+          if (msg.role === 'user') actionsHtml += `<button class="btn-edit" data-idx="${index}">✎ Edit</button>`;
+          if (msg.role === 'assistant') {
+              actionsHtml += `<button class="btn-copy-msg">⧉ Copy Text</button>`;
+              actionsHtml += `<button class="btn-regen" data-idx="${index}">↻ Regenerate</button>`;
+          }
+          actionsHtml += `</div>`;
+
+          container.innerHTML = metaHtml;
+          container.appendChild(bubble);
+          container.insertAdjacentHTML('beforeend', actionsHtml);
+
+          // Attach events to actions
+          container.querySelector('.btn-fork').addEventListener('click', () => {
+              if (isGenerating) return;
+              const newId = sessionManager.forkSession(index);
+              Toast.show("Branch created!");
+              renderSidebar();
+              renderChatWindow();
+          });
+
+          if (msg.role === 'assistant') {
+              container.querySelector('.btn-copy-msg').addEventListener('click', () => {
+                  navigator.clipboard.writeText(msg.content).then(() => Toast.show("Copied!"));
+              });
+              container.querySelector('.btn-regen').addEventListener('click', () => {
+                  if (isGenerating) return;
+                  // Remove this message and all after it
+                  session.messages = session.messages.slice(0, index);
+                  sessionManager.updateCurrentSession(session);
+                  // Grab the last user message to put back in input for flow
+                  const lastUser = session.messages[session.messages.length - 1];
+                  if(lastUser) {
+                      aiChatInput.value = lastUser.content;
+                      session.messages.pop(); // remove user message so it can be re-sent
+                      sessionManager.updateCurrentSession(session);
+                      handleSendAiMessage(); // trigger resend automatically
+                  }
+              });
+          } else if (msg.role === 'user') {
+              container.querySelector('.btn-edit').addEventListener('click', () => {
+                  if (isGenerating) return;
+                  aiChatInput.value = msg.content;
+                  aiChatInput.focus();
+                  // Truncate history before this message so user can edit and branch from here
+                  session.messages = session.messages.slice(0, index);
+                  sessionManager.updateCurrentSession(session);
+                  renderSidebar();
+                  renderChatWindow();
+              });
+          }
+
+          aiChatWindow.appendChild(container);
+      });
+
+      aiChatWindow.scrollTop = aiChatWindow.scrollHeight;
+
+      updateContextBudget();
+      // Update View Branches button visibility
+      const btnViewBranches = document.getElementById("btnViewBranches");
+      if (btnViewBranches) {
+         const hasBranches = session.children && session.children.length > 0 || session.parentId !== null;
+         btnViewBranches.style.display = hasBranches ? "block" : "none";
+      }
+  }
+
+
+  // --- Prompt Injection Firewall ---
+  function checkPromptInjection(text) {
+      const lower = text.toLowerCase();
+      const blockedPhrases = [
+          "ignore previous instructions", "system prompt", "show hidden prompt",
+          "print source", "dump project", "reveal memory", "bypass security",
+          "roleplay admin", "developer message", "process.env"
+      ];
+      for (const phrase of blockedPhrases) {
+          if (lower.includes(phrase)) {
+              return true;
+          }
+      }
+      return false;
+  }
+
+
+  // --- Secret Scanner ---
+  function scanForSecrets(text) {
+      const blockedPatterns = [
+          "process.env", "API_KEY", "JWT", "Bearer", "knowledge.json",
+          "system prompt", "router source", "hidden endpoint", "database credential"
+      ];
+      for (const pattern of blockedPatterns) {
+          // simple check
+          if (text.includes(pattern)) {
+              return true;
+          }
+      }
+      return false;
+  }
+
+  // --- Send Message & Streaming Simulation ---
+
+  async function simulateStreaming(text, containerBubble) {
+      return new Promise((resolve) => {
+          let i = 0;
+          // approximate tokens by splitting words and spaces
+          const tokens = text.match(/(\s+|\S+)/g) || [text];
+          let currentRaw = "";
+
+          const interval = setInterval(() => {
+              if (i >= tokens.length || !isGenerating) {
+                  clearInterval(interval);
+                  // Final render
+                  let finalHtml = window.marked && window.DOMPurify ? DOMPurify.sanitize(marked.parse(currentRaw)) : escapeHtml(currentRaw).replace(/\n/g, '<br/>');
+                  containerBubble.innerHTML = finalHtml;
+                  resolve(currentRaw);
+                  return;
+              }
+
+
+              currentRaw += tokens[i];
+              i++;
+
+              // Secret Scanner
+              if (scanForSecrets(currentRaw)) {
+                  currentRaw = "[REDACTED: SENSITIVE INFORMATION DETECTED]";
+                  clearInterval(interval);
+              }
+
+
+              // Render intermediate (might break markdown temporarily, but gives the effect)
+              // For safe streaming rendering, we parse the current chunk
+              let intermediateHtml = window.marked && window.DOMPurify ? DOMPurify.sanitize(marked.parse(currentRaw)) : escapeHtml(currentRaw).replace(/\n/g, '<br/>');
+              containerBubble.innerHTML = intermediateHtml + '<span class="blink-cursor"></span>';
+              aiChatWindow.scrollTop = aiChatWindow.scrollHeight;
+          }, 30); // ms per chunk
+      });
+  }
+
+
+  async function handleSendAiMessage() {
+    if (isGenerating) return;
+    const text = aiChatInput.value.trim();
+    if (!text) return;
+
+    // Security Check: Prompt Injection
+    if (checkPromptInjection(text)) {
+        Toast.show("Security Violation: Malicious prompt detected and blocked.");
+        aiChatInput.value = "";
+        return;
+    }
+
+
+    // Save mode config
+    if (aiChatMode) {
+        sessionManager.updateCurrentSession({ mode: aiChatMode.value });
+    }
+
+    sessionManager.addMessage("user", text);
+
+    aiChatInput.value = "";
+    aiChatInput.style.height = "auto";
+
+    renderSidebar();
+    renderChatWindow();
+
+    isGenerating = true;
+    if(btnSendAiChat) btnSendAiChat.style.display = "none";
+    if(btnStopAiChat) btnStopAiChat.style.display = "block";
+
+    // Create empty AI bubble for streaming
+    const session = sessionManager.getCurrentSession();
+    const container = document.createElement("div");
+    container.className = `chat-bubble-container ai`;
+    container.innerHTML = `
+        <div class="chat-bubble-meta">
+            <span class="badge badge-model">Generating...</span>
+        </div>
+        <div class="chat-bubble ai markdown-body"><span class="blink-cursor"></span></div>
+    `;
+    aiChatWindow.appendChild(container);
+    aiChatWindow.scrollTop = aiChatWindow.scrollHeight;
+
+    const bubbleTarget = container.querySelector('.chat-bubble');
+
+    abortController = new AbortController();
+
+    try {
+      // Build payload context (only send current branch history)
+      const payloadMessages = session.messages.map(m => ({role: m.role, content: m.content}));
+
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            messages: payloadMessages,
+            attachment: currentAttachment,
+            mode: session.mode
+        }),
+        signal: abortController.signal
+      });
+
+      if (!response.ok) {
+        throw new Error(`Server returned ${response.status}`);
+      }
+
+      const data = await response.json();
+      let aiReply = "No response.";
+
+
+      if (data.error) aiReply = data.error;
+      else if (data.choices && data.choices[0] && data.choices[0].message) aiReply = data.choices[0].message.content;
+
+      // Final Secret Scan
+      if (scanForSecrets(aiReply)) {
+          aiReply = "[REDACTED: SENSITIVE INFORMATION DETECTED IN FINAL PAYLOAD]";
+      }
+
+
+      // Update model badge if possible
+      const modelBadge = container.querySelector('.badge-model');
+      if (modelBadge) modelBadge.textContent = "AI Model"; // Adjust based on actual header info if backend provides
+
+      // Simulate streaming the response
+      const finalRawText = await simulateStreaming(aiReply, bubbleTarget);
+
+      // Save to history
+      if (isGenerating) { // only save if not fully aborted before stream finished
+          sessionManager.addMessage("assistant", finalRawText);
+      }
+
+      if (currentAttachment) {
+        currentAttachment = null;
+        if (aiChatFile) aiChatFile.value = "";
+        if (aiChatAttachmentPreview) {
+          aiChatAttachmentPreview.style.display = "none";
+          aiChatAttachmentPreview.innerHTML = "";
+        }
+      }
+
+    } catch (err) {
+      if (err.name === 'AbortError') {
+          bubbleTarget.innerHTML += `<br/><span style="color: #f55; font-size: 0.8em;">[Stopped by User]</span>`;
+          // If aborted, save partial state if needed, or do nothing.
+      } else {
+          bubbleTarget.innerHTML = `<span style="color: #f55;"><strong>ERROR:</strong> ${err.message}</span>`;
+      }
+    } finally {
+      isGenerating = false;
+      if(btnSendAiChat) btnSendAiChat.style.display = "block";
+      if(btnStopAiChat) btnStopAiChat.style.display = "none";
+      aiChatInput.focus();
+
+      renderSidebar();
+      renderChatWindow(); // full re-render to attach all events properly
+    }
+  }
+
+  // --- Event Listeners ---
+
+  // --- Keyboard Shortcuts (Accessibility+) ---
+  document.addEventListener('keydown', (e) => {
+      // Esc: Stop Generating
+      if (e.key === 'Escape' && isGenerating) {
+          if (btnStopAiChat) btnStopAiChat.click();
+      }
+
+      // Ctrl+K or Cmd+K: Focus Search
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+          e.preventDefault();
+          const searchInput = document.getElementById("chatSearchInput");
+          if (searchInput) searchInput.focus();
+      }
+
+      // Ctrl+Shift+C or Cmd+Shift+C: Copy latest code block
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'c') {
+          e.preventDefault();
+          const codeBlocks = aiChatWindow.querySelectorAll('.btn-copy-code');
+          if (codeBlocks.length > 0) {
+              const lastCodeBlockBtn = codeBlocks[codeBlocks.length - 1];
+              lastCodeBlockBtn.click();
+          }
+      }
+  });
+
+  // Ctrl+Enter for textarea handled specifically
+  if (aiChatInput) {
+      aiChatInput.addEventListener('keydown', (e) => {
+          if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+              e.preventDefault();
+              handleSendAiMessage();
+          }
+      });
+  }
+
+
+  if (btnSendAiChat) btnSendAiChat.addEventListener("click", handleSendAiMessage);
+
+  if (btnStopAiChat) {
+      btnStopAiChat.addEventListener("click", () => {
+          if (isGenerating) {
+              isGenerating = false; // Stops simulated streaming
+              if (abortController) abortController.abort(); // Stops network request
+          }
+      });
+  }
+
+  if (aiChatInput) {
+    aiChatInput.addEventListener("input", function() {
+      this.style.height = "auto";
+      this.style.height = Math.min(this.scrollHeight, 150) + "px";
+    });
+
+    aiChatInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        handleSendAiMessage();
+      }
+    });
+  }
+
+  document.getElementById("btnNewChat")?.addEventListener("click", () => {
+      if(isGenerating) return;
+      sessionManager.createNewSession();
+      renderSidebar();
+      renderChatWindow();
+  });
+
+  document.getElementById("chatSearchInput")?.addEventListener("input", renderSidebar);
+
+  document.getElementById("btnExportChats")?.addEventListener("click", () => {
+      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(sessionManager.sessions, null, 2));
+      const downloadAnchorNode = document.createElement('a');
+      downloadAnchorNode.setAttribute("href", dataStr);
+      downloadAnchorNode.setAttribute("download", "we10_ai_sessions.json");
+      document.body.appendChild(downloadAnchorNode);
+      downloadAnchorNode.click();
+      downloadAnchorNode.remove();
+  });
+
+  const importChatsFile = document.getElementById("importChatsFile");
+  document.getElementById("btnImportChats")?.addEventListener("click", () => {
+      importChatsFile?.click();
+  });
+
+  importChatsFile?.addEventListener("change", (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (event) => {
+          try {
+              const importedData = JSON.parse(event.target.result);
+              // Merge sessions
+              sessionManager.sessions = { ...sessionManager.sessions, ...importedData };
+              sessionManager.save();
+              Toast.show("Chats Imported Successfully!");
+              renderSidebar();
+              renderChatWindow();
+          } catch (err) {
+              Toast.show("Error parsing JSON file");
+          }
+      };
+      reader.readAsText(file);
+      importChatsFile.value = ""; // reset
+  });
+
+
+  document.getElementById("btnClearChats")?.addEventListener("click", () => {
+      if(confirm("Clear ALL chat sessions? This cannot be undone.")) {
+          sessionManager.clearAll();
+          renderSidebar();
+          renderChatWindow();
+      }
+  });
+
+  // Attachments logic
   if (btnUploadAiChat && aiChatUploadMenu) {
     btnUploadAiChat.addEventListener("click", () => {
-      if (aiChatUploadMenu.style.display === "none" || !aiChatUploadMenu.style.display) {
-        aiChatUploadMenu.style.display = "flex";
-      } else {
-        aiChatUploadMenu.style.display = "none";
-      }
+      aiChatUploadMenu.style.display = aiChatUploadMenu.style.display === "none" ? "flex" : "none";
     });
   }
 
@@ -380,105 +1080,104 @@ function escapeHtml(unsafe) {
     });
   }
 
-  const btnSendAiChat = document.getElementById("btnSendAiChat");
-  const aiChatInput = document.getElementById("aiChatInput");
-  const aiChatWindow = document.getElementById("aiChatWindow");
-
-  let chatHistory = [];
-
-  async function handleSendAiMessage() {
-    const text = aiChatInput.value.trim();
-    if (!text) return;
-
-    // Append user message to UI
-    const userMsg = document.createElement("div");
-    userMsg.style.color = "#fff";
-    userMsg.innerHTML = `<strong style="color: #0f0;">YOU:</strong> ${escapeHtml(text)}`;
-    aiChatWindow.appendChild(userMsg);
-    aiChatWindow.scrollTop = aiChatWindow.scrollHeight;
-
-    aiChatInput.value = "";
-    aiChatInput.disabled = true;
-    btnSendAiChat.disabled = true;
-
-    // Add to history
-    chatHistory.push({ role: "user", content: text });
-
-    // Append loading indicator
-    const loadingMsg = document.createElement("div");
-    loadingMsg.style.color = "#aaa";
-    loadingMsg.innerHTML = `<div class="ai-typing-indicator"><span></span><span></span><span></span></div>`;
-    aiChatWindow.appendChild(loadingMsg);
-    aiChatWindow.scrollTop = aiChatWindow.scrollHeight;
-
-    try {
-      const response = await fetch('/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: chatHistory, attachment: currentAttachment })
-      });
-
-      aiChatWindow.removeChild(loadingMsg);
-
-      if (!response.ok) {
-        throw new Error(`Server returned ${response.status}: ${await response.text()}`);
-      }
-
-
-      const data = await response.json();
-      let aiReply = "No response.";
-
-      if (data.error) {
-        aiReply = data.error;
-      } else if (data.choices && data.choices[0] && data.choices[0].message) {
-        aiReply = data.choices[0].message.content;
-      }
-
-      // Remove markdown strong/italic indicators (*) just in case
-      aiReply = aiReply.replace(/\*\*/g, '').replace(/\*/g, '');
-
-      chatHistory.push({ role: "assistant", content: aiReply });
-
-      if (currentAttachment) {
-        currentAttachment = null;
-        if (aiChatFile) aiChatFile.value = "";
-        if (aiChatAttachmentPreview) {
-          aiChatAttachmentPreview.style.display = "none";
-          aiChatAttachmentPreview.innerHTML = "";
+  // Delegate event listener for Copy Code & Collapse buttons
+  if (aiChatWindow) {
+    aiChatWindow.addEventListener("click", (e) => {
+      if (e.target.classList.contains("btn-copy-code")) {
+        const codeToCopy = decodeURIComponent(e.target.dataset.code);
+        navigator.clipboard.writeText(codeToCopy).then(() => {
+          const originalText = e.target.textContent;
+          e.target.textContent = "✓ Copied";
+          Toast.show("Code Copied!");
+          setTimeout(() => { e.target.textContent = originalText; }, 2000);
+        });
+            } else if (e.target.classList.contains("btn-toggle-wrap")) {
+        const pre = e.target.closest('.ai-code-block').querySelector('pre');
+        if (pre) {
+            pre.classList.toggle('wrap-text');
         }
-      }
-
-
-      const aiMsg = document.createElement("div");
-      aiMsg.style.color = "#0ff";
-      // Basic formatting for newlines
-      aiMsg.innerHTML = `<strong style="color: #ff0;">AI:</strong> ${escapeHtml(aiReply).replace(/\n/g, '<br/>')}`;
-      aiChatWindow.appendChild(aiMsg);
-
-    } catch (err) {
-      if (aiChatWindow.contains(loadingMsg)) aiChatWindow.removeChild(loadingMsg);
-      const errMsg = document.createElement("div");
-      errMsg.style.color = "#f55";
-      errMsg.innerHTML = `<strong>ERROR:</strong> ${err.message}`;
-      aiChatWindow.appendChild(errMsg);
-    } finally {
-      aiChatInput.disabled = false;
-      btnSendAiChat.disabled = false;
-      aiChatInput.focus();
-      aiChatWindow.scrollTop = aiChatWindow.scrollHeight;
-    }
-  }
-
-  if (btnSendAiChat) {
-    btnSendAiChat.addEventListener("click", handleSendAiMessage);
-  }
-
-  if (aiChatInput) {
-    aiChatInput.addEventListener("keypress", (e) => {
-      if (e.key === "Enter") {
-        handleSendAiMessage();
+      } else if (e.target.classList.contains("btn-toggle-code")) {
+        const block = e.target.closest('.ai-code-block');
+        if (block) {
+            block.classList.toggle('code-collapsed');
+            e.target.textContent = block.classList.contains('code-collapsed') ? "▶ Expand" : "▼ Collapse";
+        }
       }
     });
   }
+
+  // View Branches Dummy Handler
+  document.getElementById("btnViewBranches")?.addEventListener("click", () => {
+      const session = sessionManager.getCurrentSession();
+      let treeInfo = `Current Branch ID: ${session.id}\nParent: ${session.parentId || 'Root'}\nChildren: ${session.children.join(', ') || 'None'}`;
+      alert(`Conversation Tree Info:\n\n${treeInfo}\n\n(UI for tree visualization to be implemented)`);
+  });
+
+
+
+  document.getElementById("btnToggleSidebar")?.addEventListener("click", () => {
+      const sidebar = document.getElementById("aiSidebar");
+      if (sidebar) sidebar.classList.toggle("drawer-open");
+  });
+
+  document.getElementById("btnCloseSidebar")?.addEventListener("click", () => {
+      const sidebar = document.getElementById("aiSidebar");
+      if (sidebar) sidebar.classList.remove("drawer-open");
+  });
+
+
+
+  // --- Offline Mode ---
+  function updateOnlineStatus() {
+      const isOnline = navigator.onLine;
+      const indicator = document.getElementById("offlineIndicator");
+      if (indicator) {
+          indicator.style.display = isOnline ? "none" : "block";
+      }
+      if (aiChatInput) {
+          aiChatInput.disabled = !isOnline;
+          aiChatInput.placeholder = isOnline ? "Message AI..." : "Offline mode - Chat disabled";
+      }
+      if (btnSendAiChat) btnSendAiChat.disabled = !isOnline;
+      if (btnUploadAiChat) btnUploadAiChat.disabled = !isOnline;
+  }
+
+  window.addEventListener('online', updateOnlineStatus);
+  window.addEventListener('offline', updateOnlineStatus);
+  updateOnlineStatus(); // init
+
+
+  // --- Token Budget Estimator ---
+  function updateContextBudget() {
+      const session = sessionManager.getCurrentSession();
+      if (!session) return;
+
+      const indicator = document.getElementById("contextBudgetIndicator");
+      if (!indicator) return;
+
+      // Rough estimation: 4 chars = 1 token
+      let totalChars = 0;
+      session.messages.forEach(m => {
+          totalChars += m.content.length;
+      });
+
+      const estTokens = Math.round(totalChars / 4);
+      const MAX_TOKENS = 8192;
+
+      indicator.textContent = `Est. Context: ${estTokens} / ${MAX_TOKENS} tokens`;
+
+      if (estTokens > MAX_TOKENS * 0.9) {
+          indicator.style.color = "#f55";
+          indicator.textContent += " (Approaching Limit!)";
+      } else if (estTokens > MAX_TOKENS * 0.75) {
+          indicator.style.color = "gold";
+      } else {
+          indicator.style.color = "#888";
+      }
+  }
+
+  // Initial Render
+  renderSidebar();
+  renderChatWindow();
 
 });
