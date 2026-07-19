@@ -939,6 +939,128 @@ function escapeHtml(unsafe) {
     });
   }
 
+  function renderSidebar() {
+      if(!chatSessionList) return;
+      chatSessionList.innerHTML = '';
+
+      const searchQ = (document.getElementById("chatSearchInput")?.value || "").toLowerCase();
+
+      const sortedSessions = Object.values(sessionManager.sessions).sort((a, b) => {
+          if (a.pinned !== b.pinned) return b.pinned ? 1 : -1;
+          return b.updatedAt - a.updatedAt;
+      });
+
+      sortedSessions.forEach(session => {
+          if (searchQ) {
+              const inTitle = session.title.toLowerCase().includes(searchQ);
+              const inMsgs = session.messages.some(m => m.content.toLowerCase().includes(searchQ));
+              if (!inTitle && !inMsgs) return;
+          }
+
+          const div = document.createElement("div");
+          div.className = `chat-session-item ${session.id === sessionManager.currentSessionId ? 'active' : ''}`;
+          div.innerHTML = `
+             <div style="flex-grow: 1; overflow: hidden;" class="session-click-area">
+                <div class="chat-session-title">${escapeHtml(session.title)} ${session.pinned ? '📌' : ''} ${session.favorite ? '⭐' : ''}</div>
+                <div class="chat-session-meta">${new Date(session.updatedAt).toLocaleDateString()} • ${session.messages.length} msgs</div>
+             </div>
+             <div class="session-actions">
+                <button class="btn-pin ${session.pinned ? 'pin-active' : ''}" title="Pin">📌</button>
+                <button class="btn-fav" style="${session.favorite ? 'color: gold;' : ''}" title="Favorite">★</button>
+                <button class="btn-del" title="Delete">🗑</button>
+             </div>
+          `;
+
+          div.querySelector('.session-click-area').addEventListener('click', () => {
+              if (isGenerating) return;
+              sessionManager.currentSessionId = session.id;
+              sessionManager.save();
+              renderSidebar();
+              renderChatWindow();
+          });
+
+          div.querySelector('.btn-pin').addEventListener('click', (e) => { e.stopPropagation(); sessionManager.sessions[session.id].pinned = !session.pinned; sessionManager.save(); renderSidebar(); });
+          div.querySelector('.btn-fav').addEventListener('click', (e) => { e.stopPropagation(); sessionManager.sessions[session.id].favorite = !session.favorite; sessionManager.save(); renderSidebar(); });
+          div.querySelector('.btn-del').addEventListener('click', (e) => {
+              e.stopPropagation();
+              if(confirm("Delete this chat session?")) {
+                  sessionManager.deleteSession(session.id);
+                  renderSidebar();
+                  renderChatWindow();
+              }
+          });
+
+          chatSessionList.appendChild(div);
+      });
+  }
+
+  // Delegate event listener for Copy Code & Collapse buttons
+  if (aiChatWindow) {
+    aiChatWindow.addEventListener("click", (e) => {
+      if (e.target.classList.contains("btn-copy-code")) {
+        const codeToCopy = decodeURIComponent(e.target.dataset.code);
+        navigator.clipboard.writeText(codeToCopy).then(() => {
+          const originalText = e.target.textContent;
+          e.target.textContent = "✓ Copied";
+          Toast.show("Code Copied!");
+          setTimeout(() => { e.target.textContent = originalText; }, 2000);
+        });
+            } else if (e.target.classList.contains("btn-toggle-wrap")) {
+        const pre = e.target.closest('.ai-code-block').querySelector('pre');
+        if (pre) {
+            pre.classList.toggle('wrap-text');
+        }
+      } else if (e.target.classList.contains("btn-toggle-code")) {
+        const block = e.target.closest('.ai-code-block');
+        if (block) {
+            block.classList.toggle('code-collapsed');
+            e.target.textContent = block.classList.contains('code-collapsed') ? "▶ Expand" : "▼ Collapse";
+        }
+      }
+    });
+  }
+
+  // View Branches Dummy Handler
+  document.getElementById("btnViewBranches")?.addEventListener("click", () => {
+      const session = sessionManager.getCurrentSession();
+      let treeInfo = `Current Branch ID: ${session.id}\nParent: ${session.parentId || 'Root'}\nChildren: ${session.children.join(', ') || 'None'}`;
+      alert(`Conversation Tree Info:\n\n${treeInfo}\n\n(UI for tree visualization to be implemented)`);
+  });
+
+
+  document.getElementById("btnToggleSidebar")?.addEventListener("click", () => {
+      const sidebar = document.getElementById("aiSidebar");
+      if (sidebar) sidebar.classList.toggle("drawer-open");
+  });
+
+  // Initial Render
+  renderSidebar();
+  renderChatWindow();
+
+  document.getElementById("btnNewChat")?.addEventListener("click", () => {
+      if(isGenerating) return;
+      sessionManager.createNewSession();
+      renderSidebar();
+      renderChatWindow();
+  });
+
+  document.getElementById("chatSearchInput")?.addEventListener("input", renderSidebar);
+
+  document.getElementById("btnClearChats")?.addEventListener("click", () => {
+      if(confirm("Clear ALL chat sessions? This cannot be undone.")) {
+          sessionManager.clearAll();
+          renderSidebar();
+          renderChatWindow();
+      }
+  });
+
+  // Attachments logic
+  if (btnUploadAiChat && aiChatUploadMenu) {
+    btnUploadAiChat.addEventListener("click", () => {
+      aiChatUploadMenu.style.display = aiChatUploadMenu.style.display === "none" ? "flex" : "none";
+    });
+  }
+
   if (aiChatUploadMenu && aiChatFile) {
     const menuButtons = aiChatUploadMenu.querySelectorAll("button");
     menuButtons.forEach(btn => {
@@ -997,11 +1119,6 @@ function escapeHtml(unsafe) {
           Toast.show("Code Copied!");
           setTimeout(() => { e.target.textContent = originalText; }, 2000);
         });
-            } else if (e.target.classList.contains("btn-toggle-wrap")) {
-        const pre = e.target.closest('.ai-code-block').querySelector('pre');
-        if (pre) {
-            pre.classList.toggle('wrap-text');
-        }
       } else if (e.target.classList.contains("btn-toggle-code")) {
         const block = e.target.closest('.ai-code-block');
         if (block) {
@@ -1017,12 +1134,6 @@ function escapeHtml(unsafe) {
       const session = sessionManager.getCurrentSession();
       let treeInfo = `Current Branch ID: ${session.id}\nParent: ${session.parentId || 'Root'}\nChildren: ${session.children.join(', ') || 'None'}`;
       alert(`Conversation Tree Info:\n\n${treeInfo}\n\n(UI for tree visualization to be implemented)`);
-  });
-
-
-  document.getElementById("btnToggleSidebar")?.addEventListener("click", () => {
-      const sidebar = document.getElementById("aiSidebar");
-      if (sidebar) sidebar.classList.toggle("drawer-open");
   });
 
   // Initial Render
