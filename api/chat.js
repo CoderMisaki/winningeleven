@@ -19,6 +19,7 @@ export default async function handler(req, res) {
 
   const apiKey = process.env.minimax3;
   const geminiKey = process.env.gemini35;
+  const glmKey = process.env.glmKey; // <--- TAMBAHKAN BARIS INI
   const { messages, attachment, mode } = req.body;
 
   if (!apiKey && !geminiKey && !glmKey) {
