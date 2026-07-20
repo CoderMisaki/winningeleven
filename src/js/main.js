@@ -972,6 +972,8 @@ function escapeHtml(unsafe) {
           // If aborted, save partial state if needed, or do nothing.
       } else {
           bubbleTarget.innerHTML = `<span style="color: #f55;"><strong>ERROR:</strong> ${err.message}</span>`;
+          // TAMBAHKAN BARIS INI AGAR PESAN ERROR TIDAK HILANG DARI LAYAR:
+          sessionManager.addMessage("assistant", `**ERROR:** ${err.message}`);
       }
     } finally {
       isGenerating = false;
@@ -1033,6 +1035,48 @@ function escapeHtml(unsafe) {
       });
   }
 
+
+  // --- FITUR AUTO-FILE UNTUK TEKS PANJANG ---
+  if (aiChatInput) {
+    aiChatInput.addEventListener('paste', (e) => {
+      const pastedText = (e.clipboardData || window.clipboardData).getData('text');
+
+      // Jika teks yang di-paste lebih dari 500 karakter
+      if (pastedText.length >= 500) {
+        e.preventDefault(); // Hentikan teks masuk ke kolom input
+
+        // Encode teks ke base64 agar aman dikirim ke backend AI
+        const base64Text = window.btoa(unescape(encodeURIComponent(pastedText)));
+
+        // Buat nama file otomatis dari 15 huruf pertama
+        let snippetName = pastedText.trim().substring(0, 15).replace(/\n/g, ' ') + "...txt";
+        if (pastedText.trim().startsWith("<!DOCTYPE html>")) snippetName = "index.html";
+
+        // Masukkan sebagai attachment
+        currentAttachment = {
+          type: 'document',
+          base64: base64Text,
+          mimeType: 'text/plain',
+          filename: snippetName
+        };
+
+        // Tampilkan UI Preview Attachment
+        if (aiChatAttachmentPreview) {
+          aiChatAttachmentPreview.innerHTML = `<span>📄 ${escapeHtml(snippetName)} (Snippet)</span> <button id="btnRemoveAttachment" style="background: none; border: none; color: #f55; cursor: pointer; font-weight: bold;">X</button>`;
+          aiChatAttachmentPreview.style.display = "flex";
+
+          document.getElementById("btnRemoveAttachment").addEventListener("click", () => {
+            currentAttachment = null;
+            if (aiChatFile) aiChatFile.value = "";
+            aiChatAttachmentPreview.style.display = "none";
+            aiChatAttachmentPreview.innerHTML = "";
+          });
+        }
+        Toast.show("Teks panjang otomatis dijadikan file!");
+      }
+    });
+  }
+
   if (aiChatInput) {
     aiChatInput.addEventListener("input", function() {
       this.style.height = "auto";
@@ -1041,9 +1085,20 @@ function escapeHtml(unsafe) {
 
     aiChatInput.addEventListener("keydown", (e) => {
       if (e.key === "Enter" && !e.shiftKey) {
+        // Deteksi jika user menggunakan HP (layar kecil atau UserAgent Mobile)
+        if (window.innerWidth <= 768 || /Mobi|Android/i.test(navigator.userAgent)) {
+            return; // Biarkan default (tombol Enter akan membuat baris baru ke bawah)
+        }
+        // Jika di PC/Desktop, Enter = Kirim Pesan
         e.preventDefault();
         handleSendAiMessage();
       }
+  });
+
+  // Attachments logic
+  if (btnUploadAiChat && aiChatUploadMenu) {
+    btnUploadAiChat.addEventListener("click", () => {
+      aiChatUploadMenu.style.display = aiChatUploadMenu.style.display === "none" ? "flex" : "none";
     });
   } // <--- TAMBAHKAN TUTUP KURUNG KURAWAL INI DI SINI
 
