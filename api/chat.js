@@ -342,13 +342,19 @@ export default async function handler(req, res) {
 
     const reader = response.body.getReader();
     const decoder = new TextDecoder("utf-8");
+    let buffer = ""; // <-- 1. Tambahkan variabel penampung ini
 
     while (true) {
         const { done, value } = await reader.read();
         if (done) break;
 
-        const chunk = decoder.decode(value, { stream: true });
-        const lines = chunk.split('\n');
+        // 2. Gabungkan data baru dengan sisa buffer sebelumnya
+        buffer += decoder.decode(value, { stream: true });
+
+        const lines = buffer.split('\n');
+
+        // 3. Simpan sisa teks yang kepotong di akhir kembali ke buffer
+        buffer = lines.pop();
 
         for (const line of lines) {
             if (line.trim() === '') continue;

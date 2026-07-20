@@ -545,6 +545,47 @@ function escapeHtml(unsafe) {
   const aiChatAttachmentPreview = document.getElementById("aiChatAttachmentPreview");
   let currentAttachment = null;
 
+  // --- Smart Scroll & Arrow Button ---
+  const scrollBtn = document.createElement("button");
+  scrollBtn.innerHTML = "⬇";
+  scrollBtn.className = "scroll-to-bottom-btn";
+  scrollBtn.title = "Scroll to bottom";
+  document.getElementById("aiMainChat").appendChild(scrollBtn);
+
+  let scrollTimeout;
+  const scrollThreshold = 150; // Toleransi jarak dari bawah (px)
+
+  aiChatWindow.addEventListener("scroll", () => {
+      // 1. Jika user sedang scrolling, hilangkan tombol langsung
+      scrollBtn.classList.remove("show");
+      clearTimeout(scrollTimeout);
+
+      // Cek apakah posisi scroll user sedang berada di paling bawah
+      const isNearBottom = aiChatWindow.scrollHeight - aiChatWindow.scrollTop - aiChatWindow.clientHeight < scrollThreshold;
+
+      // 2. Jika user TIDAK di bawah, jalankan timer 3 detik
+      if (!isNearBottom) {
+          scrollTimeout = setTimeout(() => {
+              scrollBtn.classList.add("show"); // Munculkan panah setelah 3 detik diam
+          }, 3000);
+      }
+  });
+
+  // Jika tombol panah diklik, scroll otomatis ke bawah
+  scrollBtn.addEventListener("click", () => {
+      aiChatWindow.scrollTo({ top: aiChatWindow.scrollHeight, behavior: "smooth" });
+      scrollBtn.classList.remove("show");
+  });
+
+  // Fungsi pintar: Hanya auto-scroll jika posisi user sedang di bawah
+  function smartScrollToBottom() {
+      const isNearBottom = aiChatWindow.scrollHeight - aiChatWindow.scrollTop - aiChatWindow.clientHeight < scrollThreshold;
+      if (isNearBottom) {
+          aiChatWindow.scrollTop = aiChatWindow.scrollHeight;
+      }
+  }
+
+
   // --- Render Functions ---
 
   function renderSidebar() {
@@ -846,6 +887,7 @@ function escapeHtml(unsafe) {
       const decoder = new TextDecoder("utf-8");
       let currentRaw = "";
       let doneReading = false;
+      let buffer = ""; // <-- 1. Tambahkan variabel penampung ini
 
       // Update model badge if possible
       const modelBadge = container.querySelector('.badge-model');
@@ -858,8 +900,12 @@ function escapeHtml(unsafe) {
               break;
           }
 
-          const chunk = decoder.decode(value, { stream: true });
-          const lines = chunk.split('\n'); // PERBAIKAN DI SINI: \n tidak boleh terpotong ke bawah
+          // 2. Gabungkan data baru ke buffer
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+
+          // 3. Simpan sisa teks yang kepotong kembali ke buffer
+          buffer = lines.pop();
 
           for (const line of lines) {
               if (line.trim() === '') continue;
@@ -890,7 +936,7 @@ function escapeHtml(unsafe) {
                               : escapeHtml(currentRaw).replace(/\n/g, '<br/>'); // PERBAIKAN DI SINI
 
                           bubbleTarget.innerHTML = intermediateHtml + '<span class="blink-cursor"></span>';
-                          aiChatWindow.scrollTop = aiChatWindow.scrollHeight;
+                          smartScrollToBottom();
                       }
                   } catch (e) {
                       console.error("Error parsing stream chunk", e, dataStr);
@@ -904,7 +950,7 @@ function escapeHtml(unsafe) {
           ? DOMPurify.sanitize(marked.parse(currentRaw), { ADD_ATTR: ['target'] })
           : escapeHtml(currentRaw).replace(/\n/g, '<br/>'); // PERBAIKAN DI SINI
       bubbleTarget.innerHTML = finalHtml;
-      aiChatWindow.scrollTop = aiChatWindow.scrollHeight;
+      smartScrollToBottom();
 
       // Save to history
       if (isGenerating && currentRaw.trim() !== "") {
@@ -998,6 +1044,12 @@ function escapeHtml(unsafe) {
         e.preventDefault();
         handleSendAiMessage();
       }
+  });
+
+  // Attachments logic
+  if (btnUploadAiChat && aiChatUploadMenu) {
+    btnUploadAiChat.addEventListener("click", () => {
+      aiChatUploadMenu.style.display = aiChatUploadMenu.style.display === "none" ? "flex" : "none";
     });
   }
 

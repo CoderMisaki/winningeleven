@@ -862,3 +862,32 @@ body {
 #aiMainChat {
   min-width: 0;
 }
+
+/* --- SMART SCROLL BUTTON --- */
+.scroll-to-bottom-btn {
+  position: absolute;
+  bottom: 85px; /* Berada tepat di atas area input */
+  right: 20px;
+  width: 35px;
+  height: 35px;
+  border-radius: 50%;
+  background: var(--bg-panel);
+  color: #0ff;
+  border: 1px solid #0ff;
+  font-size: 1.2rem;
+  font-weight: bold;
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s ease;
+  z-index: 100;
+  box-shadow: 0 4px 6px rgba(0,0,0,0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.scroll-to-bottom-btn.show {
+  opacity: 1;
+  pointer-events: auto;
+}
