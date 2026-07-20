@@ -1044,6 +1044,12 @@ function escapeHtml(unsafe) {
         e.preventDefault();
         handleSendAiMessage();
       }
+  });
+
+  // Attachments logic
+  if (btnUploadAiChat && aiChatUploadMenu) {
+    btnUploadAiChat.addEventListener("click", () => {
+      aiChatUploadMenu.style.display = aiChatUploadMenu.style.display === "none" ? "flex" : "none";
     });
   }
 
