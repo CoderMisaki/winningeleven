@@ -19,7 +19,7 @@ export default async function handler(req, res) {
 
   const apiKey = process.env.minimax3;
   const geminiKey = process.env.gemini35;
-  const glmKey = process.env.glmKey; // <--- TAMBAHKAN BARIS INI
+  const glmKey = process.env.glm52;
   const { messages, attachment, mode } = req.body;
 
   if (!apiKey && !geminiKey && !glmKey) {
@@ -82,7 +82,7 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'Invalid payload: content must be a string' });
     }
 
-    if (msg.content.length > 4000) {
+    if (msg.content.length > 30000) {
       return res.status(400).json({ error: 'Invalid payload: message content too long' });
     }
 
@@ -92,270 +92,107 @@ export default async function handler(req, res) {
     });
   }
 
-  async function fetchWithTimeout(resource, options = {}) {
-    const { timeout = 60000 } = options;
-    const controller = new AbortController();
-    const id = setTimeout(() => controller.abort(), timeout);
-    const response = await fetch(resource, {
-      ...options,
-      signal: controller.signal
-    });
-    clearTimeout(id);
-    return response;
-  }
-
-  async function callMiniMax(messagesToPass, fileAttachment = null) {
-    if (!apiKey) throw new Error('MiniMax API key not configured.');
-
-    let finalMessages = [...messagesToPass];
-
-    if (fileAttachment && fileAttachment.mimeType.startsWith('image/')) {
-        // Find last user message
-        const lastUserIdx = finalMessages.map(m => m.role).lastIndexOf('user');
-        if (lastUserIdx !== -1) {
-             const originalText = finalMessages[lastUserIdx].content;
-             const dataUri = `data:${fileAttachment.mimeType};base64,${fileAttachment.base64}`;
-             finalMessages[lastUserIdx] = {
-                 role: 'user',
-                 content: [
-                     { type: "text", text: originalText },
-                     { type: "image_url", image_url: { url: dataUri } }
-                 ]
-             };
-        }
-    }
-
-    const response = await fetchWithTimeout('https://integrate.api.nvidia.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-        'Authorization': `Bearer ${apiKey}`
-      },
-      body: JSON.stringify({
-        model: 'minimaxai/minimax-m3',
-        messages: finalMessages,
-        max_tokens: 8192,
-        temperature: 0.70,
-        top_p: 0.95,
-        stream: false
-      }),
-      timeout: 60000
-    });
-
-    if (!response.ok) {
-        throw new Error(`MiniMax API failed with status ${response.status}`);
-    }
-    return await response.json();
-  }
-
-  async function callGLM(messagesToPass) {
-    if (!glmKey) throw new Error('GLM API key not configured.');
-
-    const response = await fetchWithTimeout('https://integrate.api.nvidia.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-        'Authorization': `Bearer ${glmKey}`
-      },
-      body: JSON.stringify({
-        model: 'z-ai/glm-5.2',
-        messages: messagesToPass,
-        max_tokens: 16384,
-        temperature: 1,
-        top_p: 1,
-        seed: 42,
-        stream: false
-      }),
-      timeout: 60000
-    });
-
-    if (!response.ok) {
-        throw new Error(`GLM API failed with status ${response.status}`);
-    }
-    return await response.json();
-  }
-
-  async function smartRouter(messagesToPass, fileAttachment = null) {
-    let requestType = 'TEXT';
-    if (fileAttachment) {
-       if (fileAttachment.mimeType.startsWith('image/')) requestType = 'IMAGE';
-       else if (fileAttachment.mimeType.startsWith('audio/')) requestType = 'AUDIO';
-       else if (fileAttachment.mimeType.startsWith('video/')) requestType = 'VIDEO';
-       else requestType = 'DOCUMENT';
-    }
-
-    console.log('[Router]');
-    console.log(`Request Type : ${requestType}`);
-    console.log('Primary : MiniMax M3');
-
-    // Attempt 1: MiniMax
-    try {
-        const result = await callMiniMax(messagesToPass, fileAttachment);
-        console.log('Model Used : MiniMax M3');
-        return result;
-    } catch (e) {
-        console.warn('MiniMax failed.');
-
-        if (requestType === 'TEXT') {
-            console.log('Switching to GLM...');
-            // Attempt 2: GLM
-            try {
-                const resultGLM = await callGLM(messagesToPass);
-                console.log('Model Used : GLM 5.2');
-                return resultGLM;
-            } catch (e2) {
-                console.warn('GLM failed.');
-                console.log('Switching to Gemini...');
-                // Attempt 3: Gemini
-                try {
-                   const resultGemini = await callGemini(messagesToPass, fileAttachment);
-                   console.log('Model Used : Gemini 3.5 Flash');
-                   return resultGemini;
-                } catch (e3) {
-                   console.warn('Gemini failed too.');
-                }
-            }
-        } else {
-            console.log('Switching to Gemini...');
-            // Attempt 2: Gemini
-            try {
-                const resultGemini = await callGemini(messagesToPass, fileAttachment);
-                console.log('Model Used : Gemini 3.5 Flash');
-                return resultGemini;
-            } catch (e2) {
-                console.warn('Gemini failed too.');
-            }
-        }
-    }
-
-    return {
-      choices: [
-        {
-          message: {
-            content: "Mohon maaf, seluruh layanan AI sedang tidak tersedia. Silakan coba beberapa saat lagi."
-          }
-        }
-      ]
-    };
-  }
-
-  // Fallback function to call Gemini API
+  // 1. Fungsi Ultimate Fallback ke Gemini
   async function callGemini(messagesToPass, fileAttachment = null) {
     try {
-      if (!geminiKey) {
-          throw new Error('Gemini API key not configured.');
-      }
+      if (!geminiKey) throw new Error('Gemini API key not configured.');
       const ai = new GoogleGenAI({ apiKey: geminiKey });
-
       let systemPrompt = "";
-      let lastUserMsg = "";
+      let geminiHistory = [];
 
       let geminiHistory = [];
       for (const m of messagesToPass) {
           if (m.role === 'system') {
               systemPrompt += m.content + "\n";
           } else if (m.role === 'user' || m.role === 'assistant') {
-              // Note: Gemini API requires 'model' instead of 'assistant' in contents array if using history
-              // But since we are using inlineData for images, we might just pass a formatted string of the whole history
-              // Or use proper Gemini format. Since `contents` accepts a string for simple text generation:
-              if (m.role === 'user') lastUserMsg = m.content;
               geminiHistory.push(`${m.role.toUpperCase()}: ${m.content}`);
           }
       }
       const fullPrompt = geminiHistory.join("\n\n");
 
+      let payload = fileAttachment
+        ? [ { text: fullPrompt }, { inlineData: { data: fileAttachment.base64, mimeType: fileAttachment.mimeType } } ]
+        : fullPrompt;
 
-      if (fileAttachment) {
-          const resultStream = await ai.models.generateContentStream({
-              model: "gemini-3.5-flash",
-              contents: [
-                  { text: fullPrompt },
-                  { inlineData: { data: fileAttachment.base64, mimeType: fileAttachment.mimeType } }
-              ],
-              config: {
-                  systemInstruction: systemPrompt
-              }
-          });
-          for await (const chunk of resultStream) {
-              res.write(`data: ${JSON.stringify({ content: chunk.text })}\n\n`);
-          }
-          res.write(`data: [DONE]\n\n`);
-          res.end();
-      } else {
-          const resultStream = await ai.models.generateContentStream({
-              model: "gemini-3.5-flash",
-              contents: fullPrompt,
-              config: {
-                  systemInstruction: systemPrompt
-              }
-          });
-          for await (const chunk of resultStream) {
-              res.write(`data: ${JSON.stringify({ content: chunk.text })}\n\n`);
-          }
-          res.write(`data: [DONE]\n\n`);
-          res.end();
+      const resultStream = await ai.models.generateContentStream({
+          model: "gemini-3.5-flash",
+          contents: payload,
+          config: { systemInstruction: systemPrompt }
+      });
+
+      for await (const chunk of resultStream) {
+          res.write(`data: ${JSON.stringify({ content: chunk.text })}\n\n`);
       }
+      res.write(`data: [DONE]\n\n`);
+      res.end();
     } catch (err) {
         console.error("Gemini Fallback Error:", err);
-        res.write(`data: ${JSON.stringify({ error: "Mohon maaf, sistem AI sedang mengalami gangguan." })}\n\n`);
+        res.write(`data: ${JSON.stringify({ error: "Mohon maaf, semua sistem AI sedang sibuk. Silakan coba lagi." })}\n\n`);
         res.end();
     }
   }
 
-  // Set SSE Headers
-  res.setHeader('Content-Type', 'text/event-stream');
-  res.setHeader('Cache-Control', 'no-cache, no-transform');
-  res.setHeader('Connection', 'keep-alive');
-  res.flushHeaders();
-
-  if (attachment) {
-      return callGemini(sanitizedMessages, attachment);
-  }
-
-  try {
+  // 2. Fungsi Eksekutor Streaming Nvidia (Bisa dipakai MiniMax & GLM)
+  async function streamNvidiaAPI(modelName, authKey, messagesToPass) {
     const response = await fetch('https://integrate.api.nvidia.com/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Accept': 'text/event-stream',
-        'Authorization': `Bearer ${apiKey}`
+        'Authorization': `Bearer ${authKey}`
       },
       body: JSON.stringify({
-        model: 'minimaxai/minimax-m3',
-        messages: sanitizedMessages,
+        model: modelName,
+        messages: messagesToPass,
         max_tokens: 8192,
         temperature: 0.70,
         top_p: 0.95,
         stream: true
       })
     });
+    if (!response.ok) throw new Error(`${modelName} API Failed with status: ${response.status}`);
+    return response;
+  }
 
-    if (!response.ok) {
-      console.warn("NVIDIA API Failed, falling back to Gemini...");
-      return callGemini(sanitizedMessages);
+  // 3. Set SSE Headers untuk Streaming ke Frontend
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache, no-transform');
+  res.setHeader('Connection', 'keep-alive');
+  res.flushHeaders();
+
+  // Jika ada gambar/dokumen, langsung lempar ke Gemini
+  if (attachment) return callGemini(sanitizedMessages, attachment);
+
+  // --- SMART & STRONGER STREAMING ROUTER ---
+  try {
+    let response;
+
+    try {
+        // Percobaan 1: MiniMax
+        if (!apiKey) throw new Error("MiniMax key missing");
+        response = await streamNvidiaAPI('minimaxai/minimax-m3', apiKey, sanitizedMessages);
+    } catch (minimaxErr) {
+        console.warn("MiniMax failed:", minimaxErr.message, "-> Switching to GLM...");
+
+        // Percobaan 2: GLM
+        if (!glmKey) throw new Error("GLM key missing");
+        response = await streamNvidiaAPI('z-ai/glm-5.2', glmKey, sanitizedMessages);
     }
 
-    if (!response.body) {
-        throw new Error("No response body from Nvidia API");
-    }
+    // Tangkap Stream dari MiniMax ATAU GLM
+    if (!response.body) throw new Error("No response body from Nvidia API");
 
     const reader = response.body.getReader();
     const decoder = new TextDecoder("utf-8");
-    let buffer = ""; // <-- 1. Tambahkan variabel penampung ini
+    let buffer = "";
 
     while (true) {
         const { done, value } = await reader.read();
         if (done) break;
 
-        // 2. Gabungkan data baru dengan sisa buffer sebelumnya
         buffer += decoder.decode(value, { stream: true });
-
         const lines = buffer.split('\n');
-
-        // 3. Simpan sisa teks yang kepotong di akhir kembali ke buffer
-        buffer = lines.pop();
+        buffer = lines.pop(); // Menjaga JSON yang terpotong di akhir chunk
 
         for (const line of lines) {
             if (line.trim() === '') continue;
@@ -367,7 +204,7 @@ export default async function handler(req, res) {
                 }
                 try {
                     const parsed = JSON.parse(dataStr);
-                    if (parsed.choices && parsed.choices[0] && parsed.choices[0].delta && parsed.choices[0].delta.content) {
+                    if (parsed.choices?.[0]?.delta?.content) {
                         res.write(`data: ${JSON.stringify({ content: parsed.choices[0].delta.content })}\n\n`);
                     }
                 } catch (e) {
@@ -376,12 +213,12 @@ export default async function handler(req, res) {
             }
         }
     }
-
     res.write(`data: [DONE]\n\n`);
     res.end();
 
   } catch (error) {
-    console.warn('Error proxying request, falling back to Gemini:', error);
+    // Percobaan 3: Gemini Ultimate Fallback
+    console.warn('MiniMax and GLM both failed. Ultimate Fallback to Gemini:', error.message);
     return callGemini(sanitizedMessages);
   }
 }
