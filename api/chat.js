@@ -100,6 +100,7 @@ export default async function handler(req, res) {
       let systemPrompt = "";
       let geminiHistory = [];
 
+      let geminiHistory = [];
       for (const m of messagesToPass) {
           if (m.role === 'system') {
               systemPrompt += m.content + "\n";
