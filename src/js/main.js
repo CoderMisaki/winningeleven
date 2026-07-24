@@ -1091,6 +1091,7 @@ document.addEventListener("DOMContentLoaded", () => {
         handleSendAiMessage();
       }
   });
+  }
 
   // Attachments logic
   if (btnUploadAiChat && aiChatUploadMenu) {
@@ -1249,6 +1250,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const sidebar = document.getElementById("aiSidebar");
       if (sidebar) sidebar.classList.toggle("drawer-open");
   });
+  }
 
 
   const btnCloseSidebar = document.getElementById("btnCloseSidebar");
@@ -1258,6 +1260,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const sidebar = document.getElementById("aiSidebar");
       if (sidebar) sidebar.classList.remove("drawer-open");
   });
+  }
 
 
 
@@ -1314,6 +1317,4 @@ document.addEventListener("DOMContentLoaded", () => {
   renderSidebar();
   renderChatWindow();
 
-  }
-  }
 });
