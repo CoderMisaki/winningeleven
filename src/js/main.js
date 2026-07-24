@@ -311,10 +311,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
 
-// HTML escape function to prevent XSS
-function escapeHtml(unsafe) {
-    return Security.sanitizeInput(unsafe);
-}
+
 
 // --- AI CHAT FUNCTIONALITY V4 ---
 
