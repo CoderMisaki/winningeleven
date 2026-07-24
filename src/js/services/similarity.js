@@ -69,7 +69,8 @@ export const SimilarityCalculator = {
 
       const qHome = (qMatch.home || "").trim();
       const qAway = (qMatch.away || "").trim();
-      const qScore = (qMatch.score || "").trim();
+      let qScore = (qMatch.score || "").trim();
+      qScore = qScore.replace(/-/g, ':').replace(/\s+/g, '');
 
       if (!qHome && !qAway && !qScore) continue;
 
@@ -78,7 +79,8 @@ export const SimilarityCalculator = {
 
       const tHome = (tMatch.home || "").trim();
       const tAway = (tMatch.away || "").trim();
-      const tScore = (tMatch.score || "").trim();
+      let tScore = (tMatch.score || "").trim();
+      tScore = tScore.replace(/-/g, ':').replace(/\s+/g, '');
 
       const normTHome = normalizeCountry(tHome);
       const normTAway = normalizeCountry(tAway);
