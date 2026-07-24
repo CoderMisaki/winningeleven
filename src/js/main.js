@@ -1242,13 +1242,18 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
 
-  document.getElementById("btnToggleSidebar")?.addEventListener("click", (e) => {
+  const btnToggleSidebar = document.getElementById("btnToggleSidebar");
+  if (btnToggleSidebar) {
+    btnToggleSidebar.addEventListener("click", (e) => {
       e.stopPropagation();
       const sidebar = document.getElementById("aiSidebar");
       if (sidebar) sidebar.classList.toggle("drawer-open");
   });
 
-  document.getElementById("btnCloseSidebar")?.addEventListener("click", (e) => {
+
+  const btnCloseSidebar = document.getElementById("btnCloseSidebar");
+  if (btnCloseSidebar) {
+    btnCloseSidebar.addEventListener("click", (e) => {
       e.stopPropagation();
       const sidebar = document.getElementById("aiSidebar");
       if (sidebar) sidebar.classList.remove("drawer-open");
@@ -1309,4 +1314,6 @@ document.addEventListener("DOMContentLoaded", () => {
   renderSidebar();
   renderChatWindow();
 
+  }
+  }
 });

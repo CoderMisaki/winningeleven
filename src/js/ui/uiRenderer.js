@@ -78,7 +78,7 @@ export const UIRenderer = {
       p1Input.value = dataSource.p1 || "";
       setupCountryAutocomplete(p1Input, (val) => {
           val = Security.sanitizeInput(val);
-          if (isEditor) {
+          if (StateManager.activeMemoryId !== null) {
               MemoryManager.updateGameField(StateManager.activeMemoryId, StateManager.activeGameIndex, "p1", val, true);
           } else {
               StateManager.homeQuery.p1 = val;
