@@ -98,25 +98,37 @@ export default async function handler(req, res) {
       if (!geminiKey) throw new Error('Gemini API key not configured.');
       const ai = new GoogleGenAI({ apiKey: geminiKey });
       let systemPrompt = "";
-      let geminiHistory = [];
 
       let geminiHistory = [];
-      for (const m of messagesToPass) {
+      for (let i = 0; i < messagesToPass.length; i++) {
+          const m = messagesToPass[i];
           if (m.role === 'system') {
               systemPrompt += m.content + "\n";
           } else if (m.role === 'user' || m.role === 'assistant') {
-              geminiHistory.push(`${m.role.toUpperCase()}: ${m.content}`);
+              // Map role: 'assistant' becomes 'model' in Gemini API
+              const geminiRole = m.role === 'assistant' ? 'model' : 'user';
+              let parts = [{ text: m.content }];
+
+              // Only attach file to the VERY LAST user message
+              if (fileAttachment && i === messagesToPass.length - 1 && m.role === 'user') {
+                 parts.push({
+                    inlineData: {
+                        data: fileAttachment.base64,
+                        mimeType: fileAttachment.mimeType
+                    }
+                 });
+              }
+
+              geminiHistory.push({
+                  role: geminiRole,
+                  parts: parts
+              });
           }
       }
-      const fullPrompt = geminiHistory.join("\n\n");
-
-      let payload = fileAttachment
-        ? [ { text: fullPrompt }, { inlineData: { data: fileAttachment.base64, mimeType: fileAttachment.mimeType } } ]
-        : fullPrompt;
 
       const resultStream = await ai.models.generateContentStream({
           model: "gemini-3.5-flash",
-          contents: payload,
+          contents: geminiHistory,
           config: { systemInstruction: systemPrompt }
       });
 
@@ -132,27 +144,62 @@ export default async function handler(req, res) {
     }
   }
 
+
   // 2. Fungsi Eksekutor Streaming Nvidia (Bisa dipakai MiniMax & GLM)
   async function streamNvidiaAPI(modelName, authKey, messagesToPass) {
-    const response = await fetch('https://integrate.api.nvidia.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'text/event-stream',
-        'Authorization': `Bearer ${authKey}`
-      },
-      body: JSON.stringify({
-        model: modelName,
-        messages: messagesToPass,
-        max_tokens: 8192,
-        temperature: 0.70,
-        top_p: 0.95,
-        stream: true
-      })
-    });
-    if (!response.ok) throw new Error(`${modelName} API Failed with status: ${response.status}`);
-    return response;
+    const maxRetries = 3;
+    let baseDelay = 1000; // 1 second
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+            const response = await fetch('https://integrate.api.nvidia.com/v1/chat/completions', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'text/event-stream',
+                'Authorization': `Bearer ${authKey}`
+              },
+              body: JSON.stringify({
+                model: modelName,
+                messages: messagesToPass,
+                max_tokens: 8192,
+                temperature: 0.70,
+                top_p: 0.95,
+                stream: true
+              })
+            });
+
+            if (response.ok) {
+                return response;
+            }
+
+            // Read error text for logging purposes
+            const errorText = await response.text();
+            console.warn(`${modelName} API Attempt ${attempt} Failed with status: ${response.status}. Body: ${errorText}`);
+
+            // Retry logic
+            if ((response.status >= 500 && response.status < 600) || response.status === 429) {
+                 if (attempt < maxRetries) {
+                     const delay = baseDelay * (2 ** (attempt - 1));
+                     console.log(`Waiting ${delay}ms before retrying ${modelName}...`);
+                     await new Promise(resolve => setTimeout(resolve, delay));
+                     continue; // loop and retry
+                 }
+            }
+
+            throw new Error(`${modelName} API Failed with status: ${response.status}, Error: ${errorText}`);
+
+        } catch (fetchError) {
+             console.warn(`${modelName} fetch exception on attempt ${attempt}:`, fetchError.message);
+             if (attempt === maxRetries) {
+                 throw fetchError;
+             }
+             const delay = baseDelay * (2 ** (attempt - 1));
+             await new Promise(resolve => setTimeout(resolve, delay));
+        }
+    }
   }
+
 
   // 3. Set SSE Headers untuk Streaming ke Frontend
   res.setHeader('Content-Type', 'text/event-stream');
