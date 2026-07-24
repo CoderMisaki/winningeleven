@@ -1242,12 +1242,14 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
 
-  document.getElementById("btnToggleSidebar")?.addEventListener("click", () => {
+  document.getElementById("btnToggleSidebar")?.addEventListener("click", (e) => {
+      e.stopPropagation();
       const sidebar = document.getElementById("aiSidebar");
       if (sidebar) sidebar.classList.toggle("drawer-open");
   });
 
-  document.getElementById("btnCloseSidebar")?.addEventListener("click", () => {
+  document.getElementById("btnCloseSidebar")?.addEventListener("click", (e) => {
+      e.stopPropagation();
       const sidebar = document.getElementById("aiSidebar");
       if (sidebar) sidebar.classList.remove("drawer-open");
   });
