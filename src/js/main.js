@@ -6,11 +6,11 @@ import { ImportExportService } from "./services/importExport.js";
 import { Security } from "./utils/security.js";
 import { MemoryManager } from "./services/memoryManager.js";
 
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", async () => {
   window.UIRenderer = UIRenderer;
 
   // Hubungkan dan inisialisasi basis data sistem
-  StateManager.init();
+  await StateManager.init();
 
   // Muat visual interface awal (Matching Center)
   NavigationManager.switchToHomeView();
@@ -135,8 +135,8 @@ document.addEventListener("DOMContentLoaded", () => {
     resultsOutput.innerHTML = "<div style='text-align:center; padding: 20px;'>Loading...</div>";
 
     // Allow UI to update before heavy computation
-    setTimeout(() => {
-        const results = MatchingEngine.executeSearch(StateManager.homeQuery);
+    setTimeout(async () => {
+        const results = await MatchingEngine.executeSearch(StateManager.homeQuery);
 
         const minSimInput = document.getElementById("minSimilarity");
         const minSimThreshold = minSimInput ? parseInt(minSimInput.value, 10) || 0 : 0;
@@ -774,36 +774,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
   // --- Prompt Injection Firewall ---
-  function checkPromptInjection(text) {
-      const lower = text.toLowerCase();
-      const blockedPhrases = [
-          "ignore previous instructions", "system prompt", "show hidden prompt",
-          "print source", "dump project", "reveal memory", "bypass security",
-          "roleplay admin", "developer message", "process.env"
-      ];
-      for (const phrase of blockedPhrases) {
-          if (lower.includes(phrase)) {
-              return true;
-          }
-      }
-      return false;
-  }
 
 
-  // --- Secret Scanner ---
-  function scanForSecrets(text) {
-      const blockedPatterns = [
-          "process.env", "API_KEY", "JWT", "Bearer", "knowledge.json",
-          "system prompt", "router source", "hidden endpoint", "database credential"
-      ];
-      for (const pattern of blockedPatterns) {
-          // simple check
-          if (text.includes(pattern)) {
-              return true;
-          }
-      }
-      return false;
-  }
 
   // --- Send Message & Streaming Simulation ---
 
@@ -815,12 +787,6 @@ document.addEventListener("DOMContentLoaded", () => {
     const text = aiChatInput.value.trim();
     if (!text) return;
 
-    // Security Check: Prompt Injection
-    if (checkPromptInjection(text)) {
-        Toast.show("Security Violation: Malicious prompt detected and blocked.");
-        aiChatInput.value = "";
-        return;
-    }
 
 
     // Save mode config
@@ -897,48 +863,44 @@ document.addEventListener("DOMContentLoaded", () => {
               break;
           }
 
-          // 2. Gabungkan data baru ke buffer
+          // Robust SSE Parsing
           buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split('\n');
 
-          // 3. Simpan sisa teks yang kepotong kembali ke buffer
-          buffer = lines.pop();
+          let eventEndIdx;
+          while ((eventEndIdx = buffer.indexOf('\n\n')) !== -1) {
+              const eventStr = buffer.slice(0, eventEndIdx);
+              buffer = buffer.slice(eventEndIdx + 2); // consume event + newlines
 
-          for (const line of lines) {
-              if (line.trim() === '') continue;
-              if (line.startsWith('data: ')) {
-                  const dataStr = line.replace(/^data: /, '');
-                  if (dataStr === '[DONE]') {
-                      doneReading = true;
-                      break;
-                  }
-                  try {
-                      const parsed = JSON.parse(dataStr);
-                      if (parsed.error) {
-                          throw new Error(parsed.error);
+              const lines = eventStr.split('\n');
+              for (const line of lines) {
+                  if (line.startsWith('data: ')) {
+                      const dataStr = line.slice(6).trim();
+                      if (dataStr === '[DONE]') {
+                          doneReading = true;
+                          break;
                       }
-                      if (parsed.content) {
-                          currentRaw += parsed.content;
-
-                          // Secret Scanner
-                          if (scanForSecrets(currentRaw)) {
-                              currentRaw = "[REDACTED: SENSITIVE INFORMATION DETECTED]";
-                              abortController.abort(); // Stop fetching
-                              break;
+                      try {
+                          const parsed = JSON.parse(dataStr);
+                          if (parsed.error) {
+                              throw new Error(parsed.error);
                           }
+                          if (parsed.content) {
+                              currentRaw += parsed.content;
 
-                          // Real-time render
-                          let intermediateHtml = window.marked && window.DOMPurify
-                              ? DOMPurify.sanitize(marked.parse(currentRaw), { ADD_ATTR: ['target'] })
-                              : escapeHtml(currentRaw).replace(/\n/g, '<br/>'); // PERBAIKAN DI SINI
+                              // Real-time render
+                              let intermediateHtml = window.marked && window.DOMPurify
+                                  ? DOMPurify.sanitize(marked.parse(currentRaw), { ADD_ATTR: ['target'] })
+                                  : escapeHtml(currentRaw).replace(/\n/g, '<br/>');
 
-                          bubbleTarget.innerHTML = intermediateHtml + '<span class="blink-cursor"></span>';
-                          smartScrollToBottom();
+                              bubbleTarget.innerHTML = intermediateHtml + '<span class="blink-cursor"></span>';
+                              smartScrollToBottom();
+                          }
+                      } catch (e) {
+                          console.error("Error parsing stream chunk", e, dataStr);
                       }
-                  } catch (e) {
-                      console.error("Error parsing stream chunk", e, dataStr);
                   }
               }
+              if (doneReading) break;
           }
       }
 
