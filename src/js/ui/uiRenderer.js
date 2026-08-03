@@ -69,20 +69,23 @@ export const UIRenderer = {
   },
   renderMatchGrid() {
     const isEditor = StateManager.activeMemoryId !== null;
-    const dataSource = isEditor
-      ? StateManager.db.memories[StateManager.activeMemoryId].games[StateManager.activeGameIndex]
+
+    // Safety Guard: Pastikan memori aktif dan game terdefinisi
+    const activeMem = isEditor ? StateManager.db.memories[StateManager.activeMemoryId] : null;
+    const dataSource = (isEditor && activeMem && activeMem.games && activeMem.games[StateManager.activeGameIndex])
+      ? activeMem.games[StateManager.activeGameIndex]
       : StateManager.homeQuery;
 
     const p1Input = document.getElementById("p1Input");
     if (p1Input) {
       p1Input.value = dataSource.p1 || "";
       setupCountryAutocomplete(p1Input, (val) => {
-          val = Security.sanitizeInput(val);
-          if (StateManager.activeMemoryId !== null) {
-              MemoryManager.updateGameField(StateManager.activeMemoryId, StateManager.activeGameIndex, "p1", val, true);
-          } else {
-              StateManager.homeQuery.p1 = val;
-          }
+        val = Security.sanitizeInput(val);
+        if (isEditor && activeMem) {
+          MemoryManager.updateGameField(StateManager.activeMemoryId, StateManager.activeGameIndex, "p1", val, true);
+        } else {
+          StateManager.homeQuery.p1 = val;
+        }
       });
     }
 
@@ -109,13 +112,30 @@ export const UIRenderer = {
         }
       }
 
-      // Sync values to DOM inputs dynamically
+      // Sync nilai ke DOM
       const rows = matchGridForm.querySelectorAll(".match-row-item");
       rows.forEach((rowItem, i) => {
-        const matchData = dataSource.matches[i] || { home: "", score: "", away: "" };
-        rowItem.querySelector('.match-home').value = matchData.home;
-        rowItem.querySelector('.match-score').value = matchData.score;
-        rowItem.querySelector('.match-away').value = matchData.away;
+        const matchData = (dataSource.matches && dataSource.matches[i]) || { home: "", score: "", away: "" };
+
+        const homeInput = rowItem.querySelector('.match-home');
+        const scoreInput = rowItem.querySelector('.match-score');
+        const awayInput = rowItem.querySelector('.match-away');
+
+        if (homeInput) {
+          homeInput.value = matchData.home || "";
+          setupCountryAutocomplete(homeInput, (val) => {
+            if (isEditor) MemoryManager.updateMatchField(StateManager.activeMemoryId, StateManager.activeGameIndex, i, "home", val, true);
+            else StateManager.homeQuery.matches[i].home = val;
+          });
+        }
+        if (scoreInput) scoreInput.value = matchData.score || "";
+        if (awayInput) {
+          awayInput.value = matchData.away || "";
+          setupCountryAutocomplete(awayInput, (val) => {
+            if (isEditor) MemoryManager.updateMatchField(StateManager.activeMemoryId, StateManager.activeGameIndex, i, "away", val, true);
+            else StateManager.homeQuery.matches[i].away = val;
+          });
+        }
       });
     }
 
@@ -143,10 +163,21 @@ export const UIRenderer = {
 
       const rows = topGoalsForm.querySelectorAll(".top-goal-row-item");
       rows.forEach((rowItem, i) => {
-        const goalData = dataSource.topGoals ? dataSource.topGoals[i] : { country: "", player: "", goals: "" };
-        rowItem.querySelector('.goal-country').value = goalData.country;
-        rowItem.querySelector('.goal-player').value = goalData.player;
-        rowItem.querySelector('.goal-amount').value = goalData.goals;
+        const goalData = (dataSource.topGoals && dataSource.topGoals[i]) || { country: "", player: "", goals: "" };
+
+        const countryInput = rowItem.querySelector('.goal-country');
+        const playerInput = rowItem.querySelector('.goal-player');
+        const amountInput = rowItem.querySelector('.goal-amount');
+
+        if (countryInput) {
+          countryInput.value = goalData.country || "";
+          setupCountryAutocomplete(countryInput, (val) => {
+            if (isEditor) MemoryManager.updateTopGoalField(StateManager.activeMemoryId, StateManager.activeGameIndex, i, "country", val, true);
+            else StateManager.homeQuery.topGoals[i].country = val;
+          });
+        }
+        if (playerInput) playerInput.value = goalData.player || "";
+        if (amountInput) amountInput.value = goalData.goals || "";
       });
     }
   },

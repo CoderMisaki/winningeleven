@@ -10,12 +10,12 @@ document.addEventListener("DOMContentLoaded", async () => {
   window.UIRenderer = UIRenderer;
 
   // Hubungkan dan inisialisasi basis data sistem
+  // 1. Inisialisasi State
   await StateManager.init();
 
-  // Muat visual interface awal (Matching Center)
-  NavigationManager.switchToHomeView();
+  // 2. Registrasi Event Helper & Tombol DULUAN
 
-  // --- REGISTRASI EVENT LISTENER UTAMA ---
+
 
   // Fungsi Helper untuk Bind Event Aman
   const bindClick = (id, handler) => {
@@ -77,7 +77,14 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (resultsPanel) resultsPanel.classList.add("hidden");
   });
 
-    // --- EVENT DELEGATION FORM INPUT ---
+      // 3. Render Tampilan Awal dengan Aman (Safety Guard)
+  try {
+    NavigationManager.switchToHomeView();
+  } catch (err) {
+    console.error("Gagal melakukan render awal:", err);
+  }
+
+  // --- EVENT DELEGATION FORM INPUT ---
   const matchGridForm = document.getElementById("matchGridForm");
   if (matchGridForm) {
     matchGridForm.addEventListener("input", (e) => {
