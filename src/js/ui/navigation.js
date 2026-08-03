@@ -4,7 +4,12 @@ import { MemoryManager } from "../services/memoryManager.js";
 
 export const NavigationManager = {
   switchToHomeView() {
-    StateManager.save();
+    try {
+      StateManager.save();
+    } catch (e) {
+      console.warn("Storage save skipped on view switch:", e);
+    }
+
     StateManager.activeMemoryId = null;
     
     document.getElementById("editorNav").classList.add("hidden");
