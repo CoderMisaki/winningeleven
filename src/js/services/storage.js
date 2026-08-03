@@ -1,36 +1,43 @@
+import { get, set } from 'idb-keyval';
+
 const LOCAL_STORAGE_KEY = "we10_memory_research_v2_data";
+const IDB_KEY = "we10_memory_research_v3_data"; // New key for IndexedDB
 
 export const StorageService = {
-  loadData() {
+  async loadData() {
     try {
+      // First try to load from IndexedDB
+      const data = await get(IDB_KEY);
+      if (data) {
+        return data;
+      }
+
+      // If not in IndexedDB, fallback to localStorage (Migration step)
       const serialized = localStorage.getItem(LOCAL_STORAGE_KEY);
       if (serialized) {
-        return JSON.parse(serialized);
+        const parsed = JSON.parse(serialized);
+        // Save to IndexedDB for next time
+        await set(IDB_KEY, parsed);
+        return parsed;
       }
     } catch (e) {
-      console.error("Gagal memuat LocalStorage", e);
+      console.error("Gagal memuat Data dari Storage", e);
     }
     return this.generateInitialStructure();
   },
 
-  saveData(data) {
+  async saveData(data) {
     try {
-      const dataStr = JSON.stringify(data);
-      localStorage.setItem(LOCAL_STORAGE_KEY, dataStr);
+      await set(IDB_KEY, data);
 
-      const saved = localStorage.getItem(LOCAL_STORAGE_KEY);
-      if (saved !== dataStr) {
-        throw new Error("LocalStorage validation failed: Data saved differs from memory.");
-      }
+      // Optional: keep localStorage updated just in case for a while, or don't.
+      // We will remove localStorage saving for better performance and to fix the quota issue.
+      // localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(data));
+
     } catch (e) {
-      console.error("Gagal menyimpan ke LocalStorage", e);
-      // We need to show an error message if saving fails.
-      // Use standard alert for now, UIRenderer isn't imported here and we'll refactor alerts later
-      // But we can trigger a custom event or just console error if we can't use alert
-      // Using an event might be cleaner but let's just log and throw, the UI can catch or we'll inject UIRenderer later.
-      // Wait, UIRenderer relies on StateManager which relies on StorageService.
+      console.error("Gagal menyimpan ke IndexedDB", e);
       if (typeof window !== 'undefined' && window.alert) {
-          window.alert("Gagal menyimpan ke LocalStorage: " + e.message);
+          window.alert("Gagal menyimpan ke Database: " + e.message);
       }
       throw e;
     }

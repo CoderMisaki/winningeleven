@@ -1,14 +1,16 @@
 import { countryAliases } from "../data/countryAliases.js";
 
+// Pre-computed hash map
+const ALIAS_LOOKUP_MAP = new Map();
+Object.entries(countryAliases).forEach(([code, aliases]) => {
+  ALIAS_LOOKUP_MAP.set(code.toLowerCase(), code.toUpperCase());
+  aliases.forEach(alias => ALIAS_LOOKUP_MAP.set(alias.toLowerCase(), code.toUpperCase()));
+});
+
 export function normalizeCountry(countryInput) {
   if (!countryInput) return "";
   const query = countryInput.trim().toLowerCase();
-  for (const [code, aliases] of Object.entries(countryAliases)) {
-    if (code.toLowerCase() === query || aliases.includes(query)) {
-      return code.toUpperCase();
-    }
-  }
-  return query.toUpperCase();
+  return ALIAS_LOOKUP_MAP.get(query) || query.toUpperCase();
 }
 
 function fuzzyMatchString(str1, str2) {

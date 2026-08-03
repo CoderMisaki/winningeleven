@@ -1,5 +1,34 @@
 import { StorageService } from "../services/storage.js";
 
+/**
+ * @typedef {Object} Match
+ * @property {string} home
+ * @property {string} score
+ * @property {string} away
+ */
+
+/**
+ * @typedef {Object} TopGoal
+ * @property {string} country
+ * @property {string} player
+ * @property {string} goals
+ */
+
+/**
+ * @typedef {Object} GameDataset
+ * @property {string} p1
+ * @property {Match[]} matches
+ * @property {TopGoal[]} topGoals
+ * @property {number} gameNumber
+ */
+
+/**
+ * @typedef {Object} ChatMessage
+ * @property {'user' | 'assistant' | 'system'} role
+ * @property {string} content
+ */
+
+
 export const StateManager = {
   db: { memories: {} },
   
@@ -14,8 +43,8 @@ export const StateManager = {
   activeMemoryId: null, // Jika null, user berada di halaman Matching Center (Home)
   activeGameIndex: 0,   // Indeks game yang aktif saat membuka editor memory
 
-  init() {
-    this.db = StorageService.loadData();
+  async init() {
+    this.db = await StorageService.loadData();
     if (!this.db.maxSlot) {
       this.db.maxSlot = 7;
       let highestKey = 7;
