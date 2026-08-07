@@ -1,5 +1,6 @@
 import { StateManager } from "./state/appState.js";
 import { NavigationManager } from "./ui/navigation.js";
+import { PredictionService } from "./services/predictor.js";
 import { UIRenderer } from "./ui/uiRenderer.js";
 import { MatchingEngine } from "./services/matchingEngine.js";
 import { ImportExportService } from "./services/importExport.js";
@@ -70,12 +71,119 @@ document.addEventListener("DOMContentLoaded", async () => {
   });
 
   // Reset Form Pencarian Utama
+
   bindClick("btnClearForm", () => {
     StateManager.clearHomeQuery();
     UIRenderer.renderMatchGrid();
     const resultsPanel = document.getElementById("resultsPanel");
     if (resultsPanel) resultsPanel.classList.add("hidden");
+    const predictPanel = document.getElementById("predictPanel");
+    if (predictPanel) predictPanel.classList.add("hidden");
   });
+
+  bindClick("btnPredict", () => {
+    const predictPanel = document.getElementById("predictPanel");
+    const predictOutput = document.getElementById("predictOutput");
+
+    if (!predictPanel || !predictOutput) return;
+
+    predictPanel.classList.remove("hidden");
+    predictOutput.innerHTML =
+      "<div style='text-align:center; padding: 20px;'>PREDICTING...</div>";
+
+    setTimeout(() => {
+      try {
+        const isEditor = StateManager.activeMemoryId !== null;
+
+        const activeMem = isEditor
+          ? StateManager.db.memories[StateManager.activeMemoryId]
+          : null;
+
+        const dataSource =
+          isEditor &&
+          activeMem &&
+          activeMem.games &&
+          activeMem.games[StateManager.activeGameIndex]
+            ? activeMem.games[StateManager.activeGameIndex]
+            : StateManager.homeQuery;
+
+        const predictions = PredictionService.predictMatches(dataSource);
+
+        predictOutput.innerHTML = "";
+
+        if (!predictions.length) {
+          predictOutput.innerHTML =
+            `<div class="error-msg">Isi minimal satu negara pada HOME/AWAY.</div>`;
+          return;
+        }
+
+        const pre = document.createElement("pre");
+        pre.className = "log-output";
+
+        const header = document.createElement("div");
+        header.innerHTML =
+          "================================<br/>" +
+          "   PREDICT ENGINE (WE10 DATASET)<br/>" +
+          "================================<br/><br/>";
+
+        pre.appendChild(header);
+
+        predictions.forEach(p => {
+          const block = document.createElement("div");
+
+          if (p.error) {
+            block.textContent = `B${p.row}: ${p.error}`;
+            block.style.color = "#f55";
+          } else {
+            const resultLine = document.createElement("div");
+
+            const resultText =
+              `B${p.row}: ${p.homeName} ${p.homeGoals}:${p.awayGoals} ` +
+              `${p.awayName} => ` +
+              (p.winner === "DRAW"
+                ? "DRAW"
+                : `${p.winner} WIN`) +
+              ` (Confidence ${p.confidence}%)`;
+
+            resultLine.textContent = resultText;
+            resultLine.style.fontWeight = "bold";
+
+            block.appendChild(resultLine);
+
+            const detail = document.createElement("div");
+            detail.style.color = "#aaa";
+            detail.style.fontSize = "0.75rem";
+            detail.style.marginTop = "4px";
+
+            detail.textContent =
+              `xG ${p.xgHome}:${p.xgAway} | ` +
+              `Data ${p.homeName}: ${p.homeMatches} match | ` +
+              `Data ${p.awayName}: ${p.awayMatches} match`;
+
+            block.appendChild(detail);
+          }
+
+          pre.appendChild(block);
+
+          const divider = document.createElement("div");
+          divider.innerHTML = "--------------------------------<br/>";
+          pre.appendChild(divider);
+        });
+
+        predictOutput.appendChild(pre);
+
+        predictPanel.scrollIntoView({ behavior: "smooth" });
+      } catch (err) {
+        console.error("Predict error:", err);
+
+        predictOutput.innerHTML =
+          `<div class="error-msg">Predict error: ` +
+          Security.escapeHtml(err.message || String(err)) +
+          `</div>`;
+      }
+    }, 50);
+  });
+
 
       // 3. Render Tampilan Awal dengan Aman (Safety Guard)
   try {
