@@ -13,18 +13,24 @@ self.onmessage = function(e) {
       if (!currentMemory || !currentMemory.games) continue;
 
       for (const game of currentMemory.games) {
-        const simResult = SimilarityCalculator.calculate(query, game);
+  if (!game || typeof game !== "object") continue;
 
-        if (simResult.percentage > 0) {
-          results.push({
-            memoryId: parseInt(memoryId, 10),
-            memoryName: currentMemory.memoryName || `Memory ${memoryId}`,
-            gameNumber: game.gameNumber,
-            similarity: simResult.percentage,
-            explanations: simResult.explanations
-          });
-        }
-      }
+  try {
+    const simResult = SimilarityCalculator.calculate(query, game);
+
+    if (simResult.percentage > 0) {
+      results.push({
+        memoryId: parseInt(memoryId, 10),
+        memoryName: currentMemory.memoryName || `Memory ${memoryId}`,
+        gameNumber: game.gameNumber,
+        similarity: simResult.percentage,
+        explanations: simResult.explanations
+      });
+    }
+  } catch (err) {
+    console.warn("Gagal menghitung similarity game", game?.gameNumber, err);
+  }
+}
     }
 
     const sortedResults = results.sort((a, b) => {

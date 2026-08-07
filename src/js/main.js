@@ -20,7 +20,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   // Fungsi Helper untuk Bind Event Aman
   const bindClick = (id, handler) => {
     const el = document.getElementById(id);
-    if (el) el.onclick = handler;
+    if (el) el.addEventListener("click", handler);
   };
 
   // Navigasi Bar Menu Atas
@@ -91,7 +91,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       const target = e.target;
       if (target.tagName !== "INPUT") return;
       const idx = target.dataset.idx;
-      const val = Security.sanitizeInput(target.value);
+      const val = target.value.trim();
       const isEditor = StateManager.activeMemoryId !== null;
       let field = "";
       if (target.classList.contains("match-home")) field = "home";
@@ -114,7 +114,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       const target = e.target;
       if (target.tagName !== "INPUT") return;
       const idx = target.dataset.idx;
-      const val = Security.sanitizeInput(target.value);
+      const val = target.value.trim();
       const isEditor = StateManager.activeMemoryId !== null;
       let field = "goals";
       if (target.classList.contains("goal-country")) field = "country";
@@ -131,111 +131,143 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   // Eksekusi Pencocokan Dataset (Matching Engine)
   bindClick("btnRunMatch", () => {
-    const btn = document.getElementById("btnRunMatch");
-    btn.disabled = true;
-    const oldText = btn.textContent;
-    btn.textContent = "SEARCHING...";
+  const btn = document.getElementById("btnRunMatch");
+  const resultsPanel = document.getElementById("resultsPanel");
+  const resultsOutput = document.getElementById("resultsOutput");
 
-    const resultsPanel = document.getElementById("resultsPanel");
-    const resultsOutput = document.getElementById("resultsOutput");
-    resultsPanel.classList.remove("hidden");
-    resultsOutput.innerHTML = "<div style='text-align:center; padding: 20px;'>Loading...</div>";
+  if (!btn || !resultsPanel || !resultsOutput) return;
 
-    // Allow UI to update before heavy computation
-    setTimeout(async () => {
-        const results = await MatchingEngine.executeSearch(StateManager.homeQuery);
+  btn.disabled = true;
+  const oldText = btn.textContent;
+  btn.textContent = "SEARCHING...";
 
-        const minSimInput = document.getElementById("minSimilarity");
-        const minSimThreshold = minSimInput ? parseInt(minSimInput.value, 10) || 0 : 0;
+  resultsPanel.classList.remove("hidden");
+  resultsOutput.innerHTML = "<div style='text-align:center; padding: 20px;'>Loading...</div>";
 
-        const filteredResults = results.filter(r => r.similarity >= minSimThreshold);
-        resultsOutput.innerHTML = ""; // Clear existing
+  setTimeout(async () => {
+    try {
+      const results = await MatchingEngine.executeSearch(StateManager.homeQuery);
 
-        btn.disabled = false;
-        btn.textContent = oldText;
+      const minSimInput = document.getElementById("minSimilarity");
+      const minSimThreshold = minSimInput ? parseInt(minSimInput.value, 10) || 0 : 0;
 
-        if (filteredResults.length === 0) {
-          const errMsg = document.createElement("div");
-          errMsg.className = "error-msg";
-          errMsg.textContent = "Tidak ditemukan kecocokan pada seluruh Memory (dengan filter yang diberikan).";
-          resultsOutput.appendChild(errMsg);
-          return;
+      const filteredResults = results.filter(r => r.similarity >= minSimThreshold);
+
+      resultsOutput.innerHTML = "";
+
+      if (filteredResults.length === 0) {
+        const errMsg = document.createElement("div");
+        errMsg.className = "error-msg";
+        errMsg.textContent =
+          "Tidak ditemukan kecocokan pada seluruh Memory (dengan filter yang diberikan).";
+        resultsOutput.appendChild(errMsg);
+        return;
+      }
+
+      const pre = document.createElement("pre");
+      pre.className = "log-output";
+
+      const header = document.createElement("div");
+      header.innerHTML =
+        "================================<br/>   MATCH FOUND REPORT SYSTEMS<br/>================================<br/><br/>";
+
+      pre.appendChild(header);
+
+      filteredResults.forEach((match, index) => {
+        const isPerfect = match.similarity === 100;
+        const isExcellent = match.similarity >= 95 && match.similarity < 100;
+        const isHigh = match.similarity >= 90 && match.similarity < 95;
+
+        const matchBlock = document.createElement("div");
+
+        const rankingText = document.createElement("div");
+        rankingText.textContent = `Rank       : #${index + 1}`;
+        matchBlock.appendChild(rankingText);
+
+        const memText = document.createElement("div");
+        const safeMemoryName = Security.escapeHtml(match.memoryName || `Memory ${match.memoryId}`);
+
+        memText.innerHTML =
+          `Memory     : <span class="mem-link" style="cursor:pointer; text-decoration:underline; color:#0f0;" ` +
+          `data-mem="${match.memoryId}" data-game="${match.gameNumber}">` +
+          `${safeMemoryName} (Game ${match.gameNumber})</span>`;
+
+        matchBlock.appendChild(memText);
+
+        const simText = document.createElement("div");
+
+        if (isPerfect) {
+          simText.innerHTML =
+            `Similarity : <span class="sim-perfect">${match.similarity}%</span> ` +
+            `<span class="sim-badge" style="background:#0f0; color:#000; padding:2px 5px; font-size:0.7rem;">[ PERFECT MATCH ]</span>`;
+        } else if (isExcellent) {
+          simText.innerHTML =
+            `Similarity : <span class="sim-normal">${match.similarity}%</span> ` +
+            `<span class="sim-badge" style="background:#ff0; color:#000; padding:2px 5px; font-size:0.7rem;">[ EXCELLENT ]</span>`;
+        } else if (isHigh) {
+          simText.innerHTML =
+            `Similarity : <span class="sim-normal">${match.similarity}%</span> ` +
+            `<span class="sim-badge" style="background:#f90; color:#000; padding:2px 5px; font-size:0.7rem;">[ HIGH MATCH ]</span>`;
+        } else {
+          simText.innerHTML =
+            `Similarity : <span class="sim-normal">${match.similarity}%</span> ` +
+            `<span class="sim-badge" style="background:#333; color:#fff; padding:2px 5px; font-size:0.7rem;">[ NORMAL ]</span>`;
         }
 
-        const pre = document.createElement("pre");
-        pre.className = "log-output";
+        matchBlock.appendChild(simText);
 
-        const header = document.createElement("div");
-        header.innerHTML = "================================<br/>   MATCH FOUND REPORT SYSTEMS<br/>================================<br/><br/>";
-        pre.appendChild(header);
+        if (match.explanations && match.explanations.length > 0) {
+          const explText = document.createElement("div");
+          explText.style.marginTop = "5px";
+          explText.style.color = "#aaa";
+          explText.style.fontSize = "0.75rem";
 
-        filteredResults.forEach((match, index) => {
-          const isPerfect = match.similarity === 100;
-          const isExcellent = match.similarity >= 95 && match.similarity < 100;
-          const isHigh = match.similarity >= 90 && match.similarity < 95;
+          match.explanations.forEach(e => {
+            const div = document.createElement("div");
+            div.textContent = e;
+            explText.appendChild(div);
+          });
 
-          const matchBlock = document.createElement("div");
+          matchBlock.appendChild(explText);
+        }
 
-          const rankingText = document.createElement("div");
-          rankingText.textContent = `Rank       : #${index + 1}`;
-          matchBlock.appendChild(rankingText);
+        if (index < filteredResults.length - 1) {
+          const divider = document.createElement("div");
+          divider.innerHTML = `--------------------------------<br/>`;
+          matchBlock.appendChild(divider);
+        }
 
-          const memText = document.createElement("div");
-          memText.innerHTML = `Memory     : <span class="mem-link" style="cursor:pointer; text-decoration:underline; color:#0f0;" data-mem="${match.memoryId}" data-game="${match.gameNumber}">${match.memoryName} (Game ${match.gameNumber})</span>`;
-          matchBlock.appendChild(memText);
+        pre.appendChild(matchBlock);
+      });
 
-          const simText = document.createElement("div");
-          if (isPerfect) {
-            simText.innerHTML = `Similarity : <span class="sim-perfect">${match.similarity}%</span> <span class="sim-badge" style="background:#0f0; color:#000; padding:2px 5px; font-size:0.7rem;">[ PERFECT MATCH ]</span>`;
-          } else if (isExcellent) {
-            simText.innerHTML = `Similarity : <span class="sim-normal">${match.similarity}%</span> <span class="sim-badge" style="background:#ff0; color:#000; padding:2px 5px; font-size:0.7rem;">[ EXCELLENT ]</span>`;
-          } else if (isHigh) {
-             simText.innerHTML = `Similarity : <span class="sim-normal">${match.similarity}%</span> <span class="sim-badge" style="background:#f90; color:#000; padding:2px 5px; font-size:0.7rem;">[ HIGH MATCH ]</span>`;
-          } else {
-            simText.innerHTML = `Similarity : <span class="sim-normal">${match.similarity}%</span> <span class="sim-badge" style="background:#333; color:#fff; padding:2px 5px; font-size:0.7rem;">[ NORMAL ]</span>`;
-          }
-          matchBlock.appendChild(simText);
+      resultsOutput.appendChild(pre);
 
-          if (match.explanations && match.explanations.length > 0) {
-            const explText = document.createElement("div");
-            explText.style.marginTop = "5px";
-            explText.style.color = "#aaa";
-            explText.style.fontSize = "0.75rem";
-            match.explanations.forEach(e => {
-              const div = document.createElement("div");
-              div.textContent = e;
-              explText.appendChild(div);
-            });
-            matchBlock.appendChild(explText);
-          }
+      pre.querySelectorAll(".mem-link").forEach(link => {
+        link.addEventListener("click", e => {
+          const memId = e.target.dataset.mem;
+          const gameNum = parseInt(e.target.dataset.game, 10);
 
-          if (index < filteredResults.length - 1) {
-            const divider = document.createElement("div");
-            divider.innerHTML = `--------------------------------<br/>`;
-            matchBlock.appendChild(divider);
-          }
+          NavigationManager.switchToEditorView(memId);
+          NavigationManager.jumpToGame(gameNum);
 
-          pre.appendChild(matchBlock);
+          window.scrollTo({ top: 0, behavior: "smooth" });
         });
+      });
 
-        resultsOutput.appendChild(pre);
+      resultsPanel.scrollIntoView({ behavior: "smooth" });
+    } catch (err) {
+      console.error("Matching error:", err);
 
-        // Setup click handler for jumping to editor
-        pre.querySelectorAll('.mem-link').forEach(link => {
-            link.addEventListener('click', (e) => {
-                const memId = e.target.dataset.mem;
-                const gameNum = parseInt(e.target.dataset.game, 10);
-                NavigationManager.switchToEditorView(memId);
-                NavigationManager.jumpToGame(gameNum);
-                // Scroll to top to see editor
-                window.scrollTo({ top: 0, behavior: 'smooth' });
-            });
-        });
+      resultsOutput.innerHTML =
+        `<div class="error-msg">Error matching: ${Security.escapeHtml(err.message || String(err))}</div>`;
+    } finally {
+      btn.disabled = false;
+      btn.textContent = oldText;
+    }
+  }, 50);
+});
 
-        // Tarik scroll layar agar hasil langsung terlihat di perangkat mobile
-        resultsPanel.scrollIntoView({ behavior: "smooth" });
-    }, 50);
-  });
+
 
   // Delegasi Event Klik Dinamis di dalam Modal Database
   const dbModalList = document.getElementById("databaseModalList");
@@ -405,27 +437,90 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
 
   // --- Session Manager ---
-  class ChatSessionManager {
-    constructor() {
-      this.sessions = JSON.parse(localStorage.getItem("we10_ai_sessions")) || {};
-      this.currentSessionId = localStorage.getItem("we10_current_session") || null;
+  function safeParseLocalStorage(key, fallback) {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? JSON.parse(raw) : fallback;
+  } catch (e) {
+    console.error("Gagal parse localStorage key", key, e);
+    return fallback;
+  }
+}
 
-      // Migration/Initialization
-      if (Object.keys(this.sessions).length === 0) {
-         // Check if old history exists
-         const oldHistory = JSON.parse(localStorage.getItem("we10_ai_chat_history"));
-         if (oldHistory && oldHistory.length > 0) {
-             const newId = generateId();
-             this.sessions[newId] = this.createNewSessionObj(newId, null, 0, "Imported Session", oldHistory);
-             this.currentSessionId = newId;
-             this.save();
-         }
-      }
+function normalizeChatSession(session, id) {
+  if (!session || typeof session !== "object") {
+    return null;
+  }
 
-      if (!this.currentSessionId || !this.sessions[this.currentSessionId]) {
-         this.createNewSession();
+  return {
+    id: session.id || id,
+    parentId: session.parentId || null,
+    branchId: session.branchId || 0,
+    title: typeof session.title === "string" ? session.title : "New Chat",
+    mode: session.mode || "normal",
+    createdAt: session.createdAt || Date.now(),
+    updatedAt: session.updatedAt || Date.now(),
+    messages: Array.isArray(session.messages)
+      ? session.messages
+          .filter(m => m && typeof m.content === "string")
+          .map(m => ({
+            role: m.role === "user" ? "user" : "assistant",
+            content: m.content,
+            timestamp: m.timestamp || Date.now()
+          }))
+      : [],
+    attachments: [],
+    modelUsed: session.modelUsed || "AI",
+    favorite: !!session.favorite,
+    pinned: !!session.pinned,
+    children: Array.isArray(session.children) ? session.children : []
+  };
+}
+
+class ChatSessionManager {
+  constructor() {
+    this.sessions = safeParseLocalStorage("we10_ai_sessions", {});
+
+    if (!this.sessions || typeof this.sessions !== "object") {
+      this.sessions = {};
+    }
+
+    // Normalisasi session yang rusak
+    for (const id of Object.keys(this.sessions)) {
+      const normalized = normalizeChatSession(this.sessions[id], id);
+
+      if (!normalized) {
+        delete this.sessions[id];
+      } else {
+        this.sessions[id] = normalized;
       }
     }
+
+    this.currentSessionId =
+      localStorage.getItem("we10_current_session") || null;
+
+    // Migrasi dari history lama jika ada
+    if (Object.keys(this.sessions).length === 0) {
+      const oldHistory = safeParseLocalStorage("we10_ai_chat_history", null);
+
+      if (Array.isArray(oldHistory) && oldHistory.length > 0) {
+        const newId = generateId();
+
+        this.sessions[newId] = normalizeChatSession({
+          id: newId,
+          title: "Imported Session",
+          messages: oldHistory
+        }, newId);
+
+        this.currentSessionId = newId;
+        this.save();
+      }
+    }
+
+    if (!this.currentSessionId || !this.sessions[this.currentSessionId]) {
+      this.createNewSession();
+    }
+  }
 
     save() {
       localStorage.setItem("we10_ai_sessions", JSON.stringify(this.sessions));
@@ -1063,11 +1158,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
 
   // Attachments logic
-  if (btnUploadAiChat && aiChatUploadMenu) {
-    btnUploadAiChat.addEventListener("click", () => {
-      aiChatUploadMenu.style.display = aiChatUploadMenu.style.display === "none" ? "flex" : "none";
-    });
-  }
+
 
   document.getElementById("btnNewChat")?.addEventListener("click", () => {
       if(isGenerating) return;
@@ -1124,11 +1215,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   });
 
   // Attachments logic
-  if (btnUploadAiChat && aiChatUploadMenu) {
-    btnUploadAiChat.addEventListener("click", () => {
-      aiChatUploadMenu.style.display = aiChatUploadMenu.style.display === "none" ? "flex" : "none";
-    });
-  }
+
 
   if (aiChatUploadMenu && aiChatFile) {
     const menuButtons = aiChatUploadMenu.querySelectorAll("button");
@@ -1138,7 +1225,10 @@ document.addEventListener("DOMContentLoaded", async () => {
         if (type === "image") aiChatFile.accept = "image/*";
         else if (type === "audio") aiChatFile.accept = "audio/*";
         else if (type === "video") aiChatFile.accept = "video/*";
-        else if (type === "document") aiChatFile.accept = "application/pdf";
+        else if (type === "document") {
+          aiChatFile.accept =
+            ".pdf,.txt,.md,.json,.csv,application/pdf,text/plain,text/markdown,application/json";
+        }
 
         aiChatUploadMenu.style.display = "none";
         aiChatFile.dataset.fileType = type;
@@ -1148,34 +1238,56 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
 
   if (aiChatFile) {
-    aiChatFile.addEventListener("change", (e) => {
-      const file = e.target.files[0];
-      if (!file) return;
+  aiChatFile.addEventListener("change", e => {
+    const file = e.target.files[0];
 
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        const base64Data = event.target.result.split(",")[1];
-        currentAttachment = {
-          type: aiChatFile.dataset.fileType,
-          base64: base64Data,
-          mimeType: file.type || "application/octet-stream",
-          filename: file.name
-        };
+    if (!file) return;
 
-        if (aiChatAttachmentPreview) {
-          aiChatAttachmentPreview.innerHTML = `<span>📎 ${escapeHtml(file.name)}</span> <button id="btnRemoveAttachment" style="background: none; border: none; color: #f55; cursor: pointer; font-weight: bold;">X</button>`;
-          aiChatAttachmentPreview.style.display = "flex";
-          document.getElementById("btnRemoveAttachment").addEventListener("click", () => {
-            currentAttachment = null;
-            aiChatFile.value = "";
-            aiChatAttachmentPreview.style.display = "none";
-            aiChatAttachmentPreview.innerHTML = "";
-          });
-        }
+    const MAX_FILE_MB = 4;
+    const MAX_FILE_SIZE = MAX_FILE_MB * 1024 * 1024;
+
+    if (file.size > MAX_FILE_SIZE) {
+      Toast.show(`File terlalu besar. Maksimal ${MAX_FILE_MB}MB.`);
+      aiChatFile.value = "";
+      return;
+    }
+
+    const reader = new FileReader();
+
+    reader.onload = event => {
+      const base64Data = event.target.result.split(",")[1];
+
+      currentAttachment = {
+        type: aiChatFile.dataset.fileType || "document",
+        base64: base64Data,
+        mimeType: file.type || "application/octet-stream",
+        filename: file.name
       };
-      reader.readAsDataURL(file);
-    });
-  }
+
+      if (aiChatAttachmentPreview) {
+        aiChatAttachmentPreview.innerHTML =
+          `<span>📎 ${Security.escapeHtml(file.name)}</span> ` +
+          `<button id="btnRemoveAttachment" style="background:none; border:none; color:#f55; cursor:pointer; font-weight:bold;">X</button>`;
+
+        aiChatAttachmentPreview.style.display = "flex";
+
+        document.getElementById("btnRemoveAttachment").addEventListener("click", () => {
+          currentAttachment = null;
+          aiChatFile.value = "";
+          aiChatAttachmentPreview.style.display = "none";
+          aiChatAttachmentPreview.innerHTML = "";
+        });
+      }
+    };
+
+    reader.onerror = () => {
+      Toast.show("Gagal membaca file.");
+      aiChatFile.value = "";
+    };
+
+    reader.readAsDataURL(file);
+  });
+}
 
   // Delegate event listener for Copy Code & Collapse buttons
   if (aiChatWindow) {

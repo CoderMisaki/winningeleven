@@ -16,21 +16,44 @@ export const NavigationManager = {
     document.getElementById("homeActions").classList.remove("hidden");
     document.getElementById("panelTitle").textContent = "MATCHING INTERFACE";
     document.getElementById("activeViewIndicator").textContent = "MODE: MATCHING CENTER";
+    document.getElementById("resultsPanel")?.classList.add("hidden");
     
     UIRenderer.renderMatchGrid();
   },
 
   switchToEditorView(memoryId) {
-    StateManager.activeMemoryId = parseInt(memoryId, 10);
-    StateManager.activeGameIndex = 0; // Mulai dari entri Game paling awal
+  const id = parseInt(memoryId, 10);
 
-    document.getElementById("editorNav").classList.remove("hidden");
-    document.getElementById("homeActions").classList.add("hidden");
-    document.getElementById("resultsPanel").classList.add("hidden");
-    
-    this.updateEditorTopBar();
-    UIRenderer.renderMatchGrid();
-  },
+  if (isNaN(id)) {
+    UIRenderer.showAlert("Memory ID tidak valid.");
+    return;
+  }
+
+  const memory = StateManager.db.memories[id];
+
+  if (!memory || typeof memory !== "object") {
+    UIRenderer.showAlert("Memory tidak ditemukan. Buat atau import dulu.");
+    return;
+  }
+
+  if (!Array.isArray(memory.games)) {
+    memory.games = [];
+  }
+
+  if (memory.games.length === 0) {
+    MemoryManager.addNewGameToMemory(id);
+  }
+
+  StateManager.activeMemoryId = id;
+  StateManager.activeGameIndex = 0;
+
+  document.getElementById("editorNav")?.classList.remove("hidden");
+  document.getElementById("homeActions")?.classList.add("hidden");
+  document.getElementById("resultsPanel")?.classList.add("hidden");
+
+  this.updateEditorTopBar();
+  UIRenderer.renderMatchGrid();
+},
 
   updateEditorTopBar() {
     const memId = StateManager.activeMemoryId;
