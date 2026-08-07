@@ -138,12 +138,11 @@ document.addEventListener("DOMContentLoaded", async () => {
             const resultLine = document.createElement("div");
 
             const resultText =
-              `B${p.row}: ${p.homeName} ${p.homeGoals}:${p.awayGoals} ` +
-              `${p.awayName} => ` +
+              `B${p.row}: ${p.homeName} ${p.homeCondition} ${p.homeGoals}:${p.awayGoals} ${p.awayCondition} ${p.awayName} => ` +
               (p.winner === "DRAW"
                 ? "DRAW"
                 : `${p.winner} WIN`) +
-              ` (Confidence ${p.confidence}%)`;
+              ` (Conf ${p.confidence}%)`;
 
             resultLine.textContent = resultText;
             resultLine.style.fontWeight = "bold";
@@ -1136,14 +1135,14 @@ class ChatSessionManager {
       }
 
     } catch (err) {
-      if (err.name === 'AbortError') {
-          bubbleTarget.innerHTML += `<br/><span style="color: #f55; font-size: 0.8em;">[Stopped by User]</span>`;
-          // If aborted, save partial state if needed, or do nothing.
-      } else {
-          bubbleTarget.innerHTML = `<span style="color: #f55;"><strong>ERROR:</strong> ${err.message}</span>`;
-          // TAMBAHKAN BARIS INI AGAR PESAN ERROR TIDAK HILANG DARI LAYAR:
-          sessionManager.addMessage("assistant", `**ERROR:** ${err.message}`);
-      }
+      const errorText = err.name === 'AbortError'
+        ? '[Dihentikan oleh Pengguna]'
+        : `[ERROR: ${err.message || 'Stream terputus'}]`;
+
+      bubbleTarget.innerHTML = `<span style="color: #f55;">${errorText}</span>`;
+
+      // FIX: Simpan pesan error ke session manager agar tidak hilang saat re-render
+      sessionManager.addMessage("assistant", errorText);
     } finally {
       isGenerating = false;
       if(btnSendAiChat) btnSendAiChat.style.display = "block";
@@ -1324,6 +1323,19 @@ class ChatSessionManager {
 
   // Attachments logic
 
+  if (btnUploadAiChat && aiChatUploadMenu) {
+    btnUploadAiChat.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const isVisible = aiChatUploadMenu.style.display === "flex";
+      aiChatUploadMenu.style.display = isVisible ? "none" : "flex";
+    });
+
+    document.addEventListener("click", (e) => {
+      if (aiChatUploadMenu && e.target !== btnUploadAiChat && !aiChatUploadMenu.contains(e.target)) {
+        aiChatUploadMenu.style.display = "none";
+      }
+    });
+  }
 
   if (aiChatUploadMenu && aiChatFile) {
     const menuButtons = aiChatUploadMenu.querySelectorAll("button");
