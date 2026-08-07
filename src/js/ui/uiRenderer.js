@@ -192,7 +192,9 @@ export const UIRenderer = {
     for (let i = 1; i <= maxSlot; i++) {
       const mem = StateManager.db.memories[i];
       const isEmpty = !mem;
-      const memName = mem && mem.memoryName ? mem.memoryName : `MEMORY ${i}`;
+      const memName = mem && mem.memoryName
+        ? Security.escapeHtml(mem.memoryName)
+        : `MEMORY ${i}`;
 
       dbModalList.innerHTML += `
         <div class="db-card">

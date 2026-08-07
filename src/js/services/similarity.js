@@ -13,10 +13,37 @@ export function normalizeCountry(countryInput) {
   return ALIAS_LOOKUP_MAP.get(query) || query.toUpperCase();
 }
 
+function normalizeScore(score) {
+  if (typeof score !== "string") return "";
+
+  return score
+    .trim()
+    .replace(/[-–—;]+/g, ":")
+    .replace(/\s+/g, "");
+}
+
+function normalizePlayerName(name) {
+  if (typeof name !== "string") return "";
+
+  return name
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/gi, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+
+
+
+
 function fuzzyMatchString(str1, str2) {
   if (!str1 || !str2) return false;
-  const s1 = str1.trim().toLowerCase();
-  const s2 = str2.trim().toLowerCase();
+
+  const s1 = normalizePlayerName(str1);
+  const s2 = normalizePlayerName(str2);
+
+  if (!s1 || !s2) return false;
+
   return s1 === s2 || s1.startsWith(s2) || s2.startsWith(s1);
 }
 
@@ -71,8 +98,7 @@ export const SimilarityCalculator = {
 
       const qHome = (qMatch.home || "").trim();
       const qAway = (qMatch.away || "").trim();
-      let qScore = (qMatch.score || "").trim();
-      qScore = qScore.replace(/-/g, ':').replace(/\s+/g, '');
+      let qScore = normalizeScore(qMatch.score || "");
 
       if (!qHome && !qAway && !qScore) continue;
 
@@ -81,8 +107,7 @@ export const SimilarityCalculator = {
 
       const tHome = (tMatch.home || "").trim();
       const tAway = (tMatch.away || "").trim();
-      let tScore = (tMatch.score || "").trim();
-      tScore = tScore.replace(/-/g, ':').replace(/\s+/g, '');
+      let tScore = normalizeScore(tMatch.score || "");
 
       const normTHome = normalizeCountry(tHome);
       const normTAway = normalizeCountry(tAway);

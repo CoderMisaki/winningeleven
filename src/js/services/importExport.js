@@ -27,6 +27,15 @@ function isMemoryIdentical(importedGames) {
   return null;
 }
 
+function normalizeScore(score) {
+  if (typeof score !== "string") return "";
+
+  return score
+    .trim()
+    .replace(/[-–—;]+/g, ":")
+    .replace(/\s+/g, "");
+}
+
 export const ImportExportService = {
   exportMemoryToJSON(memoryId) {
     // Membaca ulang state terbaru, bukan cache
@@ -136,9 +145,17 @@ export const ImportExportService = {
             throw new Error(`Game ${game.gameNumber} harus memiliki tepat 7 matches.`);
           }
           game.matches.forEach(m => {
-            if (m.score && !/^\d+:\d+$/.test(m.score.trim()) && m.score.trim() !== "") {
-              throw new Error(`Format score tidak valid pada Game ${game.gameNumber}: ${m.score}. Harus berformat x:y tanpa spasi atau karakter lain.`);
-            }
+            if (m.score && m.score.trim() !== "") {
+  const normalizedScore = normalizeScore(m.score);
+
+  if (!/^\d+:\d+$/.test(normalizedScore)) {
+    throw new Error(
+      `Format score tidak valid pada Game ${game.gameNumber}: ${m.score}. Score harus berformat x:y.`
+    );
+  }
+
+  m.score = normalizedScore;
+}
             if (m.home && m.home.trim() !== "") {
               const normHome = normalizeCountry(m.home);
               if (!teamsDB[normHome]) throw new Error(`Negara Home tidak dikenal pada Game ${game.gameNumber}: ${m.home}`);
@@ -153,14 +170,31 @@ export const ImportExportService = {
             throw new Error(`Game ${game.gameNumber} harus memiliki tepat 7 topGoals.`);
           }
           game.topGoals.forEach(g => {
-            if (g.goals && (isNaN(parseInt(g.goals, 10)) || parseInt(g.goals, 10) < 0 || g.goals.includes('.'))) {
-              throw new Error(`Goals harus berupa bilangan bulat positif pada Game ${game.gameNumber}`);
-            }
-            if (g.country && g.country.trim() !== "") {
-              const normCountry = normalizeCountry(g.country);
-              if (!teamsDB[normCountry]) throw new Error(`Negara pencetak gol tidak dikenal pada Game ${game.gameNumber}: ${g.country}`);
-            }
-          });
+  const goalsRaw = typeof g.goals === "string"
+    ? g.goals.trim()
+    : String(g.goals ?? "").trim();
+
+  if (goalsRaw !== "") {
+    const goalsNum = Number(goalsRaw);
+
+    if (!Number.isInteger(goalsNum) || goalsNum < 0) {
+      throw new Error(
+        `Goals harus berupa bilangan bulat positif pada Game ${game.gameNumber}`
+      );
+    }
+  }
+
+  g.goals = goalsRaw;
+
+  if (g.country && g.country.trim() !== "") {
+    const normCountry = normalizeCountry(g.country);
+    if (!teamsDB[normCountry]) {
+      throw new Error(
+        `Negara pencetak gol tidak dikenal pada Game ${game.gameNumber}: ${g.country}`
+      );
+    }
+  }
+});
         });
 
         // Duplicate Game Detection

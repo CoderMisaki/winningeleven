@@ -25,20 +25,34 @@ export const MemoryManager = {
   },
 
   addNewGameToMemory(memoryId) {
-    const memory = StateManager.db.memories[memoryId];
-    if (!memory) return;
-    const nextGameNumber = memory.games.length + 1;
-    const newGame = this.generateBlankGame(nextGameNumber);
-    memory.games.push(newGame);
-    memory.lastUpdate = new Date().toISOString();
-    memory.totalGames = memory.games.length;
-    StateManager.debouncedSave();
-  },
+  const memory = StateManager.db.memories[memoryId];
+
+  if (!memory) return;
+
+  if (!Array.isArray(memory.games)) {
+    memory.games = [];
+  }
+
+  const nextGameNumber = memory.games.length + 1;
+  const newGame = this.generateBlankGame(nextGameNumber);
+
+  memory.games.push(newGame);
+  memory.lastUpdate = new Date().toISOString();
+  memory.totalGames = memory.games.length;
+
+  StateManager.debouncedSave();
+},
 
   deleteMemory(memoryId) {
-    StateManager.db.memories[memoryId] = null;
-    StateManager.debouncedSave();
-  },
+  StateManager.db.memories[memoryId] = null;
+
+  if (StateManager.activeMemoryId === parseInt(memoryId, 10)) {
+    StateManager.activeMemoryId = null;
+    StateManager.activeGameIndex = 0;
+  }
+
+  StateManager.debouncedSave();
+},
 
   updateGameField(memoryId, gameIndex, field, value, immediate = false) {
     const memory = StateManager.db.memories[memoryId];
