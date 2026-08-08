@@ -19,15 +19,14 @@ function checkPromptInjection(text) {
 
 function scanForSecrets(text) {
   const blockedPatterns = [
-      "process.env", "API_KEY", "JWT", "Bearer", "knowledge.json",
-      "system prompt", "router source", "hidden endpoint", "database credential"
+    /process\.env\s*\.\s*[A-Z0-9_]+/i,
+    /process\.env\s*\[\s*['"][A-Z0-9_]+['"]\s*\]/i,
+    /\bBearer\s+[A-Za-z0-9\-._~+/]{16,}={0,2}/i,
+    /\b(?:api[_-]?key|secret[_-]?key|access[_-]?token)\s*[:=]\s*['"][A-Za-z0-9\-._~+/]{16,}['"]/i,
+    /\bsk-[A-Za-z0-9]{16,}\b/i
   ];
-  for (const pattern of blockedPatterns) {
-      if (text.includes(pattern)) {
-          return true;
-      }
-  }
-  return false;
+
+  return blockedPatterns.some(pattern => pattern.test(text));
 }
 
 let cachedKnowledge = "";
@@ -145,25 +144,29 @@ export default async function handler(req, res) {
           });
       }
 
+      const geminiModel = process.env.GEMINI_MODEL || "gemini-3.5-flash";
+
       const response = await ai.models.generateContentStream({
-          model: 'gemini-3.5-flash',
+          model: geminiModel,
           contents: geminiMessages,
       });
 
       const decoder = new TextDecoder("utf-8");
       streamStarted = true;
       let aborted = false;
+      let sentContent = false;
 
       for await (const chunk of response.stream) {
           if (aborted) break;
           const chunkText = chunk.text();
           if (scanForSecrets(chunkText)) {
               res.write(`data: ${JSON.stringify({ content: "[REDACTED: SENSITIVE INFORMATION DETECTED]" })}\n\n`);
-              res.write(`data: [DONE]\n\n`);
+              sentContent = true;
               aborted = true;
               break;
           } else {
               res.write(`data: ${JSON.stringify({ content: chunkText })}\n\n`);
+              sentContent = true;
           }
       }
 
@@ -172,6 +175,12 @@ export default async function handler(req, res) {
             res.end();
           } catch (_) {}
           return;
+      }
+
+      if (!sentContent) {
+          res.write(`data: ${JSON.stringify({
+            error: "Gemini menghasilkan output kosong. Periksa nama model dan API key."
+          })}\n\n`);
       }
 
       res.write(`data: [DONE]\n\n`);
@@ -242,6 +251,7 @@ export default async function handler(req, res) {
 
         let aborted = false;
         let buffer = "";
+        let sentContent = false;
 
         while (true) {
           if (aborted) break;
@@ -262,7 +272,6 @@ export default async function handler(req, res) {
             const dataStr = line.replace(/^data: /, "").trim();
 
             if (dataStr === "[DONE]") {
-              res.write(`data: [DONE]\n\n`);
               aborted = true;
               break;
             }
@@ -280,13 +289,13 @@ export default async function handler(req, res) {
                     content: "[REDACTED: SENSITIVE INFORMATION DETECTED]"
                   })}\n\n`
                 );
-
-                res.write(`data: [DONE]\n\n`);
+                sentContent = true;
                 aborted = true;
                 break;
               }
 
               res.write(`data: ${JSON.stringify({ content })}\n\n`);
+              sentContent = true;
             } catch (e) {
               console.error("Error parsing streaming JSON", e);
             }
@@ -297,12 +306,16 @@ export default async function handler(req, res) {
           try {
             await reader.cancel();
           } catch (_) {}
+          // Do not end the response here if we just received [DONE], it's handled below
+          // Actually, if we aborted due to secrets, we should end.
+          // Let's rely on sentContent to know if we need to send an error.
+          // And we will end the response later.
+        }
 
-          try {
-            res.end();
-          } catch (_) {}
-
-          return;
+        if (!sentContent) {
+          res.write(`data: ${JSON.stringify({
+            error: "Model tidak menghasilkan output. Periksa nama model, API key, atau limit API."
+          })}\n\n`);
         }
 
         res.write(`data: [DONE]\n\n`);

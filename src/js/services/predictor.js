@@ -1,170 +1,458 @@
 import { StateManager } from "../state/appState.js";
 import { normalizeCountry } from "./similarity.js";
 import { teamsDB } from "../data/teams.js";
+import { Security } from "../utils/security.js";
 
-const HOME_ADVANTAGE = 0.20;
-const PRIOR_MATCHES = 5;
+const HOME_ADVANTAGE = 0.18;
+const PRIOR_MATCHES = 6;
 const MAX_GOALS = 8;
+const MAX_SOURCES = 6;
 
-// WE10 Condition Arrows Mapping
-const WE10_CONDITIONS = [
-  { name: "TOP FORM", symbol: "🔴 (↑)", factor: 1.15, weight: 15 },
-  { name: "GOOD", symbol: "🟧 (↗)", factor: 1.07, weight: 25 },
-  { name: "NORMAL", symbol: "🟩 (→)", factor: 1.00, weight: 35 },
-  { name: "POOR", symbol: "🟦 (↘)", factor: 0.92, weight: 15 },
-  { name: "TERRIBLE", symbol: "🩶 (↓)", factor: 0.85, weight: 10 }
-];
-
-// Helper RNG Berbobot untuk Panah Kondisi WE10
-function rollWE10Condition() {
-  const totalWeight = WE10_CONDITIONS.reduce((acc, c) => acc + c.weight, 0);
-  let random = Math.random() * totalWeight;
-  for (const cond of WE10_CONDITIONS) {
-    if (random < cond.weight) return cond;
-    random -= cond.weight;
-  }
-  return WE10_CONDITIONS[2]; // Fallback to normal
-}
-
-// Formula Poisson Distribution untuk Simulasi Gol WE10
-function simulatePoissonGoals(lambda) {
-  let L = Math.exp(-lambda);
-  let k = 0;
-  let p = 1;
-  do {
-    k++;
-    p *= Math.random();
-  } while (p > L);
-  return Math.min(k - 1, MAX_GOALS);
+function normalizeScore(score) {
+  if (typeof score !== "string") return "";
+  return score
+    .trim()
+    .replace(/[-–—;]+/g, ":")
+    .replace(/\s+/g, "");
 }
 
 function parseScore(score) {
-  if (typeof score !== "string") return null;
-  const s = score.trim().replace(/[-–—;]+/g, ":").replace(/\s+/g, "");
+  const s = normalizeScore(score);
   const m = s.match(/^(\d+):(\d+)$/);
-  return m ? { home: parseInt(m[1], 10), away: parseInt(m[2], 10) } : null;
+  if (!m) return null;
+  return {
+    home: parseInt(m[1], 10),
+    away: parseInt(m[2], 10)
+  };
+}
+
+function reverseScore(score) {
+  const s = normalizeScore(score);
+  const parts = s.split(":");
+  if (parts.length !== 2) return s;
+  return `${parts[1]}:${parts[0]}`;
+}
+
+function scoreDistance(a, b) {
+  const qa = parseScore(a);
+  const qb = parseScore(b);
+  if (!qa || !qb) return 999;
+  return Math.abs(qa.home - qb.home) + Math.abs(qa.away - qb.away);
 }
 
 function createTeamStats(code) {
-  return { code, matches: 0, wins: 0, draws: 0, losses: 0, goalsFor: 0, goalsAgainst: 0, topGoals: 0 };
+  return {
+    code,
+    matches: 0,
+    wins: 0,
+    draws: 0,
+    losses: 0,
+    goalsFor: 0,
+    goalsAgainst: 0,
+    topGoals: 0
+  };
 }
 
-function buildTeamStats() {
+function buildTeamStats(exclude = {}) {
   const stats = {};
   const getTeam = code => (stats[code] ||= createTeamStats(code));
   const memories = StateManager.db?.memories || {};
 
-  for (const memory of Object.values(memories)) {
+  for (const [memoryId, memory] of Object.entries(memories)) {
     if (!memory || !Array.isArray(memory.games)) continue;
+
     for (const game of memory.games) {
-      if (!game) continue;
-      if (Array.isArray(game.matches)) {
-        for (const m of game.matches) {
-          if (!m) continue;
-          const home = normalizeCountry(m.home || "");
-          const away = normalizeCountry(m.away || "");
-          const score = parseScore(m.score || "");
-          if (!home || !away || !score || !teamsDB[home] || !teamsDB[away]) continue;
+      if (!game || !Array.isArray(game.matches)) continue;
 
-          const h = getTeam(home), a = getTeam(away);
-          h.matches++; a.matches++;
-          h.goalsFor += score.home; h.goalsAgainst += score.away;
-          a.goalsFor += score.away; a.goalsAgainst += score.home;
+      const isExcluded =
+        exclude.memoryId != null &&
+        exclude.gameNumber != null &&
+        String(memoryId) === String(exclude.memoryId) &&
+        game.gameNumber === exclude.gameNumber;
 
-          if (score.home > score.away) { h.wins++; a.losses++; }
-          else if (score.home < score.away) { a.wins++; h.losses++; }
-          else { h.draws++; a.draws++; }
+      if (isExcluded) continue;
+
+      for (const m of game.matches) {
+        if (!m) continue;
+
+        const home = normalizeCountry(m.home || "");
+        const away = normalizeCountry(m.away || "");
+        const score = parseScore(m.score || "");
+
+        if (!home || !away || !score || !teamsDB[home] || !teamsDB[away]) continue;
+
+        const h = getTeam(home);
+        const a = getTeam(away);
+
+        h.matches++;
+        a.matches++;
+
+        h.goalsFor += score.home;
+        h.goalsAgainst += score.away;
+
+        a.goalsFor += score.away;
+        a.goalsAgainst += score.home;
+
+        if (score.home > score.away) {
+          h.wins++;
+          a.losses++;
+        } else if (score.home < score.away) {
+          a.wins++;
+          h.losses++;
+        } else {
+          h.draws++;
+          a.draws++;
         }
       }
+
       if (Array.isArray(game.topGoals)) {
         for (const g of game.topGoals) {
-          const country = normalizeCountry(g.country || "");
-          const goals = parseInt(g.goals, 10);
-          if (country && teamsDB[country] && !isNaN(goals) && goals > 0) {
+          const country = normalizeCountry(g?.country || "");
+          const goals = parseInt(g?.goals, 10);
+
+          if (country && teamsDB[country] && Number.isInteger(goals) && goals > 0) {
             getTeam(country).topGoals += goals;
           }
         }
       }
     }
   }
+
   return stats;
 }
 
 function getGlobalAttack(stats) {
-  let totalMatches = 0, totalGoals = 0;
+  let totalMatches = 0;
+  let totalGoals = 0;
+
   for (const team of Object.values(stats)) {
     totalMatches += team.matches;
     totalGoals += team.goalsFor;
   }
+
   return totalMatches === 0 ? 1.3 : totalGoals / totalMatches;
+}
+
+function poissonProbability(lambda, k) {
+  if (!Number.isFinite(lambda)) return 0;
+  if (lambda <= 0) return k === 0 ? 1 : 0;
+
+  let p = Math.exp(-lambda);
+  for (let i = 1; i <= k; i++) {
+    p *= lambda / i;
+  }
+  return p;
+}
+
+function mostLikelyScore(lambdaHome, lambdaAway) {
+  let best = { home: 0, away: 0, prob: -1 };
+
+  for (let h = 0; h <= MAX_GOALS; h++) {
+    for (let a = 0; a <= MAX_GOALS; a++) {
+      const prob =
+        poissonProbability(lambdaHome, h) *
+        poissonProbability(lambdaAway, a);
+
+      if (prob > best.prob) {
+        best = { home: h, away: a, prob };
+      }
+    }
+  }
+
+  return best;
+}
+
+function estimateMatch(homeCode, awayCode, exclude = {}) {
+  const stats = buildTeamStats(exclude);
+  const globalAttack = getGlobalAttack(stats);
+
+  const hStats = stats[homeCode] || createTeamStats(homeCode);
+  const aStats = stats[awayCode] || createTeamStats(awayCode);
+
+  const homeAttack =
+    (hStats.goalsFor + globalAttack * PRIOR_MATCHES) /
+    (hStats.matches + PRIOR_MATCHES);
+
+  const homeDefense =
+    (hStats.goalsAgainst + globalAttack * PRIOR_MATCHES) /
+    (hStats.matches + PRIOR_MATCHES);
+
+  const awayAttack =
+    (aStats.goalsFor + globalAttack * PRIOR_MATCHES) /
+    (aStats.matches + PRIOR_MATCHES);
+
+  const awayDefense =
+    (aStats.goalsAgainst + globalAttack * PRIOR_MATCHES) /
+    (aStats.matches + PRIOR_MATCHES);
+
+  let xgHome = ((homeAttack + awayDefense) / 2) + HOME_ADVANTAGE;
+  let xgAway = (awayAttack + homeDefense) / 2;
+
+  if (!Number.isFinite(xgHome)) xgHome = globalAttack;
+  if (!Number.isFinite(xgAway)) xgAway = globalAttack;
+
+  xgHome = Math.max(0.05, Math.min(MAX_GOALS, xgHome));
+  xgAway = Math.max(0.05, Math.min(MAX_GOALS, xgAway));
+
+  const best = mostLikelyScore(xgHome, xgAway);
+
+  let winner = "DRAW";
+  if (best.home > best.away) winner = teamsDB[homeCode]?.name || homeCode;
+  else if (best.away > best.home) winner = teamsDB[awayCode]?.name || awayCode;
+
+  const dataQuality = Math.min(1, (hStats.matches + aStats.matches) / 30);
+  const confidence = Math.round(
+    Math.min(
+      95,
+      18 + dataQuality * 45 + Math.abs(xgHome - xgAway) * 12
+    )
+  );
+
+  return {
+    estimated: true,
+    dataType: "ESTIMASI MODEL (BUKAN DATA ASLI DATASET)",
+    homeGoals: best.home,
+    awayGoals: best.away,
+    winner,
+    confidence,
+    xgHome: xgHome.toFixed(2),
+    xgAway: xgAway.toFixed(2),
+    homeMatches: hStats.matches,
+    awayMatches: aStats.matches
+  };
+}
+
+function collectTopGoals(game) {
+  if (!game || !Array.isArray(game.topGoals)) return [];
+
+  return game.topGoals
+    .map(g => ({
+      country: Security.decodeHtml((g?.country || "").trim()),
+      player: Security.decodeHtml((g?.player || "").trim()),
+      goals: (g?.goals || "").trim()
+    }))
+    .filter(g => g.country || g.player || g.goals);
+}
+
+function findDatasetSources(homeCode, awayCode, queryScore, prefer = {}) {
+  const sources = [];
+  const qScore = normalizeScore(queryScore || "");
+  const memories = StateManager.db?.memories || {};
+
+  for (const [memoryId, memory] of Object.entries(memories)) {
+    if (!memory || !Array.isArray(memory.games)) continue;
+
+    for (const game of memory.games) {
+      if (!game || !Array.isArray(game.matches)) continue;
+
+      game.matches.forEach((m, matchIndex) => {
+        const datasetHome = normalizeCountry(m?.home || "");
+        const datasetAway = normalizeCountry(m?.away || "");
+
+        if (!datasetHome || !datasetAway) return;
+        if (!teamsDB[datasetHome] || !teamsDB[datasetAway]) return;
+
+        let orientation = null;
+
+        if (datasetHome === homeCode && datasetAway === awayCode) {
+          orientation = "exact";
+        } else if (datasetHome === awayCode && datasetAway === homeCode) {
+          orientation = "reverse";
+        } else {
+          return;
+        }
+
+        const datasetScore = normalizeScore(m?.score || "");
+        const parsedScore = parseScore(datasetScore);
+
+        let relevance = orientation === "exact" ? 100 : 85;
+
+        if (parsedScore) relevance += 25;
+
+        if (qScore) {
+          const targetFromInputPerspective =
+            orientation === "reverse"
+              ? reverseScore(datasetScore)
+              : datasetScore;
+
+          const dist = scoreDistance(qScore, targetFromInputPerspective);
+
+          if (dist === 0) relevance += 60;
+          else if (dist === 1) relevance += 25;
+          else if (dist === 2) relevance += 10;
+        }
+
+        if (
+          prefer.memoryId != null &&
+          prefer.gameNumber != null &&
+          String(memoryId) === String(prefer.memoryId) &&
+          game.gameNumber === prefer.gameNumber
+        ) {
+          relevance += 45;
+        }
+
+        const topGoals = collectTopGoals(game);
+        if (topGoals.length > 0) relevance += 5;
+
+        sources.push({
+          memoryId: Number(memoryId),
+          memoryName: memory.memoryName || `Memory ${memoryId}`,
+          gameNumber: game.gameNumber,
+          matchIndex: matchIndex + 1,
+          p1: Security.decodeHtml((game.p1 || "").trim()),
+          lastUpdate: game.lastUpdate || "",
+          orientation,
+          datasetHome,
+          datasetAway,
+          datasetScore,
+          parsedScore,
+          topGoals,
+          relevance
+        });
+      });
+    }
+  }
+
+  sources.sort((a, b) => {
+    if (b.relevance !== a.relevance) return b.relevance - a.relevance;
+    if (a.memoryId !== b.memoryId) return a.memoryId - b.memoryId;
+    return a.gameNumber - b.gameNumber;
+  });
+
+  return sources;
 }
 
 export const PredictionService = {
   predictMatches(dataSource) {
-    const stats = buildTeamStats();
-    const globalAttack = getGlobalAttack(stats);
-    const results = [];
-    const matches = dataSource?.matches || [];
+    const rows = dataSource?.matches || [];
 
-    matches.forEach((m, idx) => {
+    const prefer =
+      StateManager.activeMemoryId != null && dataSource?.gameNumber
+        ? {
+            memoryId: StateManager.activeMemoryId,
+            gameNumber: dataSource.gameNumber
+          }
+        : {};
+
+    const results = [];
+
+    rows.forEach((m, idx) => {
       const homeRaw = (m?.home || "").trim();
       const awayRaw = (m?.away || "").trim();
+
       if (!homeRaw && !awayRaw) return;
+
+      const row = {
+        row: idx + 1,
+        homeInput: homeRaw,
+        awayInput: awayRaw,
+        homeName: homeRaw || "?",
+        awayName: awayRaw || "?"
+      };
+
+      if (!homeRaw || !awayRaw) {
+        row.error = "HOME dan AWAY harus diisi untuk mencari data valid.";
+        results.push(row);
+        return;
+      }
 
       const homeCode = normalizeCountry(homeRaw);
       const awayCode = normalizeCountry(awayRaw);
 
       if (!teamsDB[homeCode] || !teamsDB[awayCode]) {
-        results.push({ row: idx + 1, error: `Negara tidak dikenal: ${homeRaw || "?"} vs ${awayRaw || "?"}` });
+        row.error = `Negara tidak dikenal: ${homeRaw || "?"} vs ${awayRaw || "?"}`;
+        results.push(row);
         return;
       }
 
       if (homeCode === awayCode) {
-        results.push({ row: idx + 1, error: `HOME & AWAY sama: ${teamsDB[homeCode].name}` });
+        row.error = `HOME dan AWAY sama: ${teamsDB[homeCode].name}`;
+        results.push(row);
         return;
       }
 
-      const hStats = stats[homeCode] || createTeamStats(homeCode);
-      const aStats = stats[awayCode] || createTeamStats(awayCode);
+      row.homeCode = homeCode;
+      row.awayCode = awayCode;
+      row.homeName = teamsDB[homeCode].name;
+      row.awayName = teamsDB[awayCode].name;
 
-      // Roll Panah Kondisi WE10 (RNG Engine)
-      const homeCond = rollWE10Condition();
-      const awayCond = rollWE10Condition();
-
-      // Kalkulasi xG Terbobot + Pengaruh Panah Kondisi WE10
-      let baseHomeXg = ((hStats.goalsFor + globalAttack * PRIOR_MATCHES) / (hStats.matches + PRIOR_MATCHES) + (hStats.topGoals * 0.02)) * homeCond.factor + HOME_ADVANTAGE;
-      let baseAwayXg = ((aStats.goalsFor + globalAttack * PRIOR_MATCHES) / (aStats.matches + PRIOR_MATCHES) + (aStats.topGoals * 0.02)) * awayCond.factor;
-
-      // Simulasi WE10 via Poisson Distribution
-      let homeGoals = simulatePoissonGoals(baseHomeXg);
-      let awayGoals = simulatePoissonGoals(baseAwayXg);
-
-      let winner = "DRAW";
-      if (homeGoals > awayGoals) winner = teamsDB[homeCode].name;
-      else if (awayGoals > homeGoals) winner = teamsDB[awayCode].name;
-
-      const dataQuality = Math.min(1, (hStats.matches + aStats.matches) / 20);
-      const confidence = Math.round(Math.min(98, 35 + dataQuality * 40 + Math.abs(baseHomeXg - baseAwayXg) * 15));
-
-      results.push({
-        row: idx + 1,
-        gameNumber: dataSource?.gameNumber || 1,
-        topGoals: dataSource?.topGoals || [],
+      const rawSources = findDatasetSources(
         homeCode,
         awayCode,
-        homeName: teamsDB[homeCode].name,
-        awayName: teamsDB[awayCode].name,
-        homeGoals,
-        awayGoals,
-        winner,
-        confidence,
-        xgHome: baseHomeXg.toFixed(2),
-        xgAway: baseAwayXg.toFixed(2),
-        homeCondition: homeCond.symbol,
-        awayCondition: awayCond.symbol,
-        homeMatches: hStats.matches,
-        awayMatches: aStats.matches
+        m?.score || "",
+        prefer
+      );
+
+      const sourcesWithResult = rawSources.map(source => {
+        let result;
+
+        if (source.parsedScore) {
+          let inputHomeGoals;
+          let inputAwayGoals;
+
+          if (source.orientation === "exact") {
+            inputHomeGoals = source.parsedScore.home;
+            inputAwayGoals = source.parsedScore.away;
+          } else {
+            inputHomeGoals = source.parsedScore.away;
+            inputAwayGoals = source.parsedScore.home;
+          }
+
+          let winner = "DRAW";
+          if (inputHomeGoals > inputAwayGoals) {
+            winner = teamsDB[homeCode].name;
+          } else if (inputAwayGoals > inputHomeGoals) {
+            winner = teamsDB[awayCode].name;
+          }
+
+          result = {
+            estimated: false,
+            dataType:
+              source.orientation === "exact"
+                ? "DATASET ASLI (URUTAN SAMA)"
+                : "DATASET ASLI (URUTAN TERBALIK)",
+            homeGoals: inputHomeGoals,
+            awayGoals: inputAwayGoals,
+            winner,
+            confidence: 100,
+            xgHome: null,
+            xgAway: null,
+            homeMatches: null,
+            awayMatches: null
+          };
+        } else {
+          result = estimateMatch(homeCode, awayCode, {
+            memoryId: source.memoryId,
+            gameNumber: source.gameNumber
+          });
+        }
+
+        return {
+          ...source,
+          result
+        };
       });
+
+      row.datasetCount = sourcesWithResult.length;
+      row.sources = sourcesWithResult.slice(0, MAX_SOURCES);
+
+      if (row.datasetCount === 0) {
+        row.noDataset = true;
+        row.estimate = estimateMatch(homeCode, awayCode, {});
+      } else {
+        const best = row.sources[0];
+        row.memoryName = best.memoryName;
+        row.gameNumber = best.gameNumber;
+        row.topGoals = best.topGoals;
+        row.homeGoals = best.result.homeGoals;
+        row.awayGoals = best.result.awayGoals;
+        row.winner = best.result.winner;
+        row.confidence = best.result.confidence;
+        row.xgHome = best.result.xgHome;
+        row.xgAway = best.result.xgAway;
+      }
+
+      results.push(row);
     });
 
     return results;
