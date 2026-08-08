@@ -82,119 +82,173 @@ document.addEventListener("DOMContentLoaded", async () => {
   });
 
   bindClick("btnPredict", () => {
-    const predictPanel = document.getElementById("predictPanel");
-    const predictOutput = document.getElementById("predictOutput");
+  const predictPanel = document.getElementById("predictPanel");
+  const predictOutput = document.getElementById("predictOutput");
 
-    if (!predictPanel || !predictOutput) return;
+  if (!predictPanel || !predictOutput) return;
 
-    predictPanel.classList.remove("hidden");
-    predictOutput.innerHTML =
-      "<div style='text-align:center; padding: 20px;'>PREDICTING...</div>";
+  predictPanel.classList.remove("hidden");
+  predictOutput.innerHTML =
+    "<div style='text-align:center; padding: 20px;'>PREDICTING...</div>";
 
-    setTimeout(() => {
-      try {
-        const isEditor = StateManager.activeMemoryId !== null;
+  setTimeout(() => {
+    try {
+      const isEditor = StateManager.activeMemoryId !== null;
+      const activeMem = isEditor
+        ? StateManager.db.memories[StateManager.activeMemoryId]
+        : null;
 
-        const activeMem = isEditor
-          ? StateManager.db.memories[StateManager.activeMemoryId]
-          : null;
+      const dataSource =
+        isEditor &&
+        activeMem &&
+        activeMem.games &&
+        activeMem.games[StateManager.activeGameIndex]
+          ? activeMem.games[StateManager.activeGameIndex]
+          : StateManager.homeQuery;
 
-        const dataSource =
-          isEditor &&
-          activeMem &&
-          activeMem.games &&
-          activeMem.games[StateManager.activeGameIndex]
-            ? activeMem.games[StateManager.activeGameIndex]
-            : StateManager.homeQuery;
+      const predictions = PredictionService.predictMatches(dataSource);
 
-        const predictions = PredictionService.predictMatches(dataSource);
+      predictOutput.innerHTML = "";
 
-        predictOutput.innerHTML = "";
+      if (!predictions.length) {
+        predictOutput.innerHTML =
+          "<div class='error-msg'>Isi minimal HOME dan AWAY pada salah satu baris.</div>";
+        return;
+      }
 
-        if (!predictions.length) {
-          predictOutput.innerHTML =
-            `<div class="error-msg">Isi minimal satu negara pada HOME/AWAY.</div>`;
-          return;
+      const pre = document.createElement("pre");
+      pre.className = "log-output";
+
+      const header = document.createElement("div");
+      header.innerHTML =
+        "================================<br/>" +
+        "   SMART PREDICT + DATA SOURCE<br/>" +
+        "================================<br/><br/>";
+      pre.appendChild(header);
+
+      predictions.forEach(p => {
+        const block = document.createElement("div");
+
+        const titleLine = document.createElement("div");
+        titleLine.style.fontWeight = "bold";
+        titleLine.textContent = `INPUT B${p.row}: ${p.homeName} vs ${p.awayName}`;
+        block.appendChild(titleLine);
+
+        if (p.error) {
+          const errLine = document.createElement("div");
+          errLine.style.color = "#f55";
+          errLine.textContent = p.error;
+          block.appendChild(errLine);
+        } else if (p.noDataset) {
+          const warnLine = document.createElement("div");
+          warnLine.style.color = "#f55";
+          warnLine.style.marginTop = "5px";
+          warnLine.textContent =
+            "Tidak ditemukan fixture valid di dataset. Sistem tidak menampilkan skor dummy sebagai data asli.";
+          block.appendChild(warnLine);
+
+          if (p.estimate) {
+            const estLine = document.createElement("div");
+            estLine.style.color = "#aaa";
+            estLine.style.marginTop = "3px";
+            estLine.textContent =
+              `Estimasi model (bukan data dataset): ` +
+              `${p.homeName} ${p.estimate.homeGoals}:${p.estimate.awayGoals} ${p.awayName} => ` +
+              `${p.estimate.winner === "DRAW" ? "DRAW" : p.estimate.winner + " WIN"} ` +
+              `(Conf ${p.estimate.confidence}%) | ` +
+              `xG ${p.estimate.xgHome}:${p.estimate.xgAway}`;
+            block.appendChild(estLine);
+          }
+        } else {
+          const infoLine = document.createElement("div");
+          infoLine.style.color = "#0f0";
+          infoLine.style.marginTop = "5px";
+          infoLine.textContent =
+            `Ditemukan ${p.datasetCount} sumber data di dataset. ` +
+            `Menampilkan ${p.sources.length} sumber terbaik.`;
+          block.appendChild(infoLine);
+
+          p.sources.forEach((src, sourceIndex) => {
+            const sourceBlock = document.createElement("div");
+            sourceBlock.style.marginTop = "10px";
+            sourceBlock.style.padding = "8px";
+            sourceBlock.style.border = "1px solid #444";
+            sourceBlock.style.background = "#0a0a0a";
+
+            const sourceTitle = document.createElement("div");
+            sourceTitle.style.fontWeight = "bold";
+            sourceTitle.style.color = "#0ff";
+            sourceTitle.textContent =
+              `SUMBER ${sourceIndex + 1}: ${src.memoryName} ` +
+              `(Game #${src.gameNumber}) — Match B${src.matchIndex} — ` +
+              `${src.orientation === "exact" ? "urutan sama" : "urutan terbalik"}`;
+            sourceBlock.appendChild(sourceTitle);
+
+            const resultLine = document.createElement("div");
+            resultLine.style.marginTop = "4px";
+            resultLine.style.fontWeight = "bold";
+            resultLine.textContent =
+              `${p.homeName} ${src.result.homeGoals}:${src.result.awayGoals} ${p.awayName} => ` +
+              `${src.result.winner === "DRAW" ? "DRAW" : src.result.winner + " WIN"} | ` +
+              `${src.result.dataType} | Conf ${src.result.confidence}%`;
+            sourceBlock.appendChild(resultLine);
+
+            const detailLine = document.createElement("div");
+            detailLine.style.color = "#aaa";
+            detailLine.style.fontSize = "0.75rem";
+            detailLine.style.marginTop = "2px";
+
+            if (src.result.estimated) {
+              detailLine.textContent =
+                `Score di dataset kosong, hasil ini estimasi model. ` +
+                `xG ${src.result.xgHome}:${src.result.xgAway} | ` +
+                `Data ${p.homeName}: ${src.result.homeMatches} match | ` +
+                `Data ${p.awayName}: ${src.result.awayMatches} match`;
+            } else {
+              detailLine.textContent =
+                `Score dataset: ${src.datasetScore || "-"} | ` +
+                `P1 dataset: ${src.p1 || "-"}`;
+            }
+
+            sourceBlock.appendChild(detailLine);
+
+            const goalsLine = document.createElement("div");
+            goalsLine.style.color = "#0ff";
+            goalsLine.style.fontSize = "0.75rem";
+            goalsLine.style.marginTop = "4px";
+
+            const topGoalsText = (src.topGoals || [])
+              .filter(g => g.country || g.player)
+              .map(g => `${g.country || "?"}: ${g.player || "?"} (${g.goals || 0} gol)`)
+              .join(" | ");
+
+            goalsLine.textContent = topGoalsText
+              ? `Top Goals Game #${src.gameNumber}: ${topGoalsText}`
+              : `Top Goals Game #${src.gameNumber}: tidak ada data pencetak gol`;
+
+            sourceBlock.appendChild(goalsLine);
+            block.appendChild(sourceBlock);
+          });
         }
 
-        const pre = document.createElement("pre");
-        pre.className = "log-output";
+        pre.appendChild(block);
 
-        const header = document.createElement("div");
-        header.innerHTML =
-          "================================<br/>" +
-          "   PREDICT ENGINE (WE10 DATASET)<br/>" +
-          "================================<br/><br/>";
+        const divider = document.createElement("div");
+        divider.innerHTML = "--------------------------------<br/>";
+        pre.appendChild(divider);
+      });
 
-        pre.appendChild(header);
-
-        predictions.forEach(p => {
-          const block = document.createElement("div");
-
-          if (p.error) {
-            block.textContent = `Game #${p.gameNumber} (B${p.row}): ${p.error}`;
-            block.style.color = "#f55";
-          } else {
-            const resultLine = document.createElement("div");
-
-            // Format menampilkan Nomor Game dan Prediksi Skor
-            const resultText =
-              `GAME #${p.gameNumber} — ${p.homeName} ${p.homeCondition} ${p.homeGoals}:${p.awayGoals} ${p.awayCondition} ${p.awayName} => ` +
-              (p.winner === "DRAW" ? "DRAW" : `${p.winner} WIN`) +
-              ` (Conf ${p.confidence}%)`;
-
-            resultLine.textContent = resultText;
-            resultLine.style.fontWeight = "bold";
-            block.appendChild(resultLine);
-
-            // Menampilkan daftar pencetak gol (Top Goals) pada game tersebut
-            const goalscorersText = p.topGoals && p.topGoals.length > 0
-              ? p.topGoals
-                  .filter(g => g.country && g.player)
-                  .map(g => `${g.country}: ${g.player} (${g.goals || 0} gol)`)
-                  .join(' | ')
-              : 'Tidak ada data pencetak gol di game ini';
-
-            const goalDetail = document.createElement("div");
-            goalDetail.style.color = "#0ff";
-            goalDetail.style.fontSize = "0.75rem";
-            goalDetail.style.marginTop = "2px";
-            goalDetail.textContent = `Pencetak Gol di Dataset: ${goalscorersText}`;
-            block.appendChild(goalDetail);
-
-            const detail = document.createElement("div");
-            detail.style.color = "#aaa";
-            detail.style.fontSize = "0.75rem";
-            detail.style.marginTop = "2px";
-
-            detail.textContent =
-              `xG ${p.xgHome}:${p.xgAway} | ` +
-              `Data ${p.homeName}: ${p.homeMatches} match | ` +
-              `Data ${p.awayName}: ${p.awayMatches} match`;
-
-            block.appendChild(detail);
-          }
-
-          pre.appendChild(block);
-
-          const divider = document.createElement("div");
-          divider.innerHTML = "--------------------------------<br/>";
-          pre.appendChild(divider);
-        });
-
-        predictOutput.appendChild(pre);
-
-        predictPanel.scrollIntoView({ behavior: "smooth" });
-      } catch (err) {
-        console.error("Predict error:", err);
-
-        predictOutput.innerHTML =
-          `<div class="error-msg">Predict error: ` +
-          Security.escapeHtml(err.message || String(err)) +
-          `</div>`;
-      }
-    }, 50);
-  });
+      predictOutput.appendChild(pre);
+      predictPanel.scrollIntoView({ behavior: "smooth" });
+    } catch (err) {
+      console.error("Predict error:", err);
+      predictOutput.innerHTML =
+        `<div class="error-msg">Predict error: ` +
+        Security.escapeHtml(err.message || String(err)) +
+        `</div>`;
+    }
+  }, 50);
+});
 
 
       // 3. Render Tampilan Awal dengan Aman (Safety Guard)
@@ -1005,172 +1059,201 @@ class ChatSessionManager {
 
 
   async function handleSendAiMessage() {
-    if (isGenerating) return;
-    const text = aiChatInput.value.trim();
-    if (!text) return;
+  if (isGenerating) return;
 
+  const text = aiChatInput.value.trim();
+  if (!text) return;
 
+  if (aiChatMode) {
+    sessionManager.updateCurrentSession({ mode: aiChatMode.value });
+  }
 
-    // Save mode config
-    if (aiChatMode) {
-        sessionManager.updateCurrentSession({ mode: aiChatMode.value });
+  sessionManager.addMessage("user", text);
+
+  aiChatInput.value = "";
+  aiChatInput.style.height = "auto";
+
+  renderSidebar();
+  renderChatWindow();
+
+  isGenerating = true;
+  if (btnSendAiChat) btnSendAiChat.style.display = "none";
+  if (btnStopAiChat) btnStopAiChat.style.display = "block";
+
+  const session = sessionManager.getCurrentSession();
+
+  const container = document.createElement("div");
+  container.className = "chat-bubble-container ai";
+  container.innerHTML = `
+    <div class="chat-bubble-meta">
+      <span class="badge badge-model">Generating...</span>
+    </div>
+    <div class="chat-bubble ai markdown-body"><span class="blink-cursor"></span></div>
+  `;
+
+  aiChatWindow.appendChild(container);
+  aiChatWindow.scrollTop = aiChatWindow.scrollHeight;
+
+  const bubbleTarget = container.querySelector(".chat-bubble");
+  const modelBadge = container.querySelector(".badge-model");
+  if (modelBadge) modelBadge.textContent = "AI Model";
+
+  abortController = new AbortController();
+
+  let currentRaw = "";
+  let serverError = "";
+  let savedAssistant = false;
+
+  const renderIntermediate = () => {
+    const intermediateHtml =
+      window.marked && window.DOMPurify
+        ? DOMPurify.sanitize(marked.parse(currentRaw), { ADD_ATTR: ["target"] })
+        : escapeHtml(currentRaw).replace(/\n/g, "<br/>");
+
+    bubbleTarget.innerHTML = intermediateHtml + '<span class="blink-cursor"></span>';
+    smartScrollToBottom();
+  };
+
+  const processLine = line => {
+    if (!line || !line.startsWith("data: ")) return;
+
+    const dataStr = line.slice(6).trim();
+
+    if (dataStr === "[DONE]") return;
+
+    try {
+      const parsed = JSON.parse(dataStr);
+
+      if (parsed.error) {
+        serverError = parsed.error;
+        return;
+      }
+
+      if (parsed.content) {
+        currentRaw += parsed.content;
+        renderIntermediate();
+      }
+    } catch (e) {
+      console.error("Error parsing stream chunk", e, dataStr);
+    }
+  };
+
+  try {
+    const payloadMessages = session.messages.map(m => ({
+      role: m.role,
+      content: m.content
+    }));
+
+    const response = await fetch("/api/chat", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        messages: payloadMessages,
+        attachment: currentAttachment,
+        mode: session.mode
+      }),
+      signal: abortController.signal
+    });
+
+    if (!response.ok) {
+      let errorMessage = `Server returned ${response.status}`;
+
+      try {
+        const errorData = await response.json();
+        if (errorData?.error) errorMessage = errorData.error;
+      } catch (_) {}
+
+      throw new Error(errorMessage);
     }
 
-    sessionManager.addMessage("user", text);
+    if (!response.body) {
+      throw new Error("ReadableStream not supported in this browser.");
+    }
 
-    aiChatInput.value = "";
-    aiChatInput.style.height = "auto";
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder("utf-8");
+    let buffer = "";
+
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+
+      const lines = buffer.split(/\r?\n/);
+      buffer = lines.pop();
+
+      for (const line of lines) {
+        processLine(line);
+      }
+    }
+
+    if (buffer && buffer.trim()) {
+      processLine(buffer);
+    }
+
+    let finalContent = currentRaw.trim();
+
+    if (!finalContent) {
+      finalContent = serverError
+        ? `[ERROR: ${serverError}]`
+        : "[AI tidak menghasilkan output. Cek backend: model API, API key, dan format SSE. Ini bukan jawaban valid.]";
+    } else if (serverError) {
+      finalContent += `\n\n[WARNING: ${serverError}]`;
+    }
+
+    const finalHtml =
+      window.marked && window.DOMPurify
+        ? DOMPurify.sanitize(marked.parse(finalContent), { ADD_ATTR: ["target"] })
+        : escapeHtml(finalContent).replace(/\n/g, "<br/>");
+
+    bubbleTarget.innerHTML = finalHtml;
+    smartScrollToBottom();
+
+    sessionManager.addMessage("assistant", finalContent);
+    savedAssistant = true;
+
+    if (currentAttachment) {
+      currentAttachment = null;
+      if (aiChatFile) aiChatFile.value = "";
+      if (aiChatAttachmentPreview) {
+        aiChatAttachmentPreview.style.display = "none";
+        aiChatAttachmentPreview.innerHTML = "";
+      }
+    }
+  } catch (err) {
+    console.error("AI chat error:", err);
+
+    let errorText;
+
+    if (err.name === "AbortError") {
+      errorText = currentRaw.trim()
+        ? currentRaw.trim() + "\n\n[Dihentikan oleh pengguna]"
+        : "[Dihentikan oleh pengguna]";
+    } else {
+      errorText = `[ERROR: ${err.message || "Stream terputus"}]`;
+    }
+
+    bubbleTarget.innerHTML = `<span style="color: #f55;">${escapeHtml(errorText)}</span>`;
+
+    if (!savedAssistant) {
+      sessionManager.addMessage("assistant", errorText);
+      savedAssistant = true;
+    }
+  } finally {
+    isGenerating = false;
+
+    if (btnSendAiChat) btnSendAiChat.style.display = "block";
+    if (btnStopAiChat) btnStopAiChat.style.display = "none";
+
+    aiChatInput.focus();
 
     renderSidebar();
     renderChatWindow();
-
-    isGenerating = true;
-    if(btnSendAiChat) btnSendAiChat.style.display = "none";
-    if(btnStopAiChat) btnStopAiChat.style.display = "block";
-
-    // Create empty AI bubble for streaming
-    const session = sessionManager.getCurrentSession();
-    const container = document.createElement("div");
-    container.className = `chat-bubble-container ai`;
-    container.innerHTML = `
-        <div class="chat-bubble-meta">
-            <span class="badge badge-model">Generating...</span>
-        </div>
-        <div class="chat-bubble ai markdown-body"><span class="blink-cursor"></span></div>
-    `;
-    aiChatWindow.appendChild(container);
-    aiChatWindow.scrollTop = aiChatWindow.scrollHeight;
-
-    const bubbleTarget = container.querySelector('.chat-bubble');
-
-    abortController = new AbortController();
-
-    try {
-      // Build payload context (only send current branch history)
-      const payloadMessages = session.messages.map(m => ({role: m.role, content: m.content}));
-
-      const response = await fetch('/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            messages: payloadMessages,
-            attachment: currentAttachment,
-            mode: session.mode
-        }),
-        signal: abortController.signal
-      });
-
-      if (!response.ok) {
-        throw new Error(`Server returned ${response.status}`);
-      }
-
-      if (!response.body) {
-        throw new Error("ReadableStream not supported in this browser.");
-      }
-
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder("utf-8");
-      let currentRaw = "";
-      let doneReading = false;
-      let buffer = ""; // <-- 1. Tambahkan variabel penampung ini
-
-      // Update model badge if possible
-      const modelBadge = container.querySelector('.badge-model');
-      if (modelBadge) modelBadge.textContent = "AI Model";
-
-      while (!doneReading) {
-          const { value, done } = await reader.read();
-          if (done) {
-              doneReading = true;
-              break;
-          }
-
-          // Robust SSE Parsing
-          buffer += decoder.decode(value, { stream: true });
-
-          let eventEndIdx;
-          while ((eventEndIdx = buffer.indexOf('\n\n')) !== -1) {
-              const eventStr = buffer.slice(0, eventEndIdx);
-              buffer = buffer.slice(eventEndIdx + 2); // consume event + newlines
-
-              const lines = eventStr.split('\n');
-              for (const line of lines) {
-                  if (line.startsWith('data: ')) {
-                      const dataStr = line.slice(6).trim();
-                      if (dataStr === '[DONE]') {
-                          doneReading = true;
-                          break;
-                      }
-                      try {
-                          const parsed = JSON.parse(dataStr);
-                          if (parsed.error) {
-                              throw new Error(parsed.error);
-                          }
-                          if (parsed.content) {
-                              currentRaw += parsed.content;
-
-                              // Real-time render
-                              let intermediateHtml = window.marked && window.DOMPurify
-                                  ? DOMPurify.sanitize(marked.parse(currentRaw), { ADD_ATTR: ['target'] })
-                                  : escapeHtml(currentRaw).replace(/\n/g, '<br/>');
-
-                              bubbleTarget.innerHTML = intermediateHtml + '<span class="blink-cursor"></span>';
-                              smartScrollToBottom();
-                          }
-                      } catch (e) {
-                          console.error("Error parsing stream chunk", e, dataStr);
-                      }
-                  }
-              }
-              if (doneReading) break;
-          }
-      }
-
-      // Final render tanpa blink cursor
-      let finalContent = currentRaw.trim() !== ""
-          ? currentRaw
-          : "[AI tidak memberikan respons atau pertanyaan di luar batas konteks sistem. Silakan coba tanyakan hal lain.]";
-
-      let finalHtml = window.marked && window.DOMPurify
-          ? DOMPurify.sanitize(marked.parse(finalContent), { ADD_ATTR: ['target'] })
-          : escapeHtml(finalContent).replace(/\n/g, '<br/>');
-
-      bubbleTarget.innerHTML = finalHtml;
-      smartScrollToBottom();
-
-      // FIX: Pastikan selalu tersimpan ke session history agar tidak hilang/terpotong tanpa jejak
-      if (isGenerating) {
-          sessionManager.addMessage("assistant", finalContent);
-      }
-
-      if (currentAttachment) {
-        currentAttachment = null;
-        if (aiChatFile) aiChatFile.value = "";
-        if (aiChatAttachmentPreview) {
-          aiChatAttachmentPreview.style.display = "none";
-          aiChatAttachmentPreview.innerHTML = "";
-        }
-      }
-
-    } catch (err) {
-      const errorText = err.name === 'AbortError'
-        ? '[Dihentikan oleh Pengguna]'
-        : `[ERROR: ${err.message || 'Stream terputus'}]`;
-
-      bubbleTarget.innerHTML = `<span style="color: #f55;">${errorText}</span>`;
-
-      // FIX: Simpan pesan error ke session manager agar tidak hilang saat re-render
-      sessionManager.addMessage("assistant", errorText);
-    } finally {
-      isGenerating = false;
-      if(btnSendAiChat) btnSendAiChat.style.display = "block";
-      if(btnStopAiChat) btnStopAiChat.style.display = "none";
-      aiChatInput.focus();
-
-      renderSidebar();
-      renderChatWindow(); // full re-render to attach all events properly
-    }
   }
+}
 
   // --- Event Listeners ---
 
