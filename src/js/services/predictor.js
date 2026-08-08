@@ -1,3 +1,4 @@
+import { teamRatings } from "../data/teamRatings.js";
 import { StateManager } from "../state/appState.js";
 import { normalizeCountry } from "./similarity.js";
 import { teamsDB } from "../data/teams.js";
@@ -7,6 +8,13 @@ const HOME_ADVANTAGE = 0.18;
 const PRIOR_MATCHES = 6;
 const MAX_GOALS = 8;
 const MAX_SOURCES = 6;
+
+const RATING_NEUTRAL_BASE = 1.46;
+const RATING_HOME_BOOST = 0.27;
+const RATING_DIVISOR = 34;
+const MIN_RATING_XG = 0.18;
+const MAX_RATING_XG = 6.2;
+
 
 function normalizeScore(score) {
   if (typeof score !== "string") return "";
@@ -162,9 +170,112 @@ function mostLikelyScore(lambdaHome, lambdaAway) {
   return best;
 }
 
-function estimateMatch(homeCode, awayCode, exclude = {}) {
-  const stats = buildTeamStats(exclude);
-  const globalAttack = getGlobalAttack(stats);
+function clampNumber(value, min, max) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return min;
+  return Math.min(max, Math.max(min, n));
+}
+
+function ratingAttackScore(r) {
+  if (!r) return 0;
+
+  return (
+    r.attack * 0.45 +
+    r.midfield * 0.25 +
+    r.speed * 0.15 +
+    r.power * 0.10 +
+    r.stamina * 0.05
+  );
+}
+
+function ratingDefenseScore(r) {
+  if (!r) return 0;
+
+  return (
+    r.defense * 0.45 +
+    r.midfield * 0.20 +
+    r.power * 0.15 +
+    r.stamina * 0.10 +
+    r.speed * 0.10
+  );
+}
+
+function estimateFromRatings(homeCode, awayCode, stats) {
+  const H = teamRatings && teamRatings[homeCode] ? teamRatings[homeCode] : null;
+  const A = teamRatings && teamRatings[awayCode] ? teamRatings[awayCode] : null;
+
+  if (!H || !A) return null;
+
+  const hAtt = ratingAttackScore(H);
+  const aAtt = ratingAttackScore(A);
+  const hDef = ratingDefenseScore(H);
+  const aDef = ratingDefenseScore(A);
+
+  // Expected goals dasar dari selisih attack vs defense.
+  // exponential dipakai supaya perbedaan rating tidak menghasilkan nilai negatif.
+  let xgHome = (RATING_NEUTRAL_BASE + RATING_HOME_BOOST) *
+    Math.exp((hAtt - aDef) / RATING_DIVISOR);
+
+  let xgAway = RATING_NEUTRAL_BASE *
+    Math.exp((aAtt - hDef) / RATING_DIVISOR);
+
+  // Kontrol lini tengah.
+  // Tim dengan midfield lebih baik mendapat sedikit boost, lawan sedikit nerf.
+  const midControl = clampNumber((H.midfield - A.midfield) / 100, -0.18, 0.18);
+  xgHome *= 1 + (midControl * 0.55);
+  xgAway *= 1 - (midControl * 0.55);
+
+  xgHome = clampNumber(xgHome, MIN_RATING_XG, MAX_RATING_XG);
+  xgAway = clampNumber(xgAway, MIN_RATING_XG, MAX_RATING_XG);
+
+  const best = mostLikelyScore(xgHome, xgAway);
+
+  let winner = "DRAW";
+  if (best.home > best.away) {
+    winner = teamsDB[homeCode] ? teamsDB[homeCode].name : homeCode;
+  } else if (best.away > best.home) {
+    winner = teamsDB[awayCode] ? teamsDB[awayCode].name : awayCode;
+  }
+
+  const homeMatches = stats && stats[homeCode] ? stats[homeCode].matches : 0;
+  const awayMatches = stats && stats[awayCode] ? stats[awayCode].matches : 0;
+  const totalMatches = homeMatches + awayMatches;
+
+  // Confidence dihitung dari:
+  // - selisih xG
+  // - selisih overall
+  // - jumlah data histori jika ada
+  const overallDiff = (H.overall - A.overall) + 2.5;
+  let confidence =
+    34 +
+    (Math.abs(xgHome - xgAway) * 11) +
+    (Math.abs(overallDiff) * 0.55) +
+    Math.min(10, totalMatches * 0.3);
+
+  confidence = Math.round(clampNumber(confidence, 22, 93));
+
+  return {
+    estimated: true,
+    dataType: "ESTIMASI RATING WE10 (MATEMATIKA)",
+    model: "WE10 rating (attack/defense/midfield) + Poisson",
+    homeGoals: best.home,
+    awayGoals: best.away,
+    winner,
+    confidence,
+    xgHome: xgHome.toFixed(2),
+    xgAway: xgAway.toFixed(2),
+    xgHomeNum: xgHome,
+    xgAwayNum: xgAway,
+    homeMatches,
+    awayMatches
+  };
+}
+
+function estimateFromHistory(homeCode, awayCode, exclude = {}, preStats = null, preGlobalAttack = null) {
+  const stats = preStats || buildTeamStats(exclude);
+  const globalAttack = typeof preGlobalAttack === "number"
+    ? preGlobalAttack
+    : getGlobalAttack(stats);
 
   const hStats = stats[homeCode] || createTeamStats(homeCode);
   const aStats = stats[awayCode] || createTeamStats(awayCode);
@@ -197,28 +308,106 @@ function estimateMatch(homeCode, awayCode, exclude = {}) {
   const best = mostLikelyScore(xgHome, xgAway);
 
   let winner = "DRAW";
-  if (best.home > best.away) winner = teamsDB[homeCode]?.name || homeCode;
-  else if (best.away > best.home) winner = teamsDB[awayCode]?.name || awayCode;
+  if (best.home > best.away) {
+    winner = teamsDB[homeCode] ? teamsDB[homeCode].name : homeCode;
+  } else if (best.away > best.home) {
+    winner = teamsDB[awayCode] ? teamsDB[awayCode].name : awayCode;
+  }
 
   const dataQuality = Math.min(1, (hStats.matches + aStats.matches) / 30);
-  const confidence = Math.round(
-    Math.min(
-      95,
-      18 + dataQuality * 45 + Math.abs(xgHome - xgAway) * 12
-    )
-  );
+
+  let confidence =
+    20 +
+    dataQuality * 42 +
+    Math.abs(xgHome - xgAway) * 12;
+
+  confidence = Math.round(Math.min(88, confidence));
 
   return {
     estimated: true,
-    dataType: "ESTIMASI MODEL (BUKAN DATA ASLI DATASET)",
+    dataType: "ESTIMASI HISTORI DATASET",
+    model: "Histori pertandingan + Poisson",
     homeGoals: best.home,
     awayGoals: best.away,
     winner,
     confidence,
     xgHome: xgHome.toFixed(2),
     xgAway: xgAway.toFixed(2),
+    xgHomeNum: xgHome,
+    xgAwayNum: xgAway,
     homeMatches: hStats.matches,
     awayMatches: aStats.matches
+  };
+}
+
+function estimateMatch(homeCode, awayCode, exclude = {}) {
+  const stats = buildTeamStats(exclude);
+  const globalAttack = getGlobalAttack(stats);
+
+  const ratingEst = estimateFromRatings(homeCode, awayCode, stats);
+  const historyEst = estimateFromHistory(homeCode, awayCode, exclude, stats, globalAttack);
+
+  // Jika rating tidak tersedia, fallback ke histori lama.
+  if (!ratingEst) {
+    return historyEst;
+  }
+
+  const homeMatches = stats && stats[homeCode] ? stats[homeCode].matches : 0;
+  const awayMatches = stats && stats[awayCode] ? stats[awayCode].matches : 0;
+  const totalMatches = homeMatches + awayMatches;
+
+  // Jika histori sangat sedikit, prioritaskan rating WE10.
+  if (totalMatches < 4) {
+    return ratingEst;
+  }
+
+  // Jika histori cukup, blend rating + histori.
+  // Rating tetap dominan supaya era WE10 terjaga.
+  const historyWeight = Math.min(0.35, totalMatches / 90);
+  const ratingWeight = 1 - historyWeight;
+
+  const xgHome =
+    (ratingEst.xgHomeNum * ratingWeight) +
+    (historyEst.xgHomeNum * historyWeight);
+
+  const xgAway =
+    (ratingEst.xgAwayNum * ratingWeight) +
+    (historyEst.xgAwayNum * historyWeight);
+
+  const best = mostLikelyScore(xgHome, xgAway);
+
+  let winner = "DRAW";
+  if (best.home > best.away) {
+    winner = teamsDB[homeCode] ? teamsDB[homeCode].name : homeCode;
+  } else if (best.away > best.home) {
+    winner = teamsDB[awayCode] ? teamsDB[awayCode].name : awayCode;
+  }
+
+  let confidence =
+    (ratingEst.confidence * 0.72) +
+    (historyEst.confidence * 0.28) +
+    Math.min(5, totalMatches * 0.15);
+
+  confidence = Math.round(clampNumber(confidence, 22, 94));
+
+  return {
+    ...ratingEst,
+    dataType: totalMatches >= 8
+      ? "ESTIMASI RATING WE10 + HISTORI"
+      : ratingEst.dataType,
+    model: totalMatches >= 8
+      ? "WE10 rating + histori + Poisson"
+      : ratingEst.model,
+    homeGoals: best.home,
+    awayGoals: best.away,
+    winner,
+    confidence,
+    xgHome: xgHome.toFixed(2),
+    xgAway: xgAway.toFixed(2),
+    xgHomeNum: xgHome,
+    xgAwayNum: xgAway,
+    homeMatches,
+    awayMatches
   };
 }
 

@@ -140,26 +140,81 @@ document.addEventListener("DOMContentLoaded", async () => {
           errLine.textContent = p.error;
           block.appendChild(errLine);
         } else if (p.noDataset) {
-          const warnLine = document.createElement("div");
-          warnLine.style.color = "#f55";
-          warnLine.style.marginTop = "5px";
-          warnLine.textContent =
-            "Tidak ditemukan fixture valid di dataset. Sistem tidak menampilkan skor dummy sebagai data asli.";
-          block.appendChild(warnLine);
+  const warnLine = document.createElement("div");
+  warnLine.style.color = "#ffd166";
+  warnLine.style.marginTop = "5px";
+  warnLine.style.whiteSpace = "normal";
+  warnLine.style.overflowWrap = "anywhere";
+  warnLine.style.wordBreak = "break-word";
+  warnLine.style.maxWidth = "100%";
+  warnLine.textContent =
+    "Tidak ditemukan fixture valid di dataset. Sistem memakai estimasi matematika berbasis rating WE10 (bukan data asli dataset).";
+  block.appendChild(warnLine);
 
-          if (p.estimate) {
-            const estLine = document.createElement("div");
-            estLine.style.color = "#aaa";
-            estLine.style.marginTop = "3px";
-            estLine.textContent =
-              `Estimasi model (bukan data dataset): ` +
-              `${p.homeName} ${p.estimate.homeGoals}:${p.estimate.awayGoals} ${p.awayName} => ` +
-              `${p.estimate.winner === "DRAW" ? "DRAW" : p.estimate.winner + " WIN"} ` +
-              `(Conf ${p.estimate.confidence}%) | ` +
-              `xG ${p.estimate.xgHome}:${p.estimate.xgAway}`;
-            block.appendChild(estLine);
-          }
-        } else {
+  if (p.estimate) {
+    const estBox = document.createElement("div");
+    estBox.style.marginTop = "8px";
+    estBox.style.padding = "8px";
+    estBox.style.border = "1px solid #444";
+    estBox.style.background = "#0a0a0a";
+    estBox.style.maxWidth = "100%";
+    estBox.style.overflowWrap = "anywhere";
+    estBox.style.wordBreak = "break-word";
+
+    const scoreLine = document.createElement("div");
+    scoreLine.style.fontWeight = "bold";
+    scoreLine.style.color = "#0ff";
+    scoreLine.style.whiteSpace = "normal";
+    scoreLine.style.overflowWrap = "anywhere";
+    scoreLine.style.wordBreak = "break-word";
+    scoreLine.style.maxWidth = "100%";
+    scoreLine.textContent =
+      `ESTIMASI: ${p.homeName} ${p.estimate.homeGoals}:${p.estimate.awayGoals} ${p.awayName} => ` +
+      `${p.estimate.winner === "DRAW" ? "DRAW" : p.estimate.winner + " WIN"}`;
+    estBox.appendChild(scoreLine);
+
+    const detailLine = document.createElement("div");
+    detailLine.style.color = "#aaa";
+    detailLine.style.fontSize = "0.75rem";
+    detailLine.style.marginTop = "3px";
+    detailLine.style.whiteSpace = "normal";
+    detailLine.style.overflowWrap = "anywhere";
+    detailLine.style.wordBreak = "break-word";
+    detailLine.style.maxWidth = "100%";
+    detailLine.textContent =
+      `Model: ${p.estimate.model || "WE10 rating + Poisson"} | ` +
+      `Conf ${p.estimate.confidence}% | ` +
+      `xG ${p.estimate.xgHome}:${p.estimate.xgAway} | ` +
+      `Data histori: ${p.homeName} ${p.estimate.homeMatches || 0} match, ` +
+      `${p.awayName} ${p.estimate.awayMatches || 0} match`;
+    estBox.appendChild(detailLine);
+
+    const noteLine = document.createElement("div");
+    noteLine.style.color = "#888";
+    noteLine.style.fontSize = "0.7rem";
+    noteLine.style.marginTop = "3px";
+    noteLine.style.whiteSpace = "normal";
+    noteLine.style.overflowWrap = "anywhere";
+    noteLine.style.wordBreak = "break-word";
+    noteLine.style.maxWidth = "100%";
+    noteLine.textContent =
+      "Catatan: hasil ini dihitung dari statistik attack/defense/midfield WE10 dan distribusi Poisson, bukan skor dari Memory Database.";
+    estBox.appendChild(noteLine);
+
+    block.appendChild(estBox);
+  } else {
+    const errLine = document.createElement("div");
+    errLine.style.color = "#f55";
+    errLine.style.marginTop = "5px";
+    errLine.style.whiteSpace = "normal";
+    errLine.style.overflowWrap = "anywhere";
+    errLine.style.wordBreak = "break-word";
+    errLine.style.maxWidth = "100%";
+    errLine.textContent =
+      "Estimasi tidak tersedia. Pastikan file src/data/teamRatings.js sudah ditambahkan dan negara yang dipakai ada di dataset rating.";
+    block.appendChild(errLine);
+  }
+} else {
           const infoLine = document.createElement("div");
           infoLine.style.color = "#0f0";
           infoLine.style.marginTop = "5px";
