@@ -148,6 +148,8 @@ export const PredictionService = {
 
       results.push({
         row: idx + 1,
+        gameNumber: dataSource?.gameNumber || 1,
+        topGoals: dataSource?.topGoals || [],
         homeCode,
         awayCode,
         homeName: teamsDB[homeCode].name,
