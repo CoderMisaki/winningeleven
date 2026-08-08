@@ -132,27 +132,40 @@ document.addEventListener("DOMContentLoaded", async () => {
           const block = document.createElement("div");
 
           if (p.error) {
-            block.textContent = `B${p.row}: ${p.error}`;
+            block.textContent = `Game #${p.gameNumber} (B${p.row}): ${p.error}`;
             block.style.color = "#f55";
           } else {
             const resultLine = document.createElement("div");
 
+            // Format menampilkan Nomor Game dan Prediksi Skor
             const resultText =
-              `B${p.row}: ${p.homeName} ${p.homeCondition} ${p.homeGoals}:${p.awayGoals} ${p.awayCondition} ${p.awayName} => ` +
-              (p.winner === "DRAW"
-                ? "DRAW"
-                : `${p.winner} WIN`) +
+              `GAME #${p.gameNumber} — ${p.homeName} ${p.homeCondition} ${p.homeGoals}:${p.awayGoals} ${p.awayCondition} ${p.awayName} => ` +
+              (p.winner === "DRAW" ? "DRAW" : `${p.winner} WIN`) +
               ` (Conf ${p.confidence}%)`;
 
             resultLine.textContent = resultText;
             resultLine.style.fontWeight = "bold";
-
             block.appendChild(resultLine);
+
+            // Menampilkan daftar pencetak gol (Top Goals) pada game tersebut
+            const goalscorersText = p.topGoals && p.topGoals.length > 0
+              ? p.topGoals
+                  .filter(g => g.country && g.player)
+                  .map(g => `${g.country}: ${g.player} (${g.goals || 0} gol)`)
+                  .join(' | ')
+              : 'Tidak ada data pencetak gol di game ini';
+
+            const goalDetail = document.createElement("div");
+            goalDetail.style.color = "#0ff";
+            goalDetail.style.fontSize = "0.75rem";
+            goalDetail.style.marginTop = "2px";
+            goalDetail.textContent = `Pencetak Gol di Dataset: ${goalscorersText}`;
+            block.appendChild(goalDetail);
 
             const detail = document.createElement("div");
             detail.style.color = "#aaa";
             detail.style.fontSize = "0.75rem";
-            detail.style.marginTop = "4px";
+            detail.style.marginTop = "2px";
 
             detail.textContent =
               `xG ${p.xgHome}:${p.xgAway} | ` +
@@ -1113,16 +1126,21 @@ class ChatSessionManager {
           }
       }
 
-      // Final render without blink cursor
+      // Final render tanpa blink cursor
+      let finalContent = currentRaw.trim() !== ""
+          ? currentRaw
+          : "[AI tidak memberikan respons atau pertanyaan di luar batas konteks sistem. Silakan coba tanyakan hal lain.]";
+
       let finalHtml = window.marked && window.DOMPurify
-          ? DOMPurify.sanitize(marked.parse(currentRaw), { ADD_ATTR: ['target'] })
-          : escapeHtml(currentRaw).replace(/\n/g, '<br/>'); // PERBAIKAN DI SINI
+          ? DOMPurify.sanitize(marked.parse(finalContent), { ADD_ATTR: ['target'] })
+          : escapeHtml(finalContent).replace(/\n/g, '<br/>');
+
       bubbleTarget.innerHTML = finalHtml;
       smartScrollToBottom();
 
-      // Save to history
-      if (isGenerating && currentRaw.trim() !== "") {
-          sessionManager.addMessage("assistant", currentRaw);
+      // FIX: Pastikan selalu tersimpan ke session history agar tidak hilang/terpotong tanpa jejak
+      if (isGenerating) {
+          sessionManager.addMessage("assistant", finalContent);
       }
 
       if (currentAttachment) {
