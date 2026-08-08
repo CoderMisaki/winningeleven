@@ -891,3 +891,55 @@ body {
   opacity: 1;
   pointer-events: auto;
 }
+
+/* ============================================
+   FIX PREDICT OUTPUT OVERFLOW
+   ============================================ */
+
+.results-panel .results-body {
+  min-width: 0;
+}
+
+#predictOutput,
+#resultsOutput {
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+#predictOutput pre.log-output,
+#resultsOutput pre.log-output {
+  width: 100%;
+  max-width: 100%;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  overflow-x: hidden;
+}
+
+#predictOutput div,
+#resultsOutput div {
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+#predictOutput .log-output > div,
+#resultsOutput .log-output > div {
+  margin-bottom: 6px;
+}
+
+/* Tambahan proteksi untuk form top goals editor */
+.top-goal-row-item {
+  min-width: 0;
+}
+
+.top-goal-row-item input {
+  min-width: 0;
+  width: 100%;
+}
+
+.goal-player {
+  text-overflow: ellipsis;
+}
