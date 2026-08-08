@@ -30,7 +30,6 @@ function scanForSecrets(text) {
   return false;
 }
 
-let streamStarted = false;
 let cachedKnowledge = "";
 try {
   const knowledgePath = path.join(process.cwd(), 'src/js/knowledge.json');
@@ -45,6 +44,8 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
+
+  let streamStarted = false;
 
   // Deep Payload Validation (Defense-in-Depth)
   const contentType = req.headers['content-type'] || '';
