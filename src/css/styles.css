@@ -943,3 +943,27 @@ body {
 .goal-player {
   text-overflow: ellipsis;
 }
+
+.result-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+}
+
+.result-table th,
+.result-table td {
+  border: 1px solid #444;
+  padding: 6px;
+  vertical-align: top;
+}
+
+.result-table th {
+  background: #1a1a1a;
+  text-align: left;
+  color: #fff;
+}
+
+.result-table td:nth-child(3) {
+  white-space: nowrap;
+}

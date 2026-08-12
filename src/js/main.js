@@ -24,6 +24,113 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (el) el.addEventListener("click", handler);
   };
 
+
+// ============================================================
+// PATCH A: bootstrap UI, tombol hilang, database modal actions
+// ============================================================
+
+// Render form utama saat pertama load
+NavigationManager.switchToHomeView();
+
+// Bind tombol CARI KECOCOKAN
+bindClick("btnRunMatch", async () => {
+  const resultsPanelEl = document.getElementById("resultsPanel");
+  const resultsOutputEl = document.getElementById("resultsOutput");
+
+  if (!resultsPanelEl || !resultsOutputEl) return;
+
+  resultsPanelEl.classList.remove("hidden");
+  resultsOutputEl.innerHTML =
+    "<div style='text-align:center; padding: 15px;'>SEARCHING...</div>";
+
+  try {
+    const minSim = Number(document.getElementById("minSimilarity")?.value || 0);
+
+    let results = await MatchingEngine.executeSearch(StateManager.homeQuery);
+    results = (results || []).filter(r => r.similarity >= minSim);
+
+    UIRenderer.renderSearchResults(results, resultsOutputEl);
+  } catch (err) {
+    resultsOutputEl.innerHTML =
+      `<div class="error-msg">Error: ${Security.escapeHtml(err.message || String(err))}</div>`;
+    console.error(err);
+  }
+});
+
+// Bind database modal
+let importTargetMemoryId = null;
+const jsonImportField = document.getElementById("jsonImportField");
+const databaseModalList = document.getElementById("databaseModalList");
+
+if (databaseModalList) {
+  databaseModalList.addEventListener("click", (e) => {
+    const btn = e.target.closest("button");
+    if (!btn) return;
+
+    const id = Number(btn.dataset.id);
+
+    if (btn.classList.contains("btn-create-mem")) {
+      MemoryManager.initializeEmptyMemory(id);
+      NavigationManager.closeDatabaseModal();
+      NavigationManager.switchToEditorView(id);
+    }
+
+    else if (btn.classList.contains("btn-open-mem")) {
+      NavigationManager.closeDatabaseModal();
+      NavigationManager.switchToEditorView(id);
+    }
+
+    else if (btn.classList.contains("btn-export-mem")) {
+      ImportExportService.exportMemoryToJSON(id);
+    }
+
+    else if (btn.classList.contains("btn-delete-mem")) {
+      UIRenderer.showConfirm(`Hapus Memory ${id}?`, () => {
+        MemoryManager.deleteMemory(id);
+        UIRenderer.renderDatabaseModal();
+      });
+    }
+
+    else if (btn.classList.contains("btn-import-mem")) {
+      importTargetMemoryId = id;
+      if (jsonImportField) {
+        jsonImportField.value = "";
+        jsonImportField.click();
+      }
+    }
+
+    else if (btn.classList.contains("btn-download-template")) {
+      ImportExportService.downloadTemplate(id);
+    }
+
+    else if (btn.classList.contains("btn-add-memory-slot")) {
+      StateManager.db.maxSlot = (StateManager.db.maxSlot || 7) + 1;
+      StateManager.save();
+      UIRenderer.renderDatabaseModal();
+    }
+  });
+}
+
+if (jsonImportField) {
+  jsonImportField.addEventListener("change", (e) => {
+    const file = e.target.files?.[0];
+    if (!file || importTargetMemoryId == null) return;
+
+    ImportExportService.processImportFile(
+      file,
+      importTargetMemoryId,
+      (memId) => {
+        UIRenderer.renderDatabaseModal();
+        NavigationManager.closeDatabaseModal();
+        NavigationManager.switchToEditorView(memId);
+      }
+    );
+
+    jsonImportField.value = "";
+  });
+}
+
+
   // Navigasi Bar Menu Atas
   bindClick("btnHomeView", () => {
     NavigationManager.switchToHomeView();
@@ -270,7 +377,49 @@ document.addEventListener("DOMContentLoaded", async () => {
 
 
 
-  // Attachments logic
+
+// ============================================================
+// PATCH B: stub sementara untuk variabel chat yang hilang
+// ============================================================
+
+const btnUploadAiChat = document.getElementById("btnUploadAiChat");
+const aiChatUploadMenu = document.getElementById("aiChatUploadMenu");
+const aiChatFile = document.getElementById("aiChatFile");
+const aiChatAttachmentPreview = document.getElementById("aiChatAttachmentPreview");
+const aiChatWindow = document.getElementById("aiChatWindow");
+const aiChatInput = document.getElementById("aiChatInput");
+const btnSendAiChat = document.getElementById("btnSendAiChat");
+
+let isGenerating = false;
+let currentAttachment = null;
+
+const Toast = {
+  show(message) {
+    console.log("[TOAST]", message);
+  }
+};
+
+const sessionManager = {
+  sessions: {},
+  currentId: null,
+  save() {},
+  createNewSession() {},
+  clearAll() {},
+  getCurrentSession() {
+    return {
+      id: "stub-session",
+      parentId: null,
+      children: [],
+      messages: []
+    };
+  }
+};
+
+function renderSidebar() {}
+function renderChatWindow() {}
+
+
+// Attachments logic
 
 
   document.getElementById("btnNewChat")?.addEventListener("click", () => {
