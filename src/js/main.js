@@ -122,15 +122,17 @@ document.addEventListener("DOMContentLoaded", async () => {
       const header = document.createElement("div");
       header.innerHTML =
         "================================<br/>" +
-        "   SMART PREDICT + DATA SOURCE<br/>" +
+        "      WE10 HYBRID PREDICTOR<br/>" +
         "================================<br/><br/>";
       pre.appendChild(header);
 
       predictions.forEach(p => {
         const block = document.createElement("div");
+        block.style.marginBottom = "20px";
 
         const titleLine = document.createElement("div");
         titleLine.style.fontWeight = "bold";
+        titleLine.style.color = "#fff";
         titleLine.textContent = `INPUT B${p.row}: ${p.homeName} vs ${p.awayName}`;
         block.appendChild(titleLine);
 
@@ -139,1286 +141,134 @@ document.addEventListener("DOMContentLoaded", async () => {
           errLine.style.color = "#f55";
           errLine.textContent = p.error;
           block.appendChild(errLine);
-        } else if (p.noDataset) {
-  const warnLine = document.createElement("div");
-  warnLine.style.color = "#ffd166";
-  warnLine.style.marginTop = "5px";
-  warnLine.style.whiteSpace = "normal";
-  warnLine.style.overflowWrap = "anywhere";
-  warnLine.style.wordBreak = "break-word";
-  warnLine.style.maxWidth = "100%";
-  warnLine.textContent =
-    "Tidak ditemukan fixture valid di dataset. Sistem memakai estimasi matematika berbasis rating WE10 (bukan data asli dataset).";
-  block.appendChild(warnLine);
+        } else if (p.prediction) {
+          const pred = p.prediction;
 
-  if (p.estimate) {
-    const estBox = document.createElement("div");
-    estBox.style.marginTop = "8px";
-    estBox.style.padding = "8px";
-    estBox.style.border = "1px solid #444";
-    estBox.style.background = "#0a0a0a";
-    estBox.style.maxWidth = "100%";
-    estBox.style.overflowWrap = "anywhere";
-    estBox.style.wordBreak = "break-word";
+          const estBox = document.createElement("div");
+          estBox.style.marginTop = "8px";
+          estBox.style.padding = "10px";
+          estBox.style.border = "1px solid #444";
+          estBox.style.background = "#111";
+          estBox.style.borderRadius = "4px";
 
-    const scoreLine = document.createElement("div");
-    scoreLine.style.fontWeight = "bold";
-    scoreLine.style.color = "#0ff";
-    scoreLine.style.whiteSpace = "normal";
-    scoreLine.style.overflowWrap = "anywhere";
-    scoreLine.style.wordBreak = "break-word";
-    scoreLine.style.maxWidth = "100%";
-    scoreLine.textContent =
-      `ESTIMASI: ${p.homeName} ${p.estimate.homeGoals}:${p.estimate.awayGoals} ${p.awayName} => ` +
-      `${p.estimate.winner === "DRAW" ? "DRAW" : p.estimate.winner + " WIN"}`;
-    estBox.appendChild(scoreLine);
+          // Prediction Result
+          const scoreLine = document.createElement("div");
+          scoreLine.style.fontWeight = "bold";
+          scoreLine.style.color = "#0ff";
+          scoreLine.style.fontSize = "1.1rem";
+          scoreLine.style.marginBottom = "8px";
+          scoreLine.textContent =
+            `PREDIKSI: ${p.homeName} ${pred.homeGoals} : ${pred.awayGoals} ${p.awayName}`;
+          estBox.appendChild(scoreLine);
 
-    const detailLine = document.createElement("div");
-    detailLine.style.color = "#aaa";
-    detailLine.style.fontSize = "0.75rem";
-    detailLine.style.marginTop = "3px";
-    detailLine.style.whiteSpace = "normal";
-    detailLine.style.overflowWrap = "anywhere";
-    detailLine.style.wordBreak = "break-word";
-    detailLine.style.maxWidth = "100%";
-    detailLine.textContent =
-      `Model: ${p.estimate.model || "WE10 rating + Poisson"} | ` +
-      `Conf ${p.estimate.confidence}% | ` +
-      `xG ${p.estimate.xgHome}:${p.estimate.xgAway} | ` +
-      `Data histori: ${p.homeName} ${p.estimate.homeMatches || 0} match, ` +
-      `${p.awayName} ${p.estimate.awayMatches || 0} match`;
-    estBox.appendChild(detailLine);
+          // Probabilities (1X2)
+          const probGrid = document.createElement("div");
+          probGrid.style.display = "grid";
+          probGrid.style.gridTemplateColumns = "1fr 1fr 1fr";
+          probGrid.style.gap = "5px";
+          probGrid.style.marginBottom = "10px";
 
-    const noteLine = document.createElement("div");
-    noteLine.style.color = "#888";
-    noteLine.style.fontSize = "0.7rem";
-    noteLine.style.marginTop = "3px";
-    noteLine.style.whiteSpace = "normal";
-    noteLine.style.overflowWrap = "anywhere";
-    noteLine.style.wordBreak = "break-word";
-    noteLine.style.maxWidth = "100%";
-    noteLine.textContent =
-      "Catatan: hasil ini dihitung dari statistik attack/defense/midfield WE10 dan distribusi Poisson, bukan skor dari Memory Database.";
-    estBox.appendChild(noteLine);
+          const pHome = document.createElement("div");
+          pHome.style.textAlign = "center";
+          pHome.style.background = "#222";
+          pHome.style.padding = "4px";
+          pHome.style.border = pred.probs.home > Math.max(pred.probs.draw, pred.probs.away) ? "1px solid #0f0" : "1px solid #333";
+          pHome.innerHTML = `<div style="font-size:0.75rem;color:#888;">HOME</div><div>${(pred.probs.home * 100).toFixed(1)}%</div>`;
 
-    block.appendChild(estBox);
-  } else {
-    const errLine = document.createElement("div");
-    errLine.style.color = "#f55";
-    errLine.style.marginTop = "5px";
-    errLine.style.whiteSpace = "normal";
-    errLine.style.overflowWrap = "anywhere";
-    errLine.style.wordBreak = "break-word";
-    errLine.style.maxWidth = "100%";
-    errLine.textContent =
-      "Estimasi tidak tersedia. Pastikan file src/data/teamRatings.js sudah ditambahkan dan negara yang dipakai ada di dataset rating.";
-    block.appendChild(errLine);
-  }
-} else {
-          const infoLine = document.createElement("div");
-          infoLine.style.color = "#0f0";
-          infoLine.style.marginTop = "5px";
-          infoLine.textContent =
-            `Ditemukan ${p.datasetCount} sumber data di dataset. ` +
-            `Menampilkan ${p.sources.length} sumber terbaik.`;
-          block.appendChild(infoLine);
+          const pDraw = document.createElement("div");
+          pDraw.style.textAlign = "center";
+          pDraw.style.background = "#222";
+          pDraw.style.padding = "4px";
+          pDraw.style.border = pred.probs.draw > Math.max(pred.probs.home, pred.probs.away) ? "1px solid #0f0" : "1px solid #333";
+          pDraw.innerHTML = `<div style="font-size:0.75rem;color:#888;">DRAW</div><div>${(pred.probs.draw * 100).toFixed(1)}%</div>`;
 
-          p.sources.forEach((src, sourceIndex) => {
-            const sourceBlock = document.createElement("div");
-            sourceBlock.style.marginTop = "10px";
-            sourceBlock.style.padding = "8px";
-            sourceBlock.style.border = "1px solid #444";
-            sourceBlock.style.background = "#0a0a0a";
+          const pAway = document.createElement("div");
+          pAway.style.textAlign = "center";
+          pAway.style.background = "#222";
+          pAway.style.padding = "4px";
+          pAway.style.border = pred.probs.away > Math.max(pred.probs.home, pred.probs.draw) ? "1px solid #0f0" : "1px solid #333";
+          pAway.innerHTML = `<div style="font-size:0.75rem;color:#888;">AWAY</div><div>${(pred.probs.away * 100).toFixed(1)}%</div>`;
 
-            const sourceTitle = document.createElement("div");
-            sourceTitle.style.fontWeight = "bold";
-            sourceTitle.style.color = "#0ff";
-            sourceTitle.textContent =
-              `SUMBER ${sourceIndex + 1}: ${src.memoryName} ` +
-              `(Game #${src.gameNumber}) — Match B${src.matchIndex} — ` +
-              `${src.orientation === "exact" ? "urutan sama" : "urutan terbalik"}`;
-            sourceBlock.appendChild(sourceTitle);
+          probGrid.appendChild(pHome);
+          probGrid.appendChild(pDraw);
+          probGrid.appendChild(pAway);
+          estBox.appendChild(probGrid);
 
-            const resultLine = document.createElement("div");
-            resultLine.style.marginTop = "4px";
-            resultLine.style.fontWeight = "bold";
-            resultLine.textContent =
-              `${p.homeName} ${src.result.homeGoals}:${src.result.awayGoals} ${p.awayName} => ` +
-              `${src.result.winner === "DRAW" ? "DRAW" : src.result.winner + " WIN"} | ` +
-              `${src.result.dataType} | Conf ${src.result.confidence}%`;
-            sourceBlock.appendChild(resultLine);
+          // Model info
+          const infoGrid = document.createElement("div");
+          infoGrid.style.display = "grid";
+          infoGrid.style.gridTemplateColumns = "1fr 1fr";
+          infoGrid.style.gap = "10px";
+          infoGrid.style.fontSize = "0.85rem";
 
-            const detailLine = document.createElement("div");
-            detailLine.style.color = "#aaa";
-            detailLine.style.fontSize = "0.75rem";
-            detailLine.style.marginTop = "2px";
+          const leftInfo = document.createElement("div");
+          leftInfo.style.color = "#aaa";
+          leftInfo.innerHTML = `
+            <div><span style="color:#888">Model:</span> ${pred.model}</div>
+            <div><span style="color:#888">Conf:</span> ${pred.confidence}%</div>
+            <div><span style="color:#888">xG:</span> ${pred.xgHome} : ${pred.xgAway}</div>
+          `;
 
-            if (src.result.estimated) {
-              detailLine.textContent =
-                `Score di dataset kosong, hasil ini estimasi model. ` +
-                `xG ${src.result.xgHome}:${src.result.xgAway} | ` +
-                `Data ${p.homeName}: ${src.result.homeMatches} match | ` +
-                `Data ${p.awayName}: ${src.result.awayMatches} match`;
-            } else {
-              detailLine.textContent =
-                `Score dataset: ${src.datasetScore || "-"} | ` +
-                `P1 dataset: ${src.p1 || "-"}`;
-            }
+          const rightInfo = document.createElement("div");
+          rightInfo.style.color = "#aaa";
 
-            sourceBlock.appendChild(detailLine);
+          let evidenceHtml = `<div><span style="color:#888">Evidence:</span></div>`;
+          evidenceHtml += `<div>- Rating: ${pred.evidence.hasRating ? 'Ya' : 'Tidak'}</div>`;
+          if (pred.evidence.hasHistory) {
+            evidenceHtml += `<div>- History: ${pred.evidence.homeMatches} (H) / ${pred.evidence.awayMatches} (A) matches</div>`;
+          } else {
+            evidenceHtml += `<div>- History: Tidak ada</div>`;
+          }
+          if (pred.evidence.hasH2H) {
+            evidenceHtml += `<div>- H2H: ${pred.evidence.h2hMatches} matches</div>`;
+          } else {
+            evidenceHtml += `<div>- H2H: Tidak ada</div>`;
+          }
+          rightInfo.innerHTML = evidenceHtml;
 
-            const goalsLine = document.createElement("div");
-            goalsLine.style.color = "#0ff";
-            goalsLine.style.fontSize = "0.75rem";
-            goalsLine.style.marginTop = "4px";
+          infoGrid.appendChild(leftInfo);
+          infoGrid.appendChild(rightInfo);
+          estBox.appendChild(infoGrid);
 
-            const topGoalsText = (src.topGoals || [])
-              .filter(g => g.country || g.player)
-              .map(g => `${g.country || "?"}: ${g.player || "?"} (${g.goals || 0} gol)`)
-              .join(" | ");
+          // Top Scores
+          if (pred.distribution && pred.distribution.length > 0) {
+            const topScoresContainer = document.createElement("div");
+            topScoresContainer.style.marginTop = "10px";
+            topScoresContainer.style.paddingTop = "10px";
+            topScoresContainer.style.borderTop = "1px solid #333";
+            topScoresContainer.style.fontSize = "0.8rem";
 
-            goalsLine.textContent = topGoalsText
-              ? `Top Goals Game #${src.gameNumber}: ${topGoalsText}`
-              : `Top Goals Game #${src.gameNumber}: tidak ada data pencetak gol`;
+            let distHtml = `<div style="color:#888; margin-bottom:4px;">Top Score Distribution:</div>`;
+            distHtml += `<div style="display:flex; flex-wrap:wrap; gap:8px;">`;
 
-            sourceBlock.appendChild(goalsLine);
-            block.appendChild(sourceBlock);
-          });
+            pred.distribution.forEach((s, i) => {
+              distHtml += `<div style="background:#222; padding:2px 6px; border-radius:3px;">
+                <span style="color:#ddd">${s.home}:${s.away}</span>
+                <span style="color:#0aa">(${(s.prob * 100).toFixed(1)}%)</span>
+              </div>`;
+            });
+
+            distHtml += `</div>`;
+            topScoresContainer.innerHTML = distHtml;
+            estBox.appendChild(topScoresContainer);
+          }
+
+          block.appendChild(estBox);
         }
 
         pre.appendChild(block);
-
-        const divider = document.createElement("div");
-        divider.innerHTML = "--------------------------------<br/>";
-        pre.appendChild(divider);
       });
 
       predictOutput.appendChild(pre);
-      predictPanel.scrollIntoView({ behavior: "smooth" });
-    } catch (err) {
-      console.error("Predict error:", err);
-      predictOutput.innerHTML =
-        `<div class="error-msg">Predict error: ` +
-        Security.escapeHtml(err.message || String(err)) +
-        `</div>`;
-    }
-  }, 50);
-});
 
-
-      // 3. Render Tampilan Awal dengan Aman (Safety Guard)
-  try {
-    NavigationManager.switchToHomeView();
-  } catch (err) {
-    console.error("Gagal melakukan render awal:", err);
-  }
-
-  // --- EVENT DELEGATION FORM INPUT ---
-  const matchGridForm = document.getElementById("matchGridForm");
-  if (matchGridForm) {
-    matchGridForm.addEventListener("input", (e) => {
-      const target = e.target;
-      if (target.tagName !== "INPUT") return;
-      const idx = target.dataset.idx;
-      const val = target.value.trim();
-      const isEditor = StateManager.activeMemoryId !== null;
-      let field = "";
-      if (target.classList.contains("match-home")) field = "home";
-      if (target.classList.contains("match-score")) field = "score";
-      if (target.classList.contains("match-away")) field = "away";
-
-      if (field !== "") {
-        if (isEditor) {
-          MemoryManager.updateMatchField(StateManager.activeMemoryId, StateManager.activeGameIndex, idx, field, val, false);
-        } else {
-          StateManager.homeQuery.matches[idx][field] = val;
-        }
-      }
-    });
-  }
-
-  const topGoalsForm = document.getElementById("topGoalsForm");
-  if (topGoalsForm) {
-    topGoalsForm.addEventListener("input", (e) => {
-      const target = e.target;
-      if (target.tagName !== "INPUT") return;
-      const idx = target.dataset.idx;
-      const val = target.value.trim();
-      const isEditor = StateManager.activeMemoryId !== null;
-      let field = "goals";
-      if (target.classList.contains("goal-country")) field = "country";
-      if (target.classList.contains("goal-player")) field = "player";
-      if (target.classList.contains("goal-amount")) field = "goals";
-
-      if (isEditor) {
-        MemoryManager.updateTopGoalField(StateManager.activeMemoryId, StateManager.activeGameIndex, idx, field, val, false);
-      } else {
-        StateManager.homeQuery.topGoals[idx][field] = val;
-      }
-    });
-  }
-
-  // Eksekusi Pencocokan Dataset (Matching Engine)
-  bindClick("btnRunMatch", () => {
-  const btn = document.getElementById("btnRunMatch");
-  const resultsPanel = document.getElementById("resultsPanel");
-  const resultsOutput = document.getElementById("resultsOutput");
-
-  if (!btn || !resultsPanel || !resultsOutput) return;
-
-  btn.disabled = true;
-  const oldText = btn.textContent;
-  btn.textContent = "SEARCHING...";
-
-  resultsPanel.classList.remove("hidden");
-  resultsOutput.innerHTML = "<div style='text-align:center; padding: 20px;'>Loading...</div>";
-
-  setTimeout(async () => {
-    try {
-      const results = await MatchingEngine.executeSearch(StateManager.homeQuery);
-
-      const minSimInput = document.getElementById("minSimilarity");
-      const minSimThreshold = minSimInput ? parseInt(minSimInput.value, 10) || 0 : 0;
-
-      const filteredResults = results.filter(r => r.similarity >= minSimThreshold);
-
-      resultsOutput.innerHTML = "";
-
-      if (filteredResults.length === 0) {
-        const errMsg = document.createElement("div");
-        errMsg.className = "error-msg";
-        errMsg.textContent =
-          "Tidak ditemukan kecocokan pada seluruh Memory (dengan filter yang diberikan).";
-        resultsOutput.appendChild(errMsg);
-        return;
-      }
-
-      const pre = document.createElement("pre");
-      pre.className = "log-output";
-
-      const header = document.createElement("div");
-      header.innerHTML =
-        "================================<br/>   MATCH FOUND REPORT SYSTEMS<br/>================================<br/><br/>";
-
-      pre.appendChild(header);
-
-      filteredResults.forEach((match, index) => {
-        const isPerfect = match.similarity === 100;
-        const isExcellent = match.similarity >= 95 && match.similarity < 100;
-        const isHigh = match.similarity >= 90 && match.similarity < 95;
-
-        const matchBlock = document.createElement("div");
-
-        const rankingText = document.createElement("div");
-        rankingText.textContent = `Rank       : #${index + 1}`;
-        matchBlock.appendChild(rankingText);
-
-        const memText = document.createElement("div");
-        const safeMemoryName = Security.escapeHtml(match.memoryName || `Memory ${match.memoryId}`);
-
-        memText.innerHTML =
-          `Memory     : <span class="mem-link" style="cursor:pointer; text-decoration:underline; color:#0f0;" ` +
-          `data-mem="${match.memoryId}" data-game="${match.gameNumber}">` +
-          `${safeMemoryName} (Game ${match.gameNumber})</span>`;
-
-        matchBlock.appendChild(memText);
-
-        const simText = document.createElement("div");
-
-        if (isPerfect) {
-          simText.innerHTML =
-            `Similarity : <span class="sim-perfect">${match.similarity}%</span> ` +
-            `<span class="sim-badge" style="background:#0f0; color:#000; padding:2px 5px; font-size:0.7rem;">[ PERFECT MATCH ]</span>`;
-        } else if (isExcellent) {
-          simText.innerHTML =
-            `Similarity : <span class="sim-normal">${match.similarity}%</span> ` +
-            `<span class="sim-badge" style="background:#ff0; color:#000; padding:2px 5px; font-size:0.7rem;">[ EXCELLENT ]</span>`;
-        } else if (isHigh) {
-          simText.innerHTML =
-            `Similarity : <span class="sim-normal">${match.similarity}%</span> ` +
-            `<span class="sim-badge" style="background:#f90; color:#000; padding:2px 5px; font-size:0.7rem;">[ HIGH MATCH ]</span>`;
-        } else {
-          simText.innerHTML =
-            `Similarity : <span class="sim-normal">${match.similarity}%</span> ` +
-            `<span class="sim-badge" style="background:#333; color:#fff; padding:2px 5px; font-size:0.7rem;">[ NORMAL ]</span>`;
-        }
-
-        matchBlock.appendChild(simText);
-
-        if (match.explanations && match.explanations.length > 0) {
-          const explText = document.createElement("div");
-          explText.style.marginTop = "5px";
-          explText.style.color = "#aaa";
-          explText.style.fontSize = "0.75rem";
-
-          match.explanations.forEach(e => {
-            const div = document.createElement("div");
-            div.textContent = e;
-            explText.appendChild(div);
-          });
-
-          matchBlock.appendChild(explText);
-        }
-
-        if (index < filteredResults.length - 1) {
-          const divider = document.createElement("div");
-          divider.innerHTML = `--------------------------------<br/>`;
-          matchBlock.appendChild(divider);
-        }
-
-        pre.appendChild(matchBlock);
-      });
-
-      resultsOutput.appendChild(pre);
-
-      pre.querySelectorAll(".mem-link").forEach(link => {
-        link.addEventListener("click", e => {
-          const memId = e.target.dataset.mem;
-          const gameNum = parseInt(e.target.dataset.game, 10);
-
-          NavigationManager.switchToEditorView(memId);
-          NavigationManager.jumpToGame(gameNum);
-
-          window.scrollTo({ top: 0, behavior: "smooth" });
-        });
-      });
-
-      resultsPanel.scrollIntoView({ behavior: "smooth" });
-    } catch (err) {
-      console.error("Matching error:", err);
-
-      resultsOutput.innerHTML =
-        `<div class="error-msg">Error matching: ${Security.escapeHtml(err.message || String(err))}</div>`;
-    } finally {
-      btn.disabled = false;
-      btn.textContent = oldText;
-    }
-  }, 50);
-});
-
-
-
-  // Delegasi Event Klik Dinamis di dalam Modal Database
-  const dbModalList = document.getElementById("databaseModalList");
-  if (dbModalList) {
-    dbModalList.onclick = (e) => {
-    const target = e.target;
-
-    if (target.classList.contains("btn-add-memory-slot")) {
-      StateManager.db.maxSlot = (StateManager.db.maxSlot || 7) + 1;
-      StateManager.save();
-      UIRenderer.renderDatabaseModal();
-      const list = document.getElementById("databaseModalList");
-      if(list) list.scrollTop = list.scrollHeight;
-      return;
-    }
-
-    const id = target.dataset.id;
-
-    if (!id) return;
-
-    if (target.classList.contains("btn-create-mem")) {
-      UIRenderer.showConfirm("Lanjutkan inisialisasi Memory ini?", () => {
-        MemoryManager.initializeEmptyMemory(id);
-        NavigationManager.switchToEditorView(id);
-        NavigationManager.closeDatabaseModal();
-      });
-    } else if (target.classList.contains("btn-open-mem")) {
-      NavigationManager.switchToEditorView(id);
-      NavigationManager.closeDatabaseModal();
-    } 
-    else if (target.classList.contains("btn-export-mem")) {
-      ImportExportService.exportMemoryToJSON(id);
-    }
-    else if (target.classList.contains("btn-import-mem")) {
-      const importField = document.getElementById("jsonImportField");
-      if (importField) {
-        importField.dataset.targetId = id;
-        importField.click();
-      }
-    }
-    else if (target.classList.contains("btn-delete-mem")) {
-      UIRenderer.showConfirm("Yakin ingin menghapus seluruh data Memory ini?", () => {
-        MemoryManager.deleteMemory(id);
-        UIRenderer.renderDatabaseModal();
-      });
-    }
-    else if (target.classList.contains("btn-download-template")) {
-      ImportExportService.downloadTemplate(id);
-    }
-
-    };
-  }
-
-  // Handler Event untuk Mengimpor JSON Dataset
-  const jsonImportField = document.getElementById("jsonImportField");
-  if (jsonImportField) {
-    jsonImportField.onchange = (e) => {
-    const file = e.target.files[0];
-    if (!file) {
-      e.target.value = "";
-      e.target.dataset.targetId = "";
-      return;
-    }
-
-    const targetMemoryId = parseInt(e.target.dataset.targetId, 10);
-    if (!targetMemoryId) {
-      e.target.value = "";
-      e.target.dataset.targetId = "";
-      return;
-    }
-
-    ImportExportService.processImportFile(file, targetMemoryId, (allocatedMemoryId) => {
-      UIRenderer.renderDatabaseModal();
-    });
-
-    // Reset input element berkas agar dapat mendeteksi file baru kembali di kesempatan berikutnya
-    e.target.value = "";
-    e.target.dataset.targetId = "";
-    };
-  }
-
-
-
-
-// --- AI CHAT FUNCTIONALITY V4 ---
-
-  // --- Utilities & Toast ---
-  const Toast = {
-    show: (msg) => {
-      let container = document.getElementById('toast-container');
-      if (!container) {
-        container = document.createElement('div');
-        container.id = 'toast-container';
-        document.body.appendChild(container);
-      }
-      const toast = document.createElement('div');
-      toast.className = 'toast';
-      toast.textContent = msg;
-      container.appendChild(toast);
-      setTimeout(() => toast.remove(), 2500);
-    }
-  };
-
-  // HTML Escape for fallback
-  function escapeHtml(unsafe) {
-    if(typeof unsafe !== 'string') return unsafe;
-    return unsafe.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
-  }
-
-  // Generate Unique ID
-  function generateId() {
-    return Math.random().toString(36).substr(2, 9) + Date.now().toString(36);
-  }
-
-  // --- Markdown & Code Block Configuration ---
-  // --- Markdown & Code Block Configuration ---
-  const languageNames = {
-      html: 'HTML', css: 'CSS', javascript: 'JavaScript', js: 'JavaScript',
-      typescript: 'TypeScript', ts: 'TypeScript', cpp: 'C++', c: 'C',
-      csharp: 'C#', cs: 'C#', java: 'Java', python: 'Python', py: 'Python',
-      ruby: 'Ruby', php: 'PHP', go: 'Go', rust: 'Rust', rs: 'Rust',
-      swift: 'Swift', kotlin: 'Kotlin', bash: 'Bash', sh: 'Bash',
-      shell: 'Bash', json: 'JSON', sql: 'SQL', yaml: 'YAML', yml: 'YAML',
-      xml: 'XML', markdown: 'Markdown', md: 'Markdown', plaintext: 'Plain Text'
-  };
-
-  if (window.marked && window.hljs) {
-    // Configure marked without syntax highlighting in the parse step to follow the strict pipeline
-    marked.setOptions({
-      breaks: true,
-      gfm: true
-    });
-
-    const renderer = new marked.Renderer();
-
-    // Override Link to always open in new tab securely
-    renderer.link = function(href, title, text) {
-        return `<a target="_blank" rel="noopener noreferrer" href="${href}" title="${title || ''}">${text}</a>`;
-    };
-
-    // Override Code Block
-    renderer.code = function(code, language, isEscaped) {
-      const validLang = !!(language && hljs.getLanguage(language));
-      const langId = validLang ? language : 'plaintext';
-      const friendlyName = languageNames[langId.toLowerCase()] || languageNames.plaintext;
-
-      const rawCode = encodeURIComponent(code);
-      // Syntax highlighting happens here inside the renderer for simplicity,
-      // but DOMPurify will sanitize the output.
-      const highlightedCode = validLang ? hljs.highlight(code, { language: langId }).value : escapeHtml(code);
-
-      return `
-        <div class="ai-code-block">
-          <div class="ai-code-header">
-            <span class="ai-code-lang">${friendlyName}</span>
-            <div class="ai-code-controls">
-              <button class="btn-code-control btn-toggle-wrap">▤ Wrap</button>
-              <button class="btn-code-control btn-toggle-code">▼ Collapse</button>
-              <button class="btn-code-control btn-copy-code" data-code="${rawCode}">⧉ Copy</button>
-            </div>
-          </div>
-          <pre><code class="hljs language-${langId}">${highlightedCode}</code></pre>
-        </div>
-      `;
-    };
-    marked.use({ renderer });
-  }
-
-  // --- Session Manager ---
-  function safeParseLocalStorage(key, fallback) {
-  try {
-    const raw = localStorage.getItem(key);
-    return raw ? JSON.parse(raw) : fallback;
-  } catch (e) {
-    console.error("Gagal parse localStorage key", key, e);
-    return fallback;
-  }
-}
-
-function normalizeChatSession(session, id) {
-  if (!session || typeof session !== "object") {
-    return null;
-  }
-
-  return {
-    id: session.id || id,
-    parentId: session.parentId || null,
-    branchId: session.branchId || 0,
-    title: typeof session.title === "string" ? session.title : "New Chat",
-    mode: session.mode || "normal",
-    createdAt: session.createdAt || Date.now(),
-    updatedAt: session.updatedAt || Date.now(),
-    messages: Array.isArray(session.messages)
-      ? session.messages
-          .filter(m => m && typeof m.content === "string")
-          .map(m => ({
-            role: m.role === "user" ? "user" : "assistant",
-            content: m.content,
-            timestamp: m.timestamp || Date.now()
-          }))
-      : [],
-    attachments: [],
-    modelUsed: session.modelUsed || "AI",
-    favorite: !!session.favorite,
-    pinned: !!session.pinned,
-    children: Array.isArray(session.children) ? session.children : []
-  };
-}
-
-class ChatSessionManager {
-  constructor() {
-    this.sessions = safeParseLocalStorage("we10_ai_sessions", {});
-
-    if (!this.sessions || typeof this.sessions !== "object") {
-      this.sessions = {};
-    }
-
-    // Normalisasi session yang rusak
-    for (const id of Object.keys(this.sessions)) {
-      const normalized = normalizeChatSession(this.sessions[id], id);
-
-      if (!normalized) {
-        delete this.sessions[id];
-      } else {
-        this.sessions[id] = normalized;
-      }
-    }
-
-    this.currentSessionId =
-      localStorage.getItem("we10_current_session") || null;
-
-    // Migrasi dari history lama jika ada
-    if (Object.keys(this.sessions).length === 0) {
-      const oldHistory = safeParseLocalStorage("we10_ai_chat_history", null);
-
-      if (Array.isArray(oldHistory) && oldHistory.length > 0) {
-        const newId = generateId();
-
-        this.sessions[newId] = normalizeChatSession({
-          id: newId,
-          title: "Imported Session",
-          messages: oldHistory
-        }, newId);
-
-        this.currentSessionId = newId;
-        this.save();
-      }
-    }
-
-    if (!this.currentSessionId || !this.sessions[this.currentSessionId]) {
-      this.createNewSession();
-    }
-  }
-
-    save() {
-      localStorage.setItem("we10_ai_sessions", JSON.stringify(this.sessions));
-      if (this.currentSessionId) {
-        localStorage.setItem("we10_current_session", this.currentSessionId);
-      }
-    }
-
-    createNewSessionObj(id, parentId = null, branchId = 0, title = "New Chat", messages = []) {
-      return {
-        id: id,
-        parentId: parentId,
-        branchId: branchId,
-        title: title,
-        mode: document.getElementById("aiChatMode") ? document.getElementById("aiChatMode").value : "normal",
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-        messages: messages,
-        attachments: [],
-        modelUsed: "MiniMax",
-        favorite: false,
-        pinned: false,
-        children: []
-      };
-    }
-
-    createNewSession() {
-      const id = generateId();
-      this.sessions[id] = this.createNewSessionObj(id);
-      this.currentSessionId = id;
-      this.save();
-      return id;
-    }
-
-    forkSession(messageIndex) {
-      const current = this.getCurrentSession();
-      if (!current) return;
-
-      const newId = generateId();
-      // Calculate new branch ID (count siblings)
-      let siblingsCount = 0;
-      for (const key in this.sessions) {
-        if (this.sessions[key].parentId === current.id) siblingsCount++;
-      }
-
-      const forkedMessages = JSON.parse(JSON.stringify(current.messages.slice(0, messageIndex + 1)));
-      const newSession = this.createNewSessionObj(newId, current.id, siblingsCount + 1, `${current.title} (Branch ${siblingsCount + 1})`, forkedMessages);
-
-      current.children.push(newId);
-      this.sessions[newId] = newSession;
-      this.currentSessionId = newId;
-
-      this.sessions[current.id] = current; // update parent's children
-      this.save();
-      return newId;
-    }
-
-    getCurrentSession() {
-      return this.sessions[this.currentSessionId];
-    }
-
-    updateCurrentSession(updates) {
-      if(this.currentSessionId && this.sessions[this.currentSessionId]) {
-         this.sessions[this.currentSessionId] = { ...this.sessions[this.currentSessionId], ...updates, updatedAt: Date.now() };
-         this.save();
-      }
-    }
-
-    addMessage(role, content) {
-       const session = this.getCurrentSession();
-       if(session) {
-          session.messages.push({ role, content, timestamp: Date.now() });
-
-          // Auto Title
-          if (session.messages.length === 2 && session.title === "New Chat") {
-             const userMsg = session.messages.find(m => m.role === 'user');
-             if (userMsg) {
-                 const words = userMsg.content.split(' ').slice(0, 4).join(' ');
-                 session.title = words + (userMsg.content.split(' ').length > 4 ? '...' : '');
-             }
-          }
-          this.updateCurrentSession(session);
-       }
-    }
-
-    deleteSession(id) {
-       if (this.sessions[id]) {
-           delete this.sessions[id];
-           if (this.currentSessionId === id) {
-               const remaining = Object.keys(this.sessions);
-               if (remaining.length > 0) this.currentSessionId = remaining[0];
-               else this.createNewSession();
-           }
-           this.save();
-       }
-    }
-
-    clearAll() {
-       this.sessions = {};
-       this.createNewSession();
-    }
-  }
-
-  const sessionManager = new ChatSessionManager();
-  let isGenerating = false;
-  let abortController = null;
-
-  // --- UI Elements ---
-  const aiChatWindow = document.getElementById("aiChatWindow");
-  const aiChatInput = document.getElementById("aiChatInput");
-  const btnSendAiChat = document.getElementById("btnSendAiChat");
-  const btnStopAiChat = document.getElementById("btnStopAiChat");
-  const chatSessionList = document.getElementById("chatSessionList");
-  const currentChatTitle = document.getElementById("currentChatTitle");
-  const aiChatMode = document.getElementById("aiChatMode");
-
-  // Attachments
-  const btnUploadAiChat = document.getElementById("btnUploadAiChat");
-  const aiChatUploadMenu = document.getElementById("aiChatUploadMenu");
-  const aiChatFile = document.getElementById("aiChatFile");
-  const aiChatAttachmentPreview = document.getElementById("aiChatAttachmentPreview");
-  let currentAttachment = null;
-
-  // --- Smart Scroll & Arrow Button ---
-  const scrollBtn = document.createElement("button");
-  scrollBtn.innerHTML = "⬇";
-  scrollBtn.className = "scroll-to-bottom-btn";
-  scrollBtn.title = "Scroll to bottom";
-  document.getElementById("aiMainChat").appendChild(scrollBtn);
-
-  let scrollTimeout;
-  const scrollThreshold = 150; // Toleransi jarak dari bawah (px)
-
-  aiChatWindow.addEventListener("scroll", () => {
-      // 1. Jika user sedang scrolling, hilangkan tombol langsung
-      scrollBtn.classList.remove("show");
-      clearTimeout(scrollTimeout);
-
-      // Cek apakah posisi scroll user sedang berada di paling bawah
-      const isNearBottom = aiChatWindow.scrollHeight - aiChatWindow.scrollTop - aiChatWindow.clientHeight < scrollThreshold;
-
-      // 2. Jika user TIDAK di bawah, jalankan timer 3 detik
-      if (!isNearBottom) {
-          scrollTimeout = setTimeout(() => {
-              scrollBtn.classList.add("show"); // Munculkan panah setelah 3 detik diam
-          }, 3000);
-      }
-  });
-
-  // Jika tombol panah diklik, scroll otomatis ke bawah
-  scrollBtn.addEventListener("click", () => {
-      aiChatWindow.scrollTo({ top: aiChatWindow.scrollHeight, behavior: "smooth" });
-      scrollBtn.classList.remove("show");
-  });
-
-  // Fungsi pintar: Hanya auto-scroll jika posisi user sedang di bawah
-  function smartScrollToBottom() {
-      const isNearBottom = aiChatWindow.scrollHeight - aiChatWindow.scrollTop - aiChatWindow.clientHeight < scrollThreshold;
-      if (isNearBottom) {
-          aiChatWindow.scrollTop = aiChatWindow.scrollHeight;
-      }
-  }
-
-
-  // --- Render Functions ---
-
-  function renderSidebar() {
-      if(!chatSessionList) return;
-      chatSessionList.innerHTML = '';
-
-      const searchQ = (document.getElementById("chatSearchInput")?.value || "").toLowerCase();
-
-      const sortedSessions = Object.values(sessionManager.sessions).sort((a, b) => {
-          if (a.pinned !== b.pinned) return b.pinned ? 1 : -1;
-          return b.updatedAt - a.updatedAt;
-      });
-
-      sortedSessions.forEach(session => {
-          if (searchQ) {
-              const inTitle = session.title.toLowerCase().includes(searchQ);
-              const inMsgs = session.messages.some(m => m.content.toLowerCase().includes(searchQ));
-              if (!inTitle && !inMsgs) return;
-          }
-
-          const div = document.createElement("div");
-          div.className = `chat-session-item ${session.id === sessionManager.currentSessionId ? 'active' : ''}`;
-          div.innerHTML = `
-             <div style="flex-grow: 1; overflow: hidden;" class="session-click-area">
-                <div class="chat-session-title">${escapeHtml(session.title)} ${session.pinned ? '📌' : ''} ${session.favorite ? '⭐' : ''}</div>
-                <div class="chat-session-meta">${new Date(session.updatedAt).toLocaleDateString()} • ${session.messages.length} msgs</div>
-             </div>
-             <div class="session-actions">
-                <button class="btn-ren" title="Rename">✏️</button>
-                <button class="btn-pin ${session.pinned ? 'pin-active' : ''}" title="Pin">📌</button>
-                <button class="btn-fav" style="${session.favorite ? 'color: gold;' : ''}" title="Favorite">★</button>
-                <button class="btn-del" title="Delete">🗑</button>
-             </div>
-          `;
-
-          div.querySelector('.session-click-area').addEventListener('click', () => {
-              if (isGenerating) return;
-              sessionManager.currentSessionId = session.id;
-              sessionManager.save();
-              renderSidebar();
-              renderChatWindow();
-          });
-
-          div.querySelector('.btn-ren').addEventListener('click', (e) => {
-              e.stopPropagation();
-              const newTitle = prompt("Enter new chat title:", session.title);
-              if (newTitle !== null && newTitle.trim() !== "") {
-                  sessionManager.sessions[session.id].title = newTitle.trim();
-                  sessionManager.save();
-                  renderSidebar();
-                  if(sessionManager.currentSessionId === session.id) renderChatWindow();
-              }
-          });
-          div.querySelector('.btn-pin').addEventListener('click', (e) => { e.stopPropagation(); sessionManager.sessions[session.id].pinned = !session.pinned; sessionManager.save(); renderSidebar(); });
-          div.querySelector('.btn-fav').addEventListener('click', (e) => { e.stopPropagation(); sessionManager.sessions[session.id].favorite = !session.favorite; sessionManager.save(); renderSidebar(); });
-          div.querySelector('.btn-del').addEventListener('click', (e) => {
-              e.stopPropagation();
-              if(confirm("Delete this chat session?")) {
-                  sessionManager.deleteSession(session.id);
-                  renderSidebar();
-                  renderChatWindow();
-              }
-          });
-
-          chatSessionList.appendChild(div);
-      });
-  }
-
-  function formatTime(ts) {
-      if(!ts) return "";
-      const d = new Date(ts);
-      return d.getHours().toString().padStart(2, '0') + ":" + d.getMinutes().toString().padStart(2, '0');
-  }
-
-  function renderChatWindow() {
-      if(!aiChatWindow) return;
-      aiChatWindow.innerHTML = '';
-      const session = sessionManager.getCurrentSession();
-      if (!session) return;
-
-      if(currentChatTitle) currentChatTitle.textContent = session.title;
-      if(aiChatMode && session.mode) aiChatMode.value = session.mode;
-
-      if (session.messages.length === 0) {
-          aiChatWindow.innerHTML = `<div style="color: #aaa; text-align: center; font-size: 0.7rem; margin-top: 20px;">[SYSTEM] AI Assistant Ready. Start typing to begin.</div>`;
-          return;
-      }
-
-      session.messages.forEach((msg, index) => {
-          const container = document.createElement("div");
-          container.className = `chat-bubble-container ${msg.role === 'user' ? 'user' : 'ai'}`;
-
-          let metaHtml = ``;
-          if (msg.role === 'assistant') {
-             metaHtml = `<div class="chat-bubble-meta">
-                           <span class="badge badge-model">${session.modelUsed || 'AI'}</span>
-                           <span>${formatTime(msg.timestamp)}</span>
-                         </div>`;
-          } else {
-             metaHtml = `<div class="chat-bubble-meta">
-                           <span>YOU</span>
-                           <span>${formatTime(msg.timestamp)}</span>
-                         </div>`;
-          }
-
-          let contentHtml = "";
-          if (msg.role === 'user') {
-              contentHtml = escapeHtml(msg.content).replace(/\n/g, '<br/>');
-          } else {
-              // Parse Markdown and Sanitize
-              if (window.marked && window.DOMPurify) {
-                  const rawHtml = marked.parse(msg.content);
-                  contentHtml = DOMPurify.sanitize(rawHtml, { ADD_ATTR: ['target'] });
-              } else {
-                  contentHtml = escapeHtml(msg.content).replace(/\n/g, '<br/>');
-              }
-          }
-
-          const bubble = document.createElement("div");
-          bubble.className = `chat-bubble ${msg.role === 'user' ? 'user' : 'ai'} markdown-body`;
-          bubble.innerHTML = contentHtml;
-
-          let actionsHtml = `<div class="bubble-actions">`;
-          actionsHtml += `<button class="btn-fork" data-idx="${index}">⑂ Fork Chat</button>`;
-          if (msg.role === 'user') actionsHtml += `<button class="btn-edit" data-idx="${index}">✎ Edit</button>`;
-          if (msg.role === 'assistant') {
-              actionsHtml += `<button class="btn-copy-msg">⧉ Copy Text</button>`;
-              actionsHtml += `<button class="btn-regen" data-idx="${index}">↻ Regenerate</button>`;
-          }
-          actionsHtml += `</div>`;
-
-          container.innerHTML = metaHtml;
-          container.appendChild(bubble);
-          container.insertAdjacentHTML('beforeend', actionsHtml);
-
-          // Attach events to actions
-          container.querySelector('.btn-fork').addEventListener('click', () => {
-              if (isGenerating) return;
-              const newId = sessionManager.forkSession(index);
-              Toast.show("Branch created!");
-              renderSidebar();
-              renderChatWindow();
-          });
-
-          if (msg.role === 'assistant') {
-              container.querySelector('.btn-copy-msg').addEventListener('click', () => {
-                  navigator.clipboard.writeText(msg.content).then(() => Toast.show("Copied!"));
-              });
-              container.querySelector('.btn-regen').addEventListener('click', () => {
-                  if (isGenerating) return;
-                  // Remove this message and all after it
-                  session.messages = session.messages.slice(0, index);
-                  sessionManager.updateCurrentSession(session);
-                  // Grab the last user message to put back in input for flow
-                  const lastUser = session.messages[session.messages.length - 1];
-                  if(lastUser) {
-                      aiChatInput.value = lastUser.content;
-                      session.messages.pop(); // remove user message so it can be re-sent
-                      sessionManager.updateCurrentSession(session);
-                      handleSendAiMessage(); // trigger resend automatically
-                  }
-              });
-          } else if (msg.role === 'user') {
-              container.querySelector('.btn-edit').addEventListener('click', () => {
-                  if (isGenerating) return;
-                  aiChatInput.value = msg.content;
-                  aiChatInput.focus();
-                  // Truncate history before this message so user can edit and branch from here
-                  session.messages = session.messages.slice(0, index);
-                  sessionManager.updateCurrentSession(session);
-                  renderSidebar();
-                  renderChatWindow();
-              });
-          }
-
-          aiChatWindow.appendChild(container);
-      });
-
-      aiChatWindow.scrollTop = aiChatWindow.scrollHeight;
-
-      updateContextBudget();
-      // Update View Branches button visibility
-      const btnViewBranches = document.getElementById("btnViewBranches");
-      if (btnViewBranches) {
-         const hasBranches = session.children && session.children.length > 0 || session.parentId !== null;
-         btnViewBranches.style.display = hasBranches ? "block" : "none";
-      }
-  }
-
-
-  // --- Prompt Injection Firewall ---
-
-
-
-  // --- Send Message & Streaming Simulation ---
-
-
-
-
-  async function handleSendAiMessage() {
-  if (isGenerating) return;
-
-  const text = aiChatInput.value.trim();
-  if (!text) return;
-
-  if (aiChatMode) {
-    sessionManager.updateCurrentSession({ mode: aiChatMode.value });
-  }
-
-  sessionManager.addMessage("user", text);
-
-  aiChatInput.value = "";
-  aiChatInput.style.height = "auto";
-
-  renderSidebar();
-  renderChatWindow();
-
-  isGenerating = true;
-  if (btnSendAiChat) btnSendAiChat.style.display = "none";
-  if (btnStopAiChat) btnStopAiChat.style.display = "block";
-
-  const session = sessionManager.getCurrentSession();
-
-  const container = document.createElement("div");
-  container.className = "chat-bubble-container ai";
-  container.innerHTML = `
-    <div class="chat-bubble-meta">
-      <span class="badge badge-model">Generating...</span>
-    </div>
-    <div class="chat-bubble ai markdown-body"><span class="blink-cursor"></span></div>
-  `;
-
-  aiChatWindow.appendChild(container);
-  aiChatWindow.scrollTop = aiChatWindow.scrollHeight;
-
-  const bubbleTarget = container.querySelector(".chat-bubble");
-  const modelBadge = container.querySelector(".badge-model");
-  if (modelBadge) modelBadge.textContent = "AI Model";
-
-  abortController = new AbortController();
-
-  let currentRaw = "";
-  let serverError = "";
-  let savedAssistant = false;
-
-  const renderIntermediate = () => {
-    const intermediateHtml =
-      window.marked && window.DOMPurify
-        ? DOMPurify.sanitize(marked.parse(currentRaw), { ADD_ATTR: ["target"] })
-        : escapeHtml(currentRaw).replace(/\n/g, "<br/>");
-
-    bubbleTarget.innerHTML = intermediateHtml + '<span class="blink-cursor"></span>';
-    smartScrollToBottom();
-  };
-
-  const processLine = line => {
-    if (!line || !line.startsWith("data: ")) return;
-
-    const dataStr = line.slice(6).trim();
-
-    if (dataStr === "[DONE]") return;
-
-    try {
-      const parsed = JSON.parse(dataStr);
-
-      if (parsed.error) {
-        serverError = parsed.error;
-        return;
-      }
-
-      if (parsed.content) {
-        currentRaw += parsed.content;
-        renderIntermediate();
-      }
     } catch (e) {
-      console.error("Error parsing stream chunk", e, dataStr);
+      predictOutput.innerHTML = `<div class="error-msg">Error: ${e.message}</div>`;
+      console.error(e);
     }
-  };
-
-  try {
-    const payloadMessages = session.messages.map(m => ({
-      role: m.role,
-      content: m.content
-    }));
-
-    const response = await fetch("/api/chat", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        messages: payloadMessages,
-        attachment: currentAttachment,
-        mode: session.mode
-      }),
-      signal: abortController.signal
-    });
-
-    if (!response.ok) {
-      let errorMessage = `Server returned ${response.status}`;
-
-      try {
-        const errorData = await response.json();
-        if (errorData?.error) errorMessage = errorData.error;
-      } catch (_) {}
-
-      throw new Error(errorMessage);
-    }
-
-    if (!response.body) {
-      throw new Error("ReadableStream not supported in this browser.");
-    }
-
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder("utf-8");
-    let buffer = "";
-
-    while (true) {
-      const { value, done } = await reader.read();
-      if (done) break;
-
-      buffer += decoder.decode(value, { stream: true });
-
-      const lines = buffer.split(/\r?\n/);
-      buffer = lines.pop();
-
-      for (const line of lines) {
-        processLine(line);
-      }
-    }
-
-    if (buffer && buffer.trim()) {
-      processLine(buffer);
-    }
-
-    let finalContent = currentRaw.trim();
-
-    if (!finalContent) {
-      finalContent = serverError
-        ? `[ERROR: ${serverError}]`
-        : "[AI tidak menghasilkan output. Cek backend: model API, API key, dan format SSE. Ini bukan jawaban valid.]";
-    } else if (serverError) {
-      finalContent += `\n\n[WARNING: ${serverError}]`;
-    }
-
-    const finalHtml =
-      window.marked && window.DOMPurify
-        ? DOMPurify.sanitize(marked.parse(finalContent), { ADD_ATTR: ["target"] })
-        : escapeHtml(finalContent).replace(/\n/g, "<br/>");
-
-    bubbleTarget.innerHTML = finalHtml;
-    smartScrollToBottom();
-
-    sessionManager.addMessage("assistant", finalContent);
-    savedAssistant = true;
-
-    if (currentAttachment) {
-      currentAttachment = null;
-      if (aiChatFile) aiChatFile.value = "";
-      if (aiChatAttachmentPreview) {
-        aiChatAttachmentPreview.style.display = "none";
-        aiChatAttachmentPreview.innerHTML = "";
-      }
-    }
-  } catch (err) {
-    console.error("AI chat error:", err);
-
-    let errorText;
-
-    if (err.name === "AbortError") {
-      errorText = currentRaw.trim()
-        ? currentRaw.trim() + "\n\n[Dihentikan oleh pengguna]"
-        : "[Dihentikan oleh pengguna]";
-    } else {
-      errorText = `[ERROR: ${err.message || "Stream terputus"}]`;
-    }
-
-    bubbleTarget.innerHTML = `<span style="color: #f55;">${escapeHtml(errorText)}</span>`;
-
-    if (!savedAssistant) {
-      sessionManager.addMessage("assistant", errorText);
-      savedAssistant = true;
-    }
-  } finally {
-    isGenerating = false;
-
-    if (btnSendAiChat) btnSendAiChat.style.display = "block";
-    if (btnStopAiChat) btnStopAiChat.style.display = "none";
-
-    aiChatInput.focus();
-
-    renderSidebar();
-    renderChatWindow();
-  }
-}
-
-  // --- Event Listeners ---
-
-  // --- Keyboard Shortcuts (Accessibility+) ---
-  document.addEventListener('keydown', (e) => {
-      // Esc: Stop Generating
-      if (e.key === 'Escape' && isGenerating) {
-          if (btnStopAiChat) btnStopAiChat.click();
-      }
-
-      // Ctrl+K or Cmd+K: Focus Search
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
-          e.preventDefault();
-          const searchInput = document.getElementById("chatSearchInput");
-          if (searchInput) searchInput.focus();
-      }
-
-      // Ctrl+Shift+C or Cmd+Shift+C: Copy latest code block
-      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'c') {
-          e.preventDefault();
-          const codeBlocks = aiChatWindow.querySelectorAll('.btn-copy-code');
-          if (codeBlocks.length > 0) {
-              const lastCodeBlockBtn = codeBlocks[codeBlocks.length - 1];
-              lastCodeBlockBtn.click();
-          }
-      }
-  });
-
-  // Ctrl+Enter for textarea handled specifically
-  if (aiChatInput) {
-      aiChatInput.addEventListener('keydown', (e) => {
-          if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
-              e.preventDefault();
-              handleSendAiMessage();
-          }
-      });
-  }
+  }, 50);
+});
 
 
-  if (btnSendAiChat) btnSendAiChat.addEventListener("click", handleSendAiMessage);
-
-  if (btnStopAiChat) {
-      btnStopAiChat.addEventListener("click", () => {
-          if (isGenerating) {
-              isGenerating = false; // Stops simulated streaming
-              if (abortController) abortController.abort(); // Stops network request
-          }
-      });
-  }
-
-
-  // --- FITUR AUTO-FILE UNTUK TEKS PANJANG ---
-  if (aiChatInput) {
-    aiChatInput.addEventListener('paste', (e) => {
-      const pastedText = (e.clipboardData || window.clipboardData).getData('text');
-
-      // Jika teks yang di-paste lebih dari 500 karakter
-      if (pastedText.length >= 500) {
-        e.preventDefault(); // Hentikan teks masuk ke kolom input
-
-        // Encode teks ke base64 agar aman dikirim ke backend AI
-        const base64Text = window.btoa(unescape(encodeURIComponent(pastedText)));
-
-        // Buat nama file otomatis dari 15 huruf pertama
-        let snippetName = pastedText.trim().substring(0, 15).replace(/\n/g, ' ') + "...txt";
-        if (pastedText.trim().startsWith("<!DOCTYPE html>")) snippetName = "index.html";
-
-        // Masukkan sebagai attachment
-        currentAttachment = {
-          type: 'document',
-          base64: base64Text,
-          mimeType: 'text/plain',
-          filename: snippetName
-        };
-
-        // Tampilkan UI Preview Attachment
-        if (aiChatAttachmentPreview) {
-          aiChatAttachmentPreview.innerHTML = `<span>📄 ${escapeHtml(snippetName)} (Snippet)</span> <button id="btnRemoveAttachment" style="background: none; border: none; color: #f55; cursor: pointer; font-weight: bold;">X</button>`;
-          aiChatAttachmentPreview.style.display = "flex";
-
-          document.getElementById("btnRemoveAttachment").addEventListener("click", () => {
-            currentAttachment = null;
-            if (aiChatFile) aiChatFile.value = "";
-            aiChatAttachmentPreview.style.display = "none";
-            aiChatAttachmentPreview.innerHTML = "";
-          });
-        }
-        Toast.show("Teks panjang otomatis dijadikan file!");
-      }
-    });
-  }
-
-  if (aiChatInput) {
-    aiChatInput.addEventListener("input", function() {
-      this.style.height = "auto";
-      this.style.height = Math.min(this.scrollHeight, 150) + "px";
-    });
-
-    aiChatInput.addEventListener("keydown", (e) => {
-      if (e.key === "Enter" && !e.shiftKey) {
-        // Deteksi jika user menggunakan HP (layar kecil atau UserAgent Mobile)
-        if (window.innerWidth <= 768 || /Mobi|Android/i.test(navigator.userAgent)) {
-            return; // Biarkan default (tombol Enter akan membuat baris baru ke bawah)
-        }
-        // Jika di PC/Desktop, Enter = Kirim Pesan
-        e.preventDefault();
-        handleSendAiMessage();
-      }
-  });
-  }
 
   // Attachments logic
 
