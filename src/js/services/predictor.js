@@ -1,398 +1,427 @@
 import { teamsDB } from "../data/teams.js";
 import { StateManager } from "../state/appState.js";
-import { normalizeCountry } from "./matchingEngine.js";
-import { Security } from "../utils/security.js";
+import { normalizeCountry } from "./similarity.js";
 import { teamRatings } from "../data/teamRatings.js";
 
-const MAX_SOURCES = 5;
-const MAX_GOALS = 8;
-const POISSON_CAP = 12;
+const MAX_XG = 6.5;
+const POISSON_CAP = 10;
+const PRIOR_MATCHES = 10;
+const HOME_ADV = 1.18;
+const AWAY_FACTOR = 0.92;
+const RHO = 0.05;
+
+const FACT = [1];
+for (let i = 1; i <= POISSON_CAP; i++) {
+  FACT[i] = FACT[i - 1] * i;
+}
+
+function clampNumber(num, min, max) {
+  return Math.max(min, Math.min(num, max));
+}
 
 function parseScore(scoreStr) {
-  if (!scoreStr) return null;
-  const parts = scoreStr.split(":");
-  if (parts.length === 2) {
-    const home = parseInt(parts[0].trim(), 10);
-    const away = parseInt(parts[1].trim(), 10);
-    if (!isNaN(home) && !isNaN(away)) {
-      return { home, away };
-    }
-  }
-  return null;
-}
+  if (typeof scoreStr !== "string") return null;
 
-function normalizeScore(scoreStr) {
-  const p = parseScore(scoreStr);
-  if (!p) return "";
-  return `${p.home}:${p.away}`;
-}
+  const s = scoreStr
+    .trim()
+    .replace(/[–—;-]/g, ":");
 
-function reverseScore(scoreStr) {
-  const p = parseScore(scoreStr);
-  if (!p) return "";
-  return `${p.away}:${p.home}`;
-}
+  const parts = s.split(":");
+  if (parts.length !== 2) return null;
 
-function scoreDistance(score1, score2) {
-  const p1 = parseScore(score1);
-  const p2 = parseScore(score2);
-  if (!p1 || !p2) return 999;
-  return Math.abs(p1.home - p2.home) + Math.abs(p1.away - p2.away);
-}
+  const home = parseInt(parts[0], 10);
+  const away = parseInt(parts[1], 10);
 
-function clampNumber(num, a, b) {
-  return Math.max(Math.min(num, Math.max(a, b)), Math.min(a, b));
-}
+  if (isNaN(home) || isNaN(away)) return null;
 
-// ----------------------------------------------------
-// POISSON DISTRIBUTION
-// ----------------------------------------------------
-function factorial(n) {
-  if (n === 0 || n === 1) return 1;
-  let result = 1;
-  for (let i = 2; i <= n; i++) {
-    result *= i;
-  }
-  return result;
+  return { home, away };
 }
 
 function poisson(k, lambda) {
-  return (Math.pow(lambda, k) * Math.exp(-lambda)) / factorial(k);
+  if (lambda <= 0) return k === 0 ? 1 : 0;
+  return Math.exp(-lambda) * Math.pow(lambda, k) / FACT[k];
 }
 
-function generateScoreDistribution(xgHome, xgAway) {
+function lowScoreCorrection(i, j, l, m) {
+  if (i === 0 && j === 0) {
+    return Math.max(0.25, 1 - l * m * RHO);
+  }
+
+  if (i === 0 && j === 1) {
+    return Math.max(0.25, 1 + l * RHO);
+  }
+
+  if (i === 1 && j === 0) {
+    return Math.max(0.25, 1 + m * RHO);
+  }
+
+  if (i === 1 && j === 1) {
+    return Math.max(0.25, 1 - RHO);
+  }
+
+  return 1;
+}
+
+function ratingNorm(v) {
+  return clampNumber((v - 60) / 35, 0, 1);
+}
+
+function getRatingPrior(code) {
+  const r = teamRatings[code];
+
+  if (!r) {
+    return {
+      att: 1,
+      def: 1,
+      mid: 0.5,
+      has: false
+    };
+  }
+
+  return {
+    att: 0.75 + ratingNorm(r.attack) * 0.65,
+    def: 1.35 - ratingNorm(r.defense) * 0.65,
+    mid: ratingNorm(r.midfield),
+    has: true
+  };
+}
+
+function getMatchWeight(game) {
+  const ts = Date.parse(game?.lastUpdate || "");
+
+  if (!isNaN(ts)) {
+    const days = Math.max(0, (Date.now() - ts) / 86400000);
+    return Math.max(0.25, Math.pow(0.5, days / 180));
+  }
+
+  return 1;
+}
+
+function buildStats(excludeMemoryId = null, excludeGameNumber = null) {
+  const stats = {};
+  let weightedGoals = 0;
+  let weightedAppearances = 0;
+
+  const memories = StateManager.db?.memories || {};
+
+  for (const [memoryId, memory] of Object.entries(memories)) {
+    if (!memory || !Array.isArray(memory.games)) continue;
+
+    for (const game of memory.games) {
+      if (
+        excludeMemoryId != null &&
+        excludeGameNumber != null &&
+        String(memoryId) === String(excludeMemoryId) &&
+        game?.gameNumber === excludeGameNumber
+      ) {
+        continue;
+      }
+
+      if (!game || !Array.isArray(game.matches)) continue;
+
+      const w = getMatchWeight(game);
+
+      for (const m of game.matches) {
+        const home = normalizeCountry(m?.home || "");
+        const away = normalizeCountry(m?.away || "");
+        const score = parseScore(m?.score || "");
+
+        if (!home || !away || !score) continue;
+
+        if (!stats[home]) {
+          stats[home] = { weight: 0, gf: 0, ga: 0, raw: 0 };
+        }
+
+        if (!stats[away]) {
+          stats[away] = { weight: 0, gf: 0, ga: 0, raw: 0 };
+        }
+
+        stats[home].weight += w;
+        stats[home].gf += score.home * w;
+        stats[home].ga += score.away * w;
+        stats[home].raw += 1;
+
+        stats[away].weight += w;
+        stats[away].gf += score.away * w;
+        stats[away].ga += score.home * w;
+        stats[away].raw += 1;
+
+        weightedAppearances += 2 * w;
+        weightedGoals += (score.home + score.away) * w;
+      }
+    }
+  }
+
+  const priorWeight = 30;
+  const priorAvg = 1.42;
+
+  const globalAttack =
+    weightedAppearances > 0
+      ? (priorWeight * priorAvg + weightedGoals) /
+        (priorWeight + weightedAppearances)
+      : priorAvg;
+
+  return { stats, globalAttack };
+}
+
+function getTeamStrength(code, stats, globalAttack) {
+  const prior = getRatingPrior(code);
+  const s = stats[code];
+  const w = s?.weight || 0;
+
+  let attObs = 1;
+  let defObs = 1;
+
+  if (w > 0 && globalAttack > 0) {
+    attObs = (s.gf / w) / globalAttack;
+    defObs = (s.ga / w) / globalAttack;
+  }
+
+  const att = clampNumber(
+    (w * attObs + PRIOR_MATCHES * prior.att) / (w + PRIOR_MATCHES),
+    0.35,
+    3.0
+  );
+
+  const def = clampNumber(
+    (w * defObs + PRIOR_MATCHES * prior.def) / (w + PRIOR_MATCHES),
+    0.35,
+    3.0
+  );
+
+  return {
+    att,
+    def,
+    mid: prior.mid,
+    hasRating: prior.has,
+    weight: w,
+    raw: s?.raw || 0
+  };
+}
+
+function getH2H(homeCode, awayCode, excludeMemoryId, excludeGameNumber) {
+  let count = 0;
+  let sumW = 0;
+  let hg = 0;
+  let ag = 0;
+
+  const memories = StateManager.db?.memories || {};
+
+  for (const [memoryId, memory] of Object.entries(memories)) {
+    if (!memory || !Array.isArray(memory.games)) continue;
+
+    for (const game of memory.games) {
+      if (
+        excludeMemoryId != null &&
+        excludeGameNumber != null &&
+        String(memoryId) === String(excludeMemoryId) &&
+        game?.gameNumber === excludeGameNumber
+      ) {
+        continue;
+      }
+
+      if (!game || !Array.isArray(game.matches)) continue;
+
+      const w = getMatchWeight(game);
+
+      for (const m of game.matches) {
+        const dh = normalizeCountry(m?.home || "");
+        const da = normalizeCountry(m?.away || "");
+        const p = parseScore(m?.score || "");
+
+        if (!p) continue;
+
+        if (dh === homeCode && da === awayCode) {
+          count += 1;
+          sumW += w;
+          hg += p.home * w;
+          ag += p.away * w;
+        } else if (dh === awayCode && da === homeCode) {
+          count += 1;
+          sumW += w;
+          hg += p.away * w;
+          ag += p.home * w;
+        }
+      }
+    }
+  }
+
+  if (!count || sumW <= 0) return null;
+
+  return {
+    count,
+    avgHome: hg / sumW,
+    avgAway: ag / sumW
+  };
+}
+
+function generateDistribution(lh, la) {
+  const matrix = [];
+  let total = 0;
+
+  let top = {
+    home: 0,
+    away: 0,
+    prob: -1
+  };
+
+  for (let i = 0; i <= POISSON_CAP; i++) {
+    matrix[i] = [];
+
+    for (let j = 0; j <= POISSON_CAP; j++) {
+      let p =
+        poisson(i, lh) *
+        poisson(j, la) *
+        lowScoreCorrection(i, j, lh, la);
+
+      if (!isFinite(p) || p < 0) p = 0;
+
+      matrix[i][j] = p;
+      total += p;
+
+      if (p > top.prob) {
+        top = { home: i, away: j, prob: p };
+      }
+    }
+  }
+
+  if (total <= 0) {
+    return {
+      distribution: [{ home: 1, away: 1, prob: 1 }],
+      probs: { home: 0.1, draw: 0.8, away: 0.1 },
+      top: { home: 1, away: 1, prob: 1 },
+      over25: 0.2,
+      btts: 0.4
+    };
+  }
+
   const scores = [];
-  let probHomeWin = 0;
-  let probDraw = 0;
-  let probAwayWin = 0;
+  let home = 0;
+  let draw = 0;
+  let away = 0;
+  let over25 = 0;
+  let btts = 0;
 
   for (let i = 0; i <= POISSON_CAP; i++) {
     for (let j = 0; j <= POISSON_CAP; j++) {
-      const prob = poisson(i, xgHome) * poisson(j, xgAway);
-      if (prob > 0.0001) {
-        scores.push({ home: i, away: j, prob });
-        if (i > j) probHomeWin += prob;
-        else if (i < j) probAwayWin += prob;
-        else probDraw += prob;
-      }
+      const p = matrix[i][j] / total;
+
+      scores.push({ home: i, away: j, prob: p });
+
+      if (i > j) home += p;
+      else if (i < j) away += p;
+      else draw += p;
+
+      if (i + j > 2.5) over25 += p;
+      if (i > 0 && j > 0) btts += p;
     }
   }
 
   scores.sort((a, b) => b.prob - a.prob);
 
-  // Normalize
-  const total = probHomeWin + probDraw + probAwayWin;
-  probHomeWin /= total;
-  probDraw /= total;
-  probAwayWin /= total;
+  top.prob = top.prob / total;
 
   return {
     distribution: scores,
-    probs: {
-      home: probHomeWin,
-      draw: probDraw,
-      away: probAwayWin
-    }
+    probs: { home, draw, away },
+    top,
+    over25,
+    btts
   };
 }
 
-// ----------------------------------------------------
-// TEAM STATS DARI DATASET MEMORY (EXCLUDING CURRENT GAME)
-// ----------------------------------------------------
-function buildTeamStats(excludeMemoryId = null, excludeGameNumber = null) {
-  const stats = {};
-  const memories = StateManager.db?.memories || {};
+function estimateConfidence(h, a, h2h) {
+  let c = 18;
 
-  for (const [memoryId, memory] of Object.entries(memories)) {
-    if (!memory || !Array.isArray(memory.games)) continue;
-
-    for (const game of memory.games) {
-      // Exclude game yang sedang diedit/dijadikan query
-      if (
-        excludeMemoryId != null &&
-        excludeGameNumber != null &&
-        String(memoryId) === String(excludeMemoryId) &&
-        game.gameNumber === excludeGameNumber
-      ) {
-        continue;
-      }
-
-      if (!game || !Array.isArray(game.matches)) continue;
-
-      game.matches.forEach(m => {
-        const homeCode = normalizeCountry(m?.home || "");
-        const awayCode = normalizeCountry(m?.away || "");
-        const parsed = parseScore(m?.score || "");
-
-        if (homeCode && awayCode && parsed) {
-          if (!stats[homeCode]) stats[homeCode] = { gf: 0, ga: 0, matches: 0 };
-          if (!stats[awayCode]) stats[awayCode] = { gf: 0, ga: 0, matches: 0 };
-
-          stats[homeCode].gf += parsed.home;
-          stats[homeCode].ga += parsed.away;
-          stats[homeCode].matches += 1;
-
-          stats[awayCode].gf += parsed.away;
-          stats[awayCode].ga += parsed.home;
-          stats[awayCode].matches += 1;
-        }
-      });
-    }
+  if (h.hasRating && a.hasRating) {
+    c += 20;
+  } else if (h.hasRating || a.hasRating) {
+    c += 10;
   }
-  return stats;
+
+  const totalWeight = h.weight + a.weight;
+  c += 34 * (1 - Math.exp(-totalWeight / 18));
+
+  if (h2h) {
+    c += 18 * (1 - Math.exp(-h2h.count / 4));
+  }
+
+  return Math.round(clampNumber(c, 5, 93));
 }
 
-function getGlobalAttack(stats) {
-  let totalGoals = 0;
-  let totalMatches = 0;
-  for (const code in stats) {
-    totalGoals += stats[code].gf;
-    totalMatches += stats[code].matches;
-  }
-  if (totalMatches === 0) return 1.5;
-  return totalGoals / totalMatches;
-}
-
-// ----------------------------------------------------
-// HYBRID PREDICTOR: RATING -> HISTORY -> ENSEMBLE -> CONTEXT -> POISSON
-// ----------------------------------------------------
-
-// 1. WE10 Rating Base
-function getRatingBase(code) {
-  const rt = teamRatings[code];
-  if (!rt) return null;
-
-  // Normalize rating WE10 (biasanya range 65-95) ke 0-1 scale.
-  const nAtk = clampNumber((rt.attack - 65) / 30, 0.1, 1.5);
-  const nDef = clampNumber((rt.defense - 65) / 30, 0.1, 1.5);
-  const nMid = clampNumber((rt.midfield - 65) / 30, 0.1, 1.5);
-  // Tambahan untuk home advantage di base rating (opsional, ditaruh di calculate nanti)
-
-  return { nAtk, nDef, nMid };
-}
-
-function estimateFromRatings(homeCode, awayCode) {
-  const h = getRatingBase(homeCode);
-  const a = getRatingBase(awayCode);
-
-  if (!h || !a) return null; // Jika negara tidak ada di rating (cold-start terburuk)
-
-  // Base xG dari Rating WE10
-  // Home = Home Attack * Away Defense * Home Advantage * Midfield Control
-  const midfieldRatio = h.nMid / (h.nMid + a.nMid);
-  const homeAdvantage = 1.15;
-
-  const baseHome = 1.3; // Base WE10 average goals per team per match
-
-  const xgHome = baseHome * h.nAtk * (1.5 - a.nDef) * homeAdvantage * (midfieldRatio * 2);
-  const xgAway = baseHome * a.nAtk * (1.5 - h.nDef) * (1/homeAdvantage) * ((1 - midfieldRatio) * 2);
-
-  return {
-    xgHome,
-    xgAway,
-    confidence: 30 // Rating only punya low confidence karena statis
-  };
-}
-
-// 2. Historical Form
-function estimateFromHistory(homeCode, awayCode, stats, globalAttack) {
-  const hStats = stats[homeCode] || { gf: 0, ga: 0, matches: 0 };
-  const aStats = stats[awayCode] || { gf: 0, ga: 0, matches: 0 };
-
-  if (hStats.matches === 0 && aStats.matches === 0) return null;
-
-  // Attack Strength = (Tim Avg GF) / Global Avg
-  let hAttStr = 1.0;
-  if (hStats.matches > 0) {
-    hAttStr = (hStats.gf / hStats.matches) / globalAttack;
-  }
-
-  let aDefStr = 1.0;
-  if (aStats.matches > 0) {
-    aDefStr = (aStats.ga / aStats.matches) / globalAttack;
-  }
-
-  let aAttStr = 1.0;
-  if (aStats.matches > 0) {
-    aAttStr = (aStats.gf / aStats.matches) / globalAttack;
-  }
-
-  let hDefStr = 1.0;
-  if (hStats.matches > 0) {
-    hDefStr = (hStats.ga / hStats.matches) / globalAttack;
-  }
-
-  const xgHome = hAttStr * aDefStr * globalAttack * 1.15; // + Home advantage
-  const xgAway = aAttStr * hDefStr * globalAttack * 0.85;
-
-  const totalMatches = hStats.matches + aStats.matches;
-  const confidence = clampNumber(30 + Math.min(totalMatches, 30), 30, 60);
-
-  return {
-    xgHome,
-    xgAway,
-    confidence
-  };
-}
-
-// 3. H2H Ensemble
-function estimateFromH2H(homeCode, awayCode, excludeMemoryId, excludeGameNumber) {
-  const h2hMatches = [];
-  const memories = StateManager.db?.memories || {};
-
-  for (const [memoryId, memory] of Object.entries(memories)) {
-    if (!memory || !Array.isArray(memory.games)) continue;
-
-    for (const game of memory.games) {
-      if (
-        excludeMemoryId != null &&
-        excludeGameNumber != null &&
-        String(memoryId) === String(excludeMemoryId) &&
-        game.gameNumber === excludeGameNumber
-      ) {
-        continue;
-      }
-
-      if (!game || !Array.isArray(game.matches)) continue;
-
-      game.matches.forEach(m => {
-        const dHome = normalizeCountry(m?.home || "");
-        const dAway = normalizeCountry(m?.away || "");
-        const parsed = parseScore(m?.score || "");
-
-        if (parsed) {
-          if (dHome === homeCode && dAway === awayCode) {
-            h2hMatches.push({ home: parsed.home, away: parsed.away, exact: true });
-          } else if (dHome === awayCode && dAway === homeCode) {
-            h2hMatches.push({ home: parsed.away, away: parsed.home, exact: false });
-          }
-        }
-      });
-    }
-  }
-
-  if (h2hMatches.length === 0) return null;
-
-  let totalHomeGoals = 0;
-  let totalAwayGoals = 0;
-
-  h2hMatches.forEach(m => {
-    totalHomeGoals += m.home;
-    totalAwayGoals += m.away;
-  });
-
-  const xgHome = totalHomeGoals / h2hMatches.length;
-  const xgAway = totalAwayGoals / h2hMatches.length;
-
-  const confidence = clampNumber(50 + (h2hMatches.length * 5), 50, 95);
-
-  return {
-    xgHome,
-    xgAway,
-    confidence,
-    matchCount: h2hMatches.length
-  };
-}
-
-// 4. Similarity Context (simplified for now, bisa dikembangkan lagi)
-// Misalnya kalau di game yg sama (context) ada tim yg mirip (bisa pakai data similarity)
-
-// Main Hybrid Predictor
 function hybridPredict(homeCode, awayCode, excludeMemoryId = null, excludeGameNumber = null) {
-  const stats = buildTeamStats(excludeMemoryId, excludeGameNumber);
-  const globalAttack = getGlobalAttack(stats);
+  const { stats, globalAttack } = buildStats(excludeMemoryId, excludeGameNumber);
 
-  const ratingEst = estimateFromRatings(homeCode, awayCode);
-  const histEst = estimateFromHistory(homeCode, awayCode, stats, globalAttack);
-  const h2hEst = estimateFromH2H(homeCode, awayCode, excludeMemoryId, excludeGameNumber);
+  const h = getTeamStrength(homeCode, stats, globalAttack);
+  const a = getTeamStrength(awayCode, stats, globalAttack);
 
-  let finalXgHome = 1.0;
-  let finalXgAway = 1.0;
-  let finalConfidence = 0;
-  let modelStr = [];
+  const midDiff = h.mid - a.mid;
 
-  // Weights (dinamis tergantung availability data)
-  let wRating = 0;
-  let wHist = 0;
-  let wH2H = 0;
+  let xgHome =
+    globalAttack *
+    h.att *
+    a.def *
+    HOME_ADV *
+    (1 + 0.12 * midDiff);
 
-  if (h2hEst) {
-    wH2H = clampNumber(0.4 + (h2hEst.matchCount * 0.05), 0.4, 0.7);
-    if (histEst) wHist = (1 - wH2H) * 0.7;
-    if (ratingEst) wRating = (1 - wH2H) * (histEst ? 0.3 : 1.0);
-    else if (!histEst) wH2H = 1.0; // Hanya punya H2H (sangat jarang)
-  } else {
-    // Tidak ada H2H
-    if (histEst && ratingEst) {
-      const histMatches = (stats[homeCode]?.matches || 0) + (stats[awayCode]?.matches || 0);
-      wHist = clampNumber(histMatches / 60, 0.2, 0.7); // Max 70% for history
-      wRating = 1 - wHist;
-    } else if (histEst) {
-      wHist = 1.0;
-    } else if (ratingEst) {
-      wRating = 1.0;
-    }
+  let xgAway =
+    globalAttack *
+    a.att *
+    h.def *
+    AWAY_FACTOR *
+    (1 - 0.12 * midDiff);
+
+  const modelParts = ["Rating", "Form"];
+
+  const h2h = getH2H(homeCode, awayCode, excludeMemoryId, excludeGameNumber);
+
+  if (h2h) {
+    const influence = Math.min(0.28, 0.07 * Math.sqrt(h2h.count));
+
+    xgHome = xgHome * (1 - influence) + h2h.avgHome * influence;
+    xgAway = xgAway * (1 - influence) + h2h.avgAway * influence;
+
+    modelParts.push(`H2H ${Math.round(influence * 100)}%`);
   }
 
-  // Hitung final xG
-  let totalWeight = wRating + wHist + wH2H;
-  if (totalWeight === 0) {
-    // Fallback ekstrim (tidak ada di rating, tidak ada histori)
-    finalXgHome = 1.5;
-    finalXgAway = 1.5;
-    finalConfidence = 10;
-    modelStr.push("Pure Random Fallback");
-  } else {
-    finalXgHome =
-      ((ratingEst?.xgHome || 0) * wRating) +
-      ((histEst?.xgHome || 0) * wHist) +
-      ((h2hEst?.xgHome || 0) * wH2H);
+  xgHome = clampNumber(xgHome, 0.1, MAX_XG);
+  xgAway = clampNumber(xgAway, 0.1, MAX_XG);
 
-    finalXgAway =
-      ((ratingEst?.xgAway || 0) * wRating) +
-      ((histEst?.xgAway || 0) * wHist) +
-      ((h2hEst?.xgAway || 0) * wH2H);
-
-    finalConfidence =
-      ((ratingEst?.confidence || 0) * wRating) +
-      ((histEst?.confidence || 0) * wHist) +
-      ((h2hEst?.confidence || 0) * wH2H);
-
-    if (wRating > 0) modelStr.push(`Rating (${Math.round(wRating*100)}%)`);
-    if (wHist > 0) modelStr.push(`Histori (${Math.round(wHist*100)}%)`);
-    if (wH2H > 0) modelStr.push(`H2H (${Math.round(wH2H*100)}%)`);
-  }
-
-  // Boundary limits
-  finalXgHome = clampNumber(finalXgHome, 0.1, MAX_GOALS);
-  finalXgAway = clampNumber(finalXgAway, 0.1, MAX_GOALS);
-
-  const dist = generateScoreDistribution(finalXgHome, finalXgAway);
-  const topScore = dist.distribution[0];
+  const dist = generateDistribution(xgHome, xgAway);
+  const confidence = estimateConfidence(h, a, h2h);
 
   let winner = "DRAW";
-  if (dist.probs.home > dist.probs.away + 0.1) winner = teamsDB[homeCode]?.name || homeCode; // Win threshold
-  else if (dist.probs.away > dist.probs.home + 0.1) winner = teamsDB[awayCode]?.name || awayCode;
+
+  if (dist.probs.home > dist.probs.away + 0.08) {
+    winner = teamsDB[homeCode]?.name || homeCode;
+  } else if (dist.probs.away > dist.probs.home + 0.08) {
+    winner = teamsDB[awayCode]?.name || awayCode;
+  }
 
   return {
-    homeGoals: topScore.home,
-    awayGoals: topScore.away,
+    homeGoals: dist.top.home,
+    awayGoals: dist.top.away,
     winner,
-    confidence: Math.round(finalConfidence),
-    xgHome: finalXgHome.toFixed(2),
-    xgAway: finalXgAway.toFixed(2),
-    xgHomeNum: finalXgHome,
-    xgAwayNum: finalXgAway,
-    model: "Hybrid: " + modelStr.join(" + "),
-    distribution: dist.distribution.slice(0, 5), // Top 5 scores
+    confidence,
+    xgHome: xgHome.toFixed(2),
+    xgAway: xgAway.toFixed(2),
+    xgHomeNum: xgHome,
+    xgAwayNum: xgAway,
+    model: `Bayesian Poisson v2 (${modelParts.join(" + ")})`,
+    distribution: dist.distribution.slice(0, 6),
     probs: dist.probs,
+    over25: dist.over25,
+    btts: dist.btts,
     evidence: {
-      hasH2H: !!h2hEst,
-      h2hMatches: h2hEst?.matchCount || 0,
-      hasRating: !!ratingEst,
-      hasHistory: !!histEst,
-      homeMatches: stats[homeCode]?.matches || 0,
-      awayMatches: stats[awayCode]?.matches || 0
+      hasRating: h.hasRating && a.hasRating,
+      hasHistory: h.raw > 0 || a.raw > 0,
+      homeMatches: h.raw,
+      awayMatches: a.raw,
+      hasH2H: !!h2h,
+      h2hMatches: h2h?.count || 0,
+      globalAttack: globalAttack.toFixed(2),
+      homeWeight: Number(h.weight.toFixed(2)),
+      awayWeight: Number(a.weight.toFixed(2))
     }
   };
 }
@@ -451,8 +480,12 @@ export const PredictionService = {
       row.homeName = teamsDB[homeCode].name;
       row.awayName = teamsDB[awayCode].name;
 
-      // Gunakan Hybrid Predictor
-      const prediction = hybridPredict(homeCode, awayCode, prefer.memoryId, prefer.gameNumber);
+      const prediction = hybridPredict(
+        homeCode,
+        awayCode,
+        prefer.memoryId ?? null,
+        prefer.gameNumber ?? null
+      );
 
       row.prediction = prediction;
       results.push(row);

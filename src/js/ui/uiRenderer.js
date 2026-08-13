@@ -67,31 +67,121 @@ export const UIRenderer = {
       cleanup();
     };
   },
-  renderMatchGrid() {
-    const isEditor = StateManager.activeMemoryId !== null;
 
-    // Safety Guard: Pastikan memori aktif dan game terdefinisi
-    const activeMem = isEditor ? StateManager.db.memories[StateManager.activeMemoryId] : null;
-    const dataSource = (isEditor && activeMem && activeMem.games && activeMem.games[StateManager.activeGameIndex])
-      ? activeMem.games[StateManager.activeGameIndex]
-      : StateManager.homeQuery;
+  renderMatchGrid() {
+    const getActiveSource = () => {
+      const isEditor = StateManager.activeMemoryId !== null;
+      const activeMem = isEditor
+        ? StateManager.db.memories[StateManager.activeMemoryId]
+        : null;
+
+      const source =
+        isEditor && activeMem?.games?.[StateManager.activeGameIndex]
+          ? activeMem.games[StateManager.activeGameIndex]
+          : StateManager.homeQuery;
+
+      return { isEditor, activeMem, source };
+    };
+
+    const cleanScoreInput = (v) =>
+      String(v || "")
+        .trim()
+        .replace(/[–—;-]/g, ":")
+        .replace(/[^0-9:]/g, "");
+
+    const cleanGoalInput = (v) =>
+      String(v || "")
+        .trim()
+        .replace(/[^0-9]/g, "");
+
+    const updateP1 = (value) => {
+      const clean = Security.sanitizeInput(value);
+      const { isEditor, activeMem } = getActiveSource();
+
+      if (isEditor && activeMem?.games?.[StateManager.activeGameIndex]) {
+        MemoryManager.updateGameField(
+          StateManager.activeMemoryId,
+          StateManager.activeGameIndex,
+          "p1",
+          clean,
+          true
+        );
+      } else {
+        StateManager.homeQuery.p1 = clean;
+      }
+    };
+
+    const updateMatch = (i, field, value) => {
+      const clean =
+        field === "score"
+          ? cleanScoreInput(value)
+          : Security.sanitizeInput(value);
+
+      const { isEditor, activeMem } = getActiveSource();
+
+      if (isEditor && activeMem?.games?.[StateManager.activeGameIndex]) {
+        MemoryManager.updateMatchField(
+          StateManager.activeMemoryId,
+          StateManager.activeGameIndex,
+          i,
+          field,
+          clean,
+          true
+        );
+      } else {
+        if (!StateManager.homeQuery.matches[i]) {
+          StateManager.homeQuery.matches[i] = { home: "", score: "", away: "" };
+        }
+        StateManager.homeQuery.matches[i][field] = clean;
+      }
+    };
+
+    const updateGoal = (i, field, value) => {
+      const clean =
+        field === "goals"
+          ? cleanGoalInput(value)
+          : Security.sanitizeInput(value);
+
+      const { isEditor, activeMem } = getActiveSource();
+
+      if (isEditor && activeMem?.games?.[StateManager.activeGameIndex]) {
+        MemoryManager.updateTopGoalField(
+          StateManager.activeMemoryId,
+          StateManager.activeGameIndex,
+          i,
+          field,
+          clean,
+          true
+        );
+      } else {
+        if (!StateManager.homeQuery.topGoals[i]) {
+          StateManager.homeQuery.topGoals[i] = {
+            country: "",
+            player: "",
+            goals: ""
+          };
+        }
+        StateManager.homeQuery.topGoals[i][field] = clean;
+      }
+    };
+
+    const { source: dataSource } = getActiveSource();
 
     const p1Input = document.getElementById("p1Input");
     if (p1Input) {
       p1Input.value = dataSource.p1 || "";
-      setupCountryAutocomplete(p1Input, (val) => {
-        val = Security.sanitizeInput(val);
-        if (isEditor && activeMem) {
-          MemoryManager.updateGameField(StateManager.activeMemoryId, StateManager.activeGameIndex, "p1", val, true);
-        } else {
-          StateManager.homeQuery.p1 = val;
-        }
-      });
+
+      if (!p1Input.dataset.uiBound) {
+        p1Input.addEventListener("input", () => updateP1(p1Input.value));
+        p1Input.dataset.uiBound = "1";
+      }
+
+      setupCountryAutocomplete(p1Input, (val) => updateP1(val));
     }
 
     const matchGridForm = document.getElementById("matchGridForm");
     if (matchGridForm) {
-      if (matchGridForm.children.length === 0) {
+      if (!matchGridForm.dataset.uiInit) {
         for (let i = 0; i < 7; i++) {
           const rowItem = document.createElement("div");
           rowItem.className = "match-row-item";
@@ -107,41 +197,63 @@ export const UIRenderer = {
             <div class="team-input-wrap">
               <input type="text" placeholder="AWAY" data-idx="${i}" class="match-away" />
               <div class="suggestions-box hidden"></div>
-            </div>`;
+            </div>
+          `;
           matchGridForm.appendChild(rowItem);
+
+          const homeInput = rowItem.querySelector(".match-home");
+          const scoreInput = rowItem.querySelector(".match-score");
+          const awayInput = rowItem.querySelector(".match-away");
+
+          homeInput.addEventListener("input", () =>
+            updateMatch(i, "home", homeInput.value)
+          );
+
+          scoreInput.addEventListener("input", () =>
+            updateMatch(i, "score", scoreInput.value)
+          );
+
+          awayInput.addEventListener("input", () =>
+            updateMatch(i, "away", awayInput.value)
+          );
         }
+
+        matchGridForm.dataset.uiInit = "1";
       }
 
-      // Sync nilai ke DOM
       const rows = matchGridForm.querySelectorAll(".match-row-item");
       rows.forEach((rowItem, i) => {
-        const matchData = (dataSource.matches && dataSource.matches[i]) || { home: "", score: "", away: "" };
+        const matchData = dataSource.matches?.[i] || {
+          home: "",
+          score: "",
+          away: ""
+        };
 
-        const homeInput = rowItem.querySelector('.match-home');
-        const scoreInput = rowItem.querySelector('.match-score');
-        const awayInput = rowItem.querySelector('.match-away');
+        const homeInput = rowItem.querySelector(".match-home");
+        const scoreInput = rowItem.querySelector(".match-score");
+        const awayInput = rowItem.querySelector(".match-away");
 
         if (homeInput) {
           homeInput.value = matchData.home || "";
-          setupCountryAutocomplete(homeInput, (val) => {
-            if (isEditor) MemoryManager.updateMatchField(StateManager.activeMemoryId, StateManager.activeGameIndex, i, "home", val, true);
-            else StateManager.homeQuery.matches[i].home = val;
-          });
+          setupCountryAutocomplete(homeInput, (val) =>
+            updateMatch(i, "home", val)
+          );
         }
+
         if (scoreInput) scoreInput.value = matchData.score || "";
+
         if (awayInput) {
           awayInput.value = matchData.away || "";
-          setupCountryAutocomplete(awayInput, (val) => {
-            if (isEditor) MemoryManager.updateMatchField(StateManager.activeMemoryId, StateManager.activeGameIndex, i, "away", val, true);
-            else StateManager.homeQuery.matches[i].away = val;
-          });
+          setupCountryAutocomplete(awayInput, (val) =>
+            updateMatch(i, "away", val)
+          );
         }
       });
     }
 
     const topGoalsForm = document.getElementById("topGoalsForm");
     if (topGoalsForm) {
-      if (topGoalsForm.children.length === 0) {
+      if (!topGoalsForm.dataset.uiInit) {
         for (let i = 0; i < 7; i++) {
           const rowItem = document.createElement("div");
           rowItem.className = "top-goal-row-item";
@@ -156,30 +268,101 @@ export const UIRenderer = {
             </div>
             <div class="team-input-wrap">
               <input type="number" placeholder="GOL" data-idx="${i}" class="goal-amount" />
-            </div>`;
+            </div>
+          `;
           topGoalsForm.appendChild(rowItem);
+
+          const countryInput = rowItem.querySelector(".goal-country");
+          const playerInput = rowItem.querySelector(".goal-player");
+          const amountInput = rowItem.querySelector(".goal-amount");
+
+          countryInput.addEventListener("input", () =>
+            updateGoal(i, "country", countryInput.value)
+          );
+
+          playerInput.addEventListener("input", () =>
+            updateGoal(i, "player", playerInput.value)
+          );
+
+          amountInput.addEventListener("input", () =>
+            updateGoal(i, "goals", amountInput.value)
+          );
         }
+
+        topGoalsForm.dataset.uiInit = "1";
       }
 
       const rows = topGoalsForm.querySelectorAll(".top-goal-row-item");
       rows.forEach((rowItem, i) => {
-        const goalData = (dataSource.topGoals && dataSource.topGoals[i]) || { country: "", player: "", goals: "" };
+        const goalData = dataSource.topGoals?.[i] || {
+          country: "",
+          player: "",
+          goals: ""
+        };
 
-        const countryInput = rowItem.querySelector('.goal-country');
-        const playerInput = rowItem.querySelector('.goal-player');
-        const amountInput = rowItem.querySelector('.goal-amount');
+        const countryInput = rowItem.querySelector(".goal-country");
+        const playerInput = rowItem.querySelector(".goal-player");
+        const amountInput = rowItem.querySelector(".goal-amount");
 
         if (countryInput) {
           countryInput.value = goalData.country || "";
-          setupCountryAutocomplete(countryInput, (val) => {
-            if (isEditor) MemoryManager.updateTopGoalField(StateManager.activeMemoryId, StateManager.activeGameIndex, i, "country", val, true);
-            else StateManager.homeQuery.topGoals[i].country = val;
-          });
+          setupCountryAutocomplete(countryInput, (val) =>
+            updateGoal(i, "country", val)
+          );
         }
+
         if (playerInput) playerInput.value = goalData.player || "";
         if (amountInput) amountInput.value = goalData.goals || "";
       });
     }
+  },
+
+  renderSearchResults(results, container) {
+    if (!container) return;
+
+    container.innerHTML = "";
+
+    if (!Array.isArray(results) || results.length === 0) {
+      container.innerHTML = `<div class="error-msg">Tidak ada kecocokan.</div>`;
+      return;
+    }
+
+    const table = document.createElement("table");
+    table.className = "result-table";
+
+    table.innerHTML = `
+      <thead>
+        <tr>
+          <th>MEMORY</th>
+          <th>GAME</th>
+          <th>SIMILARITY</th>
+          <th>DETAIL</th>
+        </tr>
+      </thead>
+    `;
+
+    const tbody = document.createElement("tbody");
+
+    results.forEach((r) => {
+      const tr = document.createElement("tr");
+
+      const simClass = r.similarity >= 90 ? "sim-perfect" : "sim-normal";
+      const details = (r.explanations || [])
+        .map(x => `<div>${Security.escapeHtml(x)}</div>`)
+        .join("");
+
+      tr.innerHTML = `
+        <td>${Security.escapeHtml(r.memoryName || "")}</td>
+        <td>${Security.escapeHtml(String(r.gameNumber ?? ""))}</td>
+        <td class="${simClass}">${Number(r.similarity || 0)}%</td>
+        <td>${details || "-"}</td>
+      `;
+
+      tbody.appendChild(tr);
+    });
+
+    table.appendChild(tbody);
+    container.appendChild(table);
   },
 
   renderDatabaseModal() {
