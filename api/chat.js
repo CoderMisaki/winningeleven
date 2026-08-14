@@ -121,10 +121,6 @@ export default async function handler(req, res) {
 
   sanitizedMessages.unshift({ role: 'system', content: systemContent });
 
-  res.setHeader('Content-Type', 'text/event-stream');
-  res.setHeader('Cache-Control', 'no-cache');
-  res.setHeader('Connection', 'keep-alive');
-
   // 1. Fungsi Eksekutor Streaming Google Gemini (Fallback 1 / Attachment Handler)
   const callGemini = async (messagesToPass, fileAttachment = null) => {
     try {
@@ -212,8 +208,15 @@ export default async function handler(req, res) {
   }
 
   if (safeAttachment) {
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
     return callGemini(sanitizedMessages, safeAttachment);
   }
+
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
 
   // 2. Fungsi Eksekutor Streaming Nvidia (Bisa dipakai MiniMax & GLM)
   async function streamNvidiaAPI(modelName, authKey, messagesToPass) {
