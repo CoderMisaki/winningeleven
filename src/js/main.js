@@ -9,374 +9,153 @@ import { MemoryManager } from "./services/memoryManager.js";
 
 document.addEventListener("DOMContentLoaded", async () => {
   window.UIRenderer = UIRenderer;
-
-  // Hubungkan dan inisialisasi basis data sistem
-  // 1. Inisialisasi State
   await StateManager.init();
 
-  // 2. Registrasi Event Helper & Tombol DULUAN
-
-
-
-  // Fungsi Helper untuk Bind Event Aman
   const bindClick = (id, handler) => {
     const el = document.getElementById(id);
     if (el) el.addEventListener("click", handler);
   };
 
+  // 1. Initial Navigation
+  NavigationManager.switchToHomeView();
 
-// ============================================================
-// PATCH A: bootstrap UI, tombol hilang, database modal actions
-// ============================================================
+  // 2. Similarity Search Binding
+  bindClick("btnRunMatch", async () => {
+    const resultsPanel = document.getElementById("resultsPanel");
+    const resultsOutput = document.getElementById("resultsOutput");
+    if (!resultsPanel || !resultsOutput) return;
 
-// Render form utama saat pertama load
-NavigationManager.switchToHomeView();
+    resultsPanel.classList.remove("hidden");
+    resultsOutput.innerHTML = "<div style='text-align:center; padding: 15px;'>MENGHITUNG SIMILARITY WE10...</div>";
 
-// Bind tombol CARI KECOCOKAN
-bindClick("btnRunMatch", async () => {
-  const resultsPanelEl = document.getElementById("resultsPanel");
-  const resultsOutputEl = document.getElementById("resultsOutput");
-
-  if (!resultsPanelEl || !resultsOutputEl) return;
-
-  resultsPanelEl.classList.remove("hidden");
-  resultsOutputEl.innerHTML =
-    "<div style='text-align:center; padding: 15px;'>SEARCHING...</div>";
-
-  try {
-    const minSim = Number(document.getElementById("minSimilarity")?.value || 0);
-
-    let results = await MatchingEngine.executeSearch(StateManager.homeQuery);
-    results = (results || []).filter(r => r.similarity >= minSim);
-
-    UIRenderer.renderSearchResults(results, resultsOutputEl);
-  } catch (err) {
-    resultsOutputEl.innerHTML =
-      `<div class="error-msg">Error: ${Security.escapeHtml(err.message || String(err))}</div>`;
-    console.error(err);
-  }
-});
-
-// Bind database modal
-let importTargetMemoryId = null;
-const jsonImportField = document.getElementById("jsonImportField");
-const databaseModalList = document.getElementById("databaseModalList");
-
-if (databaseModalList) {
-  databaseModalList.addEventListener("click", (e) => {
-    const btn = e.target.closest("button");
-    if (!btn) return;
-
-    const id = Number(btn.dataset.id);
-
-    if (btn.classList.contains("btn-create-mem")) {
-      MemoryManager.initializeEmptyMemory(id);
-      NavigationManager.closeDatabaseModal();
-      NavigationManager.switchToEditorView(id);
-    }
-
-    else if (btn.classList.contains("btn-open-mem")) {
-      NavigationManager.closeDatabaseModal();
-      NavigationManager.switchToEditorView(id);
-    }
-
-    else if (btn.classList.contains("btn-export-mem")) {
-      ImportExportService.exportMemoryToJSON(id);
-    }
-
-    else if (btn.classList.contains("btn-delete-mem")) {
-      UIRenderer.showConfirm(`Hapus Memory ${id}?`, () => {
-        MemoryManager.deleteMemory(id);
-        UIRenderer.renderDatabaseModal();
-      });
-    }
-
-    else if (btn.classList.contains("btn-import-mem")) {
-      importTargetMemoryId = id;
-      if (jsonImportField) {
-        jsonImportField.value = "";
-        jsonImportField.click();
-      }
-    }
-
-    else if (btn.classList.contains("btn-download-template")) {
-      ImportExportService.downloadTemplate(id);
-    }
-
-    else if (btn.classList.contains("btn-add-memory-slot")) {
-      StateManager.db.maxSlot = (StateManager.db.maxSlot || 7) + 1;
-      StateManager.save();
-      UIRenderer.renderDatabaseModal();
+    try {
+      const minSim = Number(document.getElementById("minSimilarity")?.value || 0);
+      let results = await MatchingEngine.executeSearch(StateManager.homeQuery);
+      results = (results || []).filter(r => r.similarity >= minSim);
+      UIRenderer.renderSearchResults(results, resultsOutput);
+    } catch (err) {
+      resultsOutput.innerHTML = `<div class="error-msg">Error Search: ${Security.escapeHtml(err.message || String(err))}</div>`;
     }
   });
-}
 
-if (jsonImportField) {
-  jsonImportField.addEventListener("change", (e) => {
-    const file = e.target.files?.[0];
-    if (!file || importTargetMemoryId == null) return;
+  // 3. Database Modal Delegate Handlers (Include Walk-Forward Backtest)
+  const databaseModalList = document.getElementById("databaseModalList");
+  const jsonImportField = document.getElementById("jsonImportField");
+  let importTargetMemoryId = null;
 
-    ImportExportService.processImportFile(
-      file,
-      importTargetMemoryId,
-      (memId) => {
-        UIRenderer.renderDatabaseModal();
+  if (databaseModalList) {
+    databaseModalList.addEventListener("click", (e) => {
+      const btn = e.target.closest("button");
+      if (!btn) return;
+      const id = Number(btn.dataset.id);
+
+      if (btn.classList.contains("btn-create-mem")) {
+        MemoryManager.initializeEmptyMemory(id);
         NavigationManager.closeDatabaseModal();
-        NavigationManager.switchToEditorView(memId);
-      }
-    );
-
-    jsonImportField.value = "";
-  });
-}
-
-
-  // Navigasi Bar Menu Atas
-  bindClick("btnHomeView", () => {
-    NavigationManager.switchToHomeView();
-  });
-
-  bindClick("btnOpenDatabase", () => {
-    NavigationManager.openDatabaseModal();
-  });
-
-  bindClick("btnCloseModal", () => {
-    NavigationManager.closeDatabaseModal();
-  });
-
-  // Navigasi Editor Paket Game (Previous / Next)
-  bindClick("btnPrevGame", () => {
-    NavigationManager.navigateGames(-1);
-  });
-
-  bindClick("btnNextGame", () => {
-    NavigationManager.navigateGames(1);
-  });
-
-  const gameInput = document.getElementById("currentGameInput");
-  if (gameInput) {
-    gameInput.addEventListener("change", (e) => {
-      const val = parseInt(e.target.value, 10);
-      if (!isNaN(val) && val >= 1) {
-        NavigationManager.jumpToGame(val);
-      } else {
-        // Reset to current if invalid
-        if(StateManager.activeMemoryId) {
-           const currentNum = StateManager.activeGameIndex + 1;
-           e.target.value = currentNum;
+        NavigationManager.switchToEditorView(id);
+      } else if (btn.classList.contains("btn-open-mem")) {
+        NavigationManager.closeDatabaseModal();
+        NavigationManager.switchToEditorView(id);
+      } else if (btn.classList.contains("btn-export-mem")) {
+        ImportExportService.exportMemoryToJSON(id);
+      } else if (btn.classList.contains("btn-delete-mem")) {
+        UIRenderer.showConfirm(`Hapus seluruh data Memory ${id}?`, () => {
+          MemoryManager.deleteMemory(id);
+          UIRenderer.renderDatabaseModal();
+        });
+      } else if (btn.classList.contains("btn-import-mem")) {
+        importTargetMemoryId = id;
+        if (jsonImportField) {
+          jsonImportField.value = "";
+          jsonImportField.click();
+        }
+      } else if (btn.classList.contains("btn-download-template")) {
+        ImportExportService.downloadTemplate(id);
+      } else if (btn.classList.contains("btn-add-memory-slot")) {
+        StateManager.db.maxSlot = (StateManager.db.maxSlot || 7) + 1;
+        StateManager.save();
+        UIRenderer.renderDatabaseModal();
+      } else if (btn.classList.contains("btn-backtest-mem")) {
+        const res = PredictionService.runWalkForwardBacktest(id);
+        if (res.error) {
+          UIRenderer.showAlert(res.error);
+        } else {
+          const msg = `HASIL WALK-FORWARD BACKTEST (MEMORY ${id}):\n\n` +
+            `Total Matches Evaluated: ${res.totalTested}\n` +
+            `1X2 Hit Rate: ${res.result1X2Accuracy.toFixed(1)}%\n` +
+            `Exact Score Accuracy: ${res.exactScoreAccuracy.toFixed(1)}%\n` +
+            `Top-3 Scoreline Hit Rate: ${res.top3ScoreHitRate.toFixed(1)}%\n` +
+            `Top-5 Scoreline Hit Rate: ${res.top5ScoreHitRate.toFixed(1)}%\n` +
+            `MAE Goals: ${res.maeHomeGoals.toFixed(2)} (H) / ${res.maeAwayGoals.toFixed(2)} (A)\n` +
+            `Brier Score: ${res.meanBrierScore.toFixed(3)} | LogLoss: ${res.meanLogLoss.toFixed(3)}`;
+          UIRenderer.showAlert(msg);
         }
       }
     });
   }
 
-  bindClick("btnAddGame", () => {
-    NavigationManager.triggerAddGame();
-  });
+  if (jsonImportField) {
+    jsonImportField.addEventListener("change", (e) => {
+      const file = e.target.files?.[0];
+      if (!file || importTargetMemoryId == null) return;
+      ImportExportService.processImportFile(file, importTargetMemoryId, (memId) => {
+        UIRenderer.renderDatabaseModal();
+        NavigationManager.closeDatabaseModal();
+        NavigationManager.switchToEditorView(memId);
+      });
+      jsonImportField.value = "";
+    });
+  }
 
-  bindClick("btnExitEditor", () => {
-    NavigationManager.switchToHomeView();
-  });
+  // 4. Header & Editor Navigation
+  bindClick("btnHomeView", () => NavigationManager.switchToHomeView());
+  bindClick("btnOpenDatabase", () => NavigationManager.openDatabaseModal());
+  bindClick("btnCloseModal", () => NavigationManager.closeDatabaseModal());
+  bindClick("btnPrevGame", () => NavigationManager.navigateGames(-1));
+  bindClick("btnNextGame", () => NavigationManager.navigateGames(1));
+  bindClick("btnAddGame", () => NavigationManager.triggerAddGame());
+  bindClick("btnExitEditor", () => NavigationManager.switchToHomeView());
 
-  // Reset Form Pencarian Utama
+  const gameInput = document.getElementById("currentGameInput");
+  if (gameInput) {
+    gameInput.addEventListener("change", (e) => {
+      const val = parseInt(e.target.value, 10);
+      if (!isNaN(val) && val >= 1) NavigationManager.jumpToGame(val);
+      else if (StateManager.activeMemoryId) e.target.value = StateManager.activeGameIndex + 1;
+    });
+  }
 
   bindClick("btnClearForm", () => {
     StateManager.clearHomeQuery();
     UIRenderer.renderMatchGrid();
-    const resultsPanel = document.getElementById("resultsPanel");
-    if (resultsPanel) resultsPanel.classList.add("hidden");
-    const predictPanel = document.getElementById("predictPanel");
-    if (predictPanel) predictPanel.classList.add("hidden");
+    document.getElementById("resultsPanel")?.classList.add("hidden");
+    document.getElementById("predictPanel")?.classList.add("hidden");
   });
 
+  // 5. Predict Button Execution
   bindClick("btnPredict", () => {
-  const predictPanel = document.getElementById("predictPanel");
-  const predictOutput = document.getElementById("predictOutput");
+    const predictPanel = document.getElementById("predictPanel");
+    const predictOutput = document.getElementById("predictOutput");
+    if (!predictPanel || !predictOutput) return;
 
-  if (!predictPanel || !predictOutput) return;
+    predictPanel.classList.remove("hidden");
+    predictOutput.innerHTML = "<div style='text-align:center; padding: 20px; font-family:var(--font-retro);'>CALCULATING WE10 ENSEMBLE...</div>";
 
-  predictPanel.classList.remove("hidden");
-  predictOutput.innerHTML =
-    "<div style='text-align:center; padding: 20px;'>PREDICTING...</div>";
-
-  setTimeout(() => {
-    try {
-      const isEditor = StateManager.activeMemoryId !== null;
-      const activeMem = isEditor
-        ? StateManager.db.memories[StateManager.activeMemoryId]
-        : null;
-
-      const dataSource =
-        isEditor &&
-        activeMem &&
-        activeMem.games &&
-        activeMem.games[StateManager.activeGameIndex]
+    setTimeout(() => {
+      try {
+        const isEditor = StateManager.activeMemoryId !== null;
+        const activeMem = isEditor ? StateManager.db.memories[StateManager.activeMemoryId] : null;
+        const dataSource = isEditor && activeMem?.games?.[StateManager.activeGameIndex]
           ? activeMem.games[StateManager.activeGameIndex]
           : StateManager.homeQuery;
 
-      const predictions = PredictionService.predictMatches(dataSource);
-
-      predictOutput.innerHTML = "";
-
-      if (!predictions.length) {
-        predictOutput.innerHTML =
-          "<div class='error-msg'>Isi minimal HOME dan AWAY pada salah satu baris.</div>";
-        return;
+        const predictions = PredictionService.predictMatches(dataSource);
+        UIRenderer.renderPredictionDashboard(predictions, predictOutput);
+      } catch (err) {
+        predictOutput.innerHTML = `<div class="error-msg">Prediction Pipeline Error: ${Security.escapeHtml(err.message)}</div>`;
       }
-
-      const pre = document.createElement("pre");
-      pre.className = "log-output";
-
-      const header = document.createElement("div");
-      header.innerHTML =
-        "================================<br/>" +
-        "      WE10 HYBRID PREDICTOR<br/>" +
-        "================================<br/><br/>";
-      pre.appendChild(header);
-
-      predictions.forEach(p => {
-        const block = document.createElement("div");
-        block.style.marginBottom = "20px";
-
-        const titleLine = document.createElement("div");
-        titleLine.style.fontWeight = "bold";
-        titleLine.style.color = "#fff";
-        titleLine.textContent = `INPUT B${p.row}: ${p.homeName} vs ${p.awayName}`;
-        block.appendChild(titleLine);
-
-        if (p.error) {
-          const errLine = document.createElement("div");
-          errLine.style.color = "#f55";
-          errLine.textContent = p.error;
-          block.appendChild(errLine);
-        } else if (p.prediction) {
-          const pred = p.prediction;
-
-          const estBox = document.createElement("div");
-          estBox.style.marginTop = "8px";
-          estBox.style.padding = "10px";
-          estBox.style.border = "1px solid #444";
-          estBox.style.background = "#111";
-          estBox.style.borderRadius = "4px";
-
-          // Prediction Result
-          const scoreLine = document.createElement("div");
-          scoreLine.style.fontWeight = "bold";
-          scoreLine.style.color = "#0ff";
-          scoreLine.style.fontSize = "1.1rem";
-          scoreLine.style.marginBottom = "8px";
-          scoreLine.textContent =
-            `PREDIKSI: ${p.homeName} ${pred.homeGoals} : ${pred.awayGoals} ${p.awayName}`;
-          estBox.appendChild(scoreLine);
-
-          // Probabilities (1X2)
-          const probGrid = document.createElement("div");
-          probGrid.style.display = "grid";
-          probGrid.style.gridTemplateColumns = "1fr 1fr 1fr";
-          probGrid.style.gap = "5px";
-          probGrid.style.marginBottom = "10px";
-
-          const pHome = document.createElement("div");
-          pHome.style.textAlign = "center";
-          pHome.style.background = "#222";
-          pHome.style.padding = "4px";
-          pHome.style.border = pred.probs.home > Math.max(pred.probs.draw, pred.probs.away) ? "1px solid #0f0" : "1px solid #333";
-          pHome.innerHTML = `<div style="font-size:0.75rem;color:#888;">HOME</div><div>${(pred.probs.home * 100).toFixed(1)}%</div>`;
-
-          const pDraw = document.createElement("div");
-          pDraw.style.textAlign = "center";
-          pDraw.style.background = "#222";
-          pDraw.style.padding = "4px";
-          pDraw.style.border = pred.probs.draw > Math.max(pred.probs.home, pred.probs.away) ? "1px solid #0f0" : "1px solid #333";
-          pDraw.innerHTML = `<div style="font-size:0.75rem;color:#888;">DRAW</div><div>${(pred.probs.draw * 100).toFixed(1)}%</div>`;
-
-          const pAway = document.createElement("div");
-          pAway.style.textAlign = "center";
-          pAway.style.background = "#222";
-          pAway.style.padding = "4px";
-          pAway.style.border = pred.probs.away > Math.max(pred.probs.home, pred.probs.draw) ? "1px solid #0f0" : "1px solid #333";
-          pAway.innerHTML = `<div style="font-size:0.75rem;color:#888;">AWAY</div><div>${(pred.probs.away * 100).toFixed(1)}%</div>`;
-
-          probGrid.appendChild(pHome);
-          probGrid.appendChild(pDraw);
-          probGrid.appendChild(pAway);
-          estBox.appendChild(probGrid);
-
-          // Model info
-          const infoGrid = document.createElement("div");
-          infoGrid.style.display = "grid";
-          infoGrid.style.gridTemplateColumns = "1fr 1fr";
-          infoGrid.style.gap = "10px";
-          infoGrid.style.fontSize = "0.85rem";
-
-          const leftInfo = document.createElement("div");
-          leftInfo.style.color = "#aaa";
-          leftInfo.innerHTML = `
-            <div><span style="color:#888">Model:</span> ${pred.model}</div>
-            <div><span style="color:#888">Conf:</span> ${pred.confidence}%</div>
-            <div><span style="color:#888">xG:</span> ${pred.xgHome} : ${pred.xgAway}</div>
-          `;
-
-          const rightInfo = document.createElement("div");
-          rightInfo.style.color = "#aaa";
-
-          let evidenceHtml = `<div><span style="color:#888">Evidence:</span></div>`;
-          evidenceHtml += `<div>- Rating: ${pred.evidence.hasRating ? 'Ya' : 'Tidak'}</div>`;
-          if (pred.evidence.hasHistory) {
-            evidenceHtml += `<div>- History: ${pred.evidence.homeMatches} (H) / ${pred.evidence.awayMatches} (A) matches</div>`;
-          } else {
-            evidenceHtml += `<div>- History: Tidak ada</div>`;
-          }
-          if (pred.evidence.hasH2H) {
-            evidenceHtml += `<div>- H2H: ${pred.evidence.h2hMatches} matches</div>`;
-          } else {
-            evidenceHtml += `<div>- H2H: Tidak ada</div>`;
-          }
-          rightInfo.innerHTML = evidenceHtml;
-
-          infoGrid.appendChild(leftInfo);
-          infoGrid.appendChild(rightInfo);
-          estBox.appendChild(infoGrid);
-
-          // Top Scores
-          if (pred.distribution && pred.distribution.length > 0) {
-            const topScoresContainer = document.createElement("div");
-            topScoresContainer.style.marginTop = "10px";
-            topScoresContainer.style.paddingTop = "10px";
-            topScoresContainer.style.borderTop = "1px solid #333";
-            topScoresContainer.style.fontSize = "0.8rem";
-
-            let distHtml = `<div style="color:#888; margin-bottom:4px;">Top Score Distribution:</div>`;
-            distHtml += `<div style="display:flex; flex-wrap:wrap; gap:8px;">`;
-
-            pred.distribution.forEach((s, i) => {
-              distHtml += `<div style="background:#222; padding:2px 6px; border-radius:3px;">
-                <span style="color:#ddd">${s.home}:${s.away}</span>
-                <span style="color:#0aa">(${(s.prob * 100).toFixed(1)}%)</span>
-              </div>`;
-            });
-
-            distHtml += `</div>`;
-            topScoresContainer.innerHTML = distHtml;
-            estBox.appendChild(topScoresContainer);
-          }
-
-          block.appendChild(estBox);
-        }
-
-        pre.appendChild(block);
-      });
-
-      predictOutput.appendChild(pre);
-
-    } catch (e) {
-      predictOutput.innerHTML = `<div class="error-msg">Error: ${e.message}</div>`;
-      console.error(e);
-    }
-  }, 50);
-});
-
-
-
+    }, 40);
+  });
 
 // ============================================================
 // PATCH B: stub sementara untuk variabel chat yang hilang
@@ -402,23 +181,311 @@ const Toast = {
 const sessionManager = {
   sessions: {},
   currentId: null,
-  save() {},
-  createNewSession() {},
-  clearAll() {},
-  getCurrentSession() {
-    return {
-      id: "stub-session",
+  STORAGE_KEY: "we10_ai_sessions",
+  init() {
+    try {
+      const data = localStorage.getItem(this.STORAGE_KEY);
+      if (data) {
+        this.sessions = JSON.parse(data);
+        const keys = Object.keys(this.sessions);
+        if (keys.length > 0) {
+          // Find the most recent session
+          this.currentId = keys.sort((a, b) => this.sessions[b].updatedAt - this.sessions[a].updatedAt)[0];
+        }
+      }
+    } catch (e) {
+      console.error("Failed to load sessions", e);
+    }
+    if (!this.currentId) {
+      this.createNewSession();
+    }
+  },
+  save() {
+    try {
+      localStorage.setItem(this.STORAGE_KEY, JSON.stringify(this.sessions));
+    } catch (e) {
+      console.error("Failed to save sessions", e);
+    }
+  },
+  createNewSession() {
+    const id = Date.now().toString();
+    this.sessions[id] = {
+      id,
+      title: "New Chat",
+      messages: [],
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
       parentId: null,
-      children: [],
-      messages: []
+      children: []
     };
+    this.currentId = id;
+    this.save();
+    return id;
+  },
+  clearAll() {
+    this.sessions = {};
+    this.currentId = null;
+    this.save();
+    this.createNewSession();
+  },
+  getCurrentSession() {
+    return this.sessions[this.currentId];
+  },
+  addMessage(role, content) {
+    const session = this.getCurrentSession();
+    if (!session) return;
+    session.messages.push({ role, content, timestamp: Date.now() });
+
+    // Auto-generate title if it's the first user message
+    if (session.messages.length === 1 && role === "user") {
+        session.title = content.substring(0, 30) + (content.length > 30 ? "..." : "");
+    }
+
+    session.updatedAt = Date.now();
+    this.save();
+  },
+  switchSession(id) {
+    if (this.sessions[id]) {
+      this.currentId = id;
+      this.save();
+    }
   }
 };
+sessionManager.init();
 
-function renderSidebar() {}
-function renderChatWindow() {}
+function renderSidebar() {
+  const list = document.getElementById("chatSessionList");
+  if (!list) return;
+  list.innerHTML = "";
+
+  const query = (document.getElementById("chatSearchInput")?.value || "").toLowerCase();
+
+  const sessionsArr = Object.values(sessionManager.sessions).sort((a, b) => b.updatedAt - a.updatedAt);
+
+  sessionsArr.forEach(session => {
+    if (query && !session.title.toLowerCase().includes(query)) return;
+
+    const div = document.createElement("div");
+    div.className = "chat-session-item" + (session.id === sessionManager.currentId ? " active" : "");
+    div.dataset.id = session.id;
+
+    div.innerHTML = `
+      <div class="chat-session-title">${Security.escapeHtml(session.title)}</div>
+      <div class="chat-session-date">${new Date(session.updatedAt).toLocaleDateString()} ${new Date(session.updatedAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>
+    `;
+
+    div.addEventListener("click", () => {
+      if(isGenerating) return;
+      sessionManager.switchSession(session.id);
+      renderSidebar();
+      renderChatWindow();
+      if(window.innerWidth <= 768) {
+          document.getElementById("aiSidebar")?.classList.remove("drawer-open");
+      }
+    });
+
+    list.appendChild(div);
+  });
+}
+function renderChatWindow() {
+  if (!aiChatWindow) return;
+  aiChatWindow.innerHTML = "";
+
+  const titleEl = document.getElementById("currentChatTitle");
+  const session = sessionManager.getCurrentSession();
+
+  if (titleEl) {
+      titleEl.textContent = session ? session.title : "New Chat";
+  }
+
+  if (!session || session.messages.length === 0) {
+    aiChatWindow.innerHTML = '<div style="color: #aaa; text-align: center; font-size: 0.7rem; margin-top: 20px;">[SYSTEM] AI Assistant Ready. ChatGPT Professional V4 Experience.</div>';
+    updateContextBudget();
+    return;
+  }
+
+  session.messages.forEach(msg => {
+    const div = document.createElement("div");
+    div.className = `chat-message ${msg.role}`;
+
+    // Check if DOMPurify and marked are available
+    let contentHtml = Security.escapeHtml(msg.content);
+    if (msg.role === 'assistant' && window.marked && window.DOMPurify) {
+       contentHtml = window.DOMPurify.sanitize(window.marked.parse(msg.content));
+    } else if (msg.role === 'assistant') {
+       // Fallback simple parsing if libraries not loaded
+       contentHtml = contentHtml.replace(/\n/g, '<br/>');
+    }
+
+    div.innerHTML = `
+      <div class="chat-message-meta">
+        <span>${msg.role === 'user' ? 'YOU' : 'AI ASSISTANT'}</span>
+        <span>${new Date(msg.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+      </div>
+      <div class="chat-message-content">${msg.role === 'assistant' ? contentHtml : Security.escapeHtml(msg.content).replace(/\n/g, '<br>')}</div>
+    `;
+    aiChatWindow.appendChild(div);
+  });
+
+  aiChatWindow.scrollTop = aiChatWindow.scrollHeight;
+  updateContextBudget();
+}
 
 
+
+let abortController = null;
+
+if (btnSendAiChat && aiChatInput) {
+  const sendChat = async () => {
+    if (isGenerating) return;
+    const text = aiChatInput.value.trim();
+    if (!text && !currentAttachment) return;
+
+    const session = sessionManager.getCurrentSession();
+    if (!session) return;
+
+    let userMsg = text;
+    if (currentAttachment) {
+      userMsg = `[Attachment: ${currentAttachment.filename}] ${text}`;
+    }
+
+    sessionManager.addMessage("user", userMsg);
+    aiChatInput.value = "";
+
+    // reset attachment UI
+    const prevAttachment = currentAttachment;
+    currentAttachment = null;
+    if (aiChatFile) aiChatFile.value = "";
+    if (aiChatAttachmentPreview) {
+      aiChatAttachmentPreview.style.display = "none";
+      aiChatAttachmentPreview.innerHTML = "";
+    }
+
+    renderSidebar();
+    renderChatWindow();
+
+    isGenerating = true;
+    btnSendAiChat.style.display = "none";
+    const btnStop = document.getElementById("btnStopAiChat");
+    if (btnStop) btnStop.style.display = "block";
+
+    // Add placeholder for AI response
+    const div = document.createElement("div");
+    div.className = "chat-message assistant";
+    div.innerHTML = `
+      <div class="chat-message-meta">
+        <span>AI ASSISTANT</span>
+        <span>Loading...</span>
+      </div>
+      <div class="chat-message-content streaming-content">...</div>
+    `;
+    aiChatWindow.appendChild(div);
+    aiChatWindow.scrollTop = aiChatWindow.scrollHeight;
+
+    const contentBox = div.querySelector(".streaming-content");
+    let accumulatedResponse = "";
+
+    abortController = new AbortController();
+
+    try {
+      const chatMode = document.getElementById("aiChatMode")?.value || "normal";
+
+      const response = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          mode: chatMode,
+          messages: session.messages.map(m => ({ role: m.role, content: m.content })),
+          attachment: prevAttachment ? {
+             base64: prevAttachment.base64,
+             mimeType: prevAttachment.mimeType,
+             filename: prevAttachment.filename
+          } : null
+        }),
+        signal: abortController.signal
+      });
+
+      if (!response.ok) {
+        throw new Error(`Server error: ${response.status}`);
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder("utf-8");
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value, { stream: true });
+        const lines = chunk.split('\n');
+
+        for (const line of lines) {
+          if (line.startsWith("data: ")) {
+            const dataStr = line.replace("data: ", "").trim();
+            if (dataStr === "[DONE]") {
+              break;
+            }
+            try {
+              const parsed = JSON.parse(dataStr);
+              if (parsed.error) {
+                accumulatedResponse += `<br><span style="color:#f55">${Security.escapeHtml(parsed.error)}</span>`;
+                break;
+              }
+              if (parsed.content) {
+                accumulatedResponse += parsed.content;
+
+                // Render streaming (raw text to prevent broken markdown while streaming)
+                contentBox.textContent = accumulatedResponse;
+                aiChatWindow.scrollTop = aiChatWindow.scrollHeight;
+              }
+            } catch (e) {
+              // Ignore parse errors on incomplete chunks
+            }
+          }
+        }
+      }
+
+      // Finalize response
+      if (accumulatedResponse) {
+          sessionManager.addMessage("assistant", accumulatedResponse);
+          // Re-render completely with Markdown
+          renderChatWindow();
+      }
+
+    } catch (err) {
+      if (err.name === 'AbortError') {
+        accumulatedResponse += " [Aborted by user]";
+      } else {
+        accumulatedResponse += `\n\n[Error: ${err.message}]`;
+      }
+      sessionManager.addMessage("assistant", accumulatedResponse);
+      renderChatWindow();
+    } finally {
+      isGenerating = false;
+      btnSendAiChat.style.display = "block";
+      if (btnStop) btnStop.style.display = "none";
+      abortController = null;
+    }
+  };
+
+  btnSendAiChat.addEventListener("click", sendChat);
+
+  aiChatInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      sendChat();
+    }
+  });
+
+  const btnStop = document.getElementById("btnStopAiChat");
+  if (btnStop) {
+      btnStop.addEventListener("click", () => {
+          if (abortController) {
+              abortController.abort();
+          }
+      });
+  }
+}
 // Attachments logic
 
 
