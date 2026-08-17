@@ -1,31 +1,25 @@
-import { GoogleGenAI } from "@google/genai";
 import fs from "fs";
 import path from "path";
 
 function checkPromptInjection(text) {
   const lower = text.toLowerCase();
   const blockedPhrases = [
-      "ignore previous instructions", "system prompt", "show hidden prompt",
-      "print source", "dump project", "reveal memory", "bypass security",
-      "roleplay admin", "developer message", "process.env"
+    "ignore previous instructions", "system prompt", "show hidden prompt",
+    "print source", "dump project", "reveal memory", "bypass security",
+    "roleplay admin", "developer message", "process.env"
   ];
-  for (const phrase of blockedPhrases) {
-      if (lower.includes(phrase)) {
-          return true;
-      }
-  }
-  return false;
+  return blockedPhrases.some(phrase => lower.includes(phrase));
 }
 
 function scanForSecrets(text) {
   const blockedPatterns = [
-    /process\.env\s*\.\s*[A-Z0-9_]+/i,
-    /process\.env\s*\[\s*['"][A-Z0-9_]+['"]\s*\]/i,
+    /process\.env\s*\.\s*[A-Za-z0-9_.]+/i,
+    /process\.env\s*\[\s*['"][A-Za-z0-9_.]+['"]\s*\]/i,
     /\bBearer\s+[A-Za-z0-9\-._~+/]{16,}={0,2}/i,
     /\b(?:api[_-]?key|secret[_-]?key|access[_-]?token)\s*[:=]\s*['"][A-Za-z0-9\-._~+/]{16,}['"]/i,
-    /\bsk-[A-Za-z0-9]{16,}\b/i
+    /\bsk-[A-Za-z0-9]{16,}\b/i,
+    /\bgk-[A-Za-z0-9]{16,}\b/i
   ];
-
   return blockedPatterns.some(pattern => pattern.test(text));
 }
 
@@ -44,27 +38,20 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  let streamStarted = false;
+  // Mengambil API Key dari ENV 'luna5.6' di Vercel
+  const apiKey = process.env['luna5.6'] || process.env.luna5_6;
+  if (!apiKey) {
+    return res.status(500).json({
+      error: 'API Key luna5.6 belum dikonfigurasi di Environment Variables Vercel.'
+    });
+  }
 
-  // Deep Payload Validation (Defense-in-Depth)
   const contentType = req.headers['content-type'] || '';
   if (!contentType.includes('application/json')) {
     return res.status(400).json({ error: 'Invalid content type. Must be application/json' });
   }
 
-  if (!req.body || typeof req.body !== 'object') {
-    return res.status(400).json({ error: 'Invalid request body payload' });
-  }
-
-  const apiKey = process.env.minimax3;
-  const geminiKey = process.env.gemini35;
-  const glmKey = process.env.glm52;
-
-  const { messages, attachment, mode } = req.body;
-
-  if (!apiKey && !geminiKey && !glmKey) {
-    return res.status(500).json({ error: 'API keys not configured' });
-  }
+  const { messages, attachment, mode } = req.body || {};
 
   if (!Array.isArray(messages)) {
     return res.status(400).json({ error: 'Invalid payload: messages must be an array' });
@@ -78,20 +65,12 @@ export default async function handler(req, res) {
   const sanitizedMessages = [];
 
   for (const msg of messages) {
-    if (!msg || typeof msg !== 'object') {
-      return res.status(400).json({ error: 'Invalid payload: message must be an object' });
-    }
-
-    if (!validRoles.includes(msg.role)) {
-      return res.status(400).json({ error: 'Invalid payload: invalid role' });
-    }
-
-    if (typeof msg.content !== 'string') {
-      return res.status(400).json({ error: 'Invalid payload: content must be a string' });
-    }
+    if (!msg || typeof msg !== 'object') continue;
+    if (!validRoles.includes(msg.role)) continue;
+    if (typeof msg.content !== 'string') continue;
 
     if (msg.content.length > 30000) {
-      return res.status(400).json({ error: 'Invalid payload: message content too long' });
+      return res.status(400).json({ error: 'Message content too long' });
     }
 
     if (msg.role === 'user' && checkPromptInjection(msg.content)) {
@@ -116,258 +95,105 @@ export default async function handler(req, res) {
   }
 
   if (cachedKnowledge && (mode === 'normal' || !mode)) {
-       systemContent += "\n[KNOWLEDGE BASE]\n" + cachedKnowledge + "\n";
+    systemContent += "\n[KNOWLEDGE BASE]\n" + cachedKnowledge + "\n";
   }
 
   sanitizedMessages.unshift({ role: 'system', content: systemContent });
 
-  // 1. Fungsi Eksekutor Streaming Google Gemini (Fallback 1 / Attachment Handler)
-  const callGemini = async (messagesToPass, fileAttachment = null) => {
-    try {
-      const ai = new GoogleGenAI({ apiKey: geminiKey });
-
-      const geminiMessages = messagesToPass.map(m => {
-          if (m.role === 'system') return { role: 'user', parts: [{ text: "SYSTEM INSTRUCTION (OBEY): " + m.content }] };
-          return { role: m.role, parts: [{ text: m.content }] };
-      });
-
-      if (fileAttachment) {
-          geminiMessages[geminiMessages.length - 1].parts.push({
-              inlineData: {
-                  data: fileAttachment.base64,
-                  mimeType: fileAttachment.mimeType
-              }
-          });
-      }
-
-      const geminiModel = process.env.GEMINI_MODEL || "gemini-3.5-flash";
-
-      const response = await ai.models.generateContentStream({
-          model: geminiModel,
-          contents: geminiMessages,
-      });
-
-      const decoder = new TextDecoder("utf-8");
-      streamStarted = true;
-      let aborted = false;
-      let sentContent = false;
-
-      for await (const chunk of response.stream) {
-          if (aborted) break;
-          const chunkText = chunk.text();
-          if (scanForSecrets(chunkText)) {
-              res.write(`data: ${JSON.stringify({ content: "[REDACTED: SENSITIVE INFORMATION DETECTED]" })}\n\n`);
-              sentContent = true;
-              aborted = true;
-              break;
-          } else {
-              res.write(`data: ${JSON.stringify({ content: chunkText })}\n\n`);
-              sentContent = true;
+  // Handle attachment gambar jika ada (Format Vision OpenAI)
+  if (attachment && attachment.base64 && attachment.mimeType) {
+    const lastMsg = sanitizedMessages[sanitizedMessages.length - 1];
+    if (lastMsg && lastMsg.role === 'user') {
+      lastMsg.content = [
+        { type: "text", text: lastMsg.content || "" },
+        {
+          type: "image_url",
+          image_url: {
+            url: `data:${attachment.mimeType};base64,${attachment.base64}`
           }
-      }
-
-      if (aborted) {
-          try {
-            res.end();
-          } catch (_) {}
-          return;
-      }
-
-      if (!sentContent) {
-          res.write(`data: ${JSON.stringify({
-            error: "Gemini menghasilkan output kosong. Periksa nama model dan API key."
-          })}\n\n`);
-      }
-
-      res.write(`data: [DONE]\n\n`);
-      res.end();
-    } catch (err) {
-        console.error("Gemini Fallback Error:", err);
-        res.write(`data: ${JSON.stringify({ error: "Mohon maaf, semua sistem AI sedang sibuk. Silakan coba lagi." })}\n\n`);
-        res.end();
+        }
+      ];
     }
-  };
-
-  let safeAttachment = null;
-
-  if (attachment && typeof attachment === "object") {
-    if (typeof attachment.base64 !== "string" || attachment.base64.length === 0) {
-      return res.status(400).json({ error: "Invalid attachment payload" });
-    }
-
-    if (attachment.base64.length > 8_000_000) {
-      return res.status(400).json({ error: "Attachment too large" });
-    }
-
-    safeAttachment = {
-      base64: attachment.base64,
-      mimeType: typeof attachment.mimeType === "string"
-        ? attachment.mimeType
-        : "application/octet-stream"
-    };
-  }
-
-  if (safeAttachment) {
-    res.setHeader('Content-Type', 'text/event-stream');
-    res.setHeader('Cache-Control', 'no-cache');
-    res.setHeader('Connection', 'keep-alive');
-    return callGemini(sanitizedMessages, safeAttachment);
   }
 
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
 
-  // 2. Fungsi Eksekutor Streaming Nvidia (Bisa dipakai MiniMax & GLM)
-  async function streamNvidiaAPI(modelName, authKey, messagesToPass) {
-    const maxRetries = 3;
-    let baseDelay = 1000; // 1 second
-
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
-      try {
-        const response = await fetch('https://integrate.api.nvidia.com/v1/chat/completions', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${authKey}`
-          },
-          body: JSON.stringify({
-            model: modelName,
-            messages: messagesToPass,
-            temperature: 0.7,
-            top_p: 1,
-            max_tokens: 8192,
-            stream: true
-          }),
-        });
-
-        if (!response.ok) {
-           if (response.status === 429 || response.status >= 500) {
-               throw new Error(`Nvidia API Temporary Error: ${response.status}`);
-           }
-           throw new Error(`Nvidia API Error: ${response.statusText}`);
-        }
-
-        streamStarted = true;
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder("utf-8");
-
-        let aborted = false;
-        let buffer = "";
-        let sentContent = false;
-
-        while (true) {
-          if (aborted) break;
-
-          const { done, value } = await reader.read();
-          if (done) break;
-
-          buffer += decoder.decode(value, { stream: true });
-
-          const lines = buffer.split(/\r?\n/);
-          buffer = lines.pop();
-
-          for (const line of lines) {
-            if (!line.trim()) continue;
-
-            if (!line.startsWith("data: ")) continue;
-
-            const dataStr = line.replace(/^data: /, "").trim();
-
-            if (dataStr === "[DONE]") {
-              aborted = true;
-              break;
-            }
-
-            try {
-              const parsed = JSON.parse(dataStr);
-
-              const content = parsed.choices?.[0]?.delta?.content;
-
-              if (!content) continue;
-
-              if (scanForSecrets(content)) {
-                res.write(
-                  `data: ${JSON.stringify({
-                    content: "[REDACTED: SENSITIVE INFORMATION DETECTED]"
-                  })}\n\n`
-                );
-                sentContent = true;
-                aborted = true;
-                break;
-              }
-
-              res.write(`data: ${JSON.stringify({ content })}\n\n`);
-              sentContent = true;
-            } catch (e) {
-              console.error("Error parsing streaming JSON", e);
-            }
-          }
-        }
-
-        if (aborted) {
-          try {
-            await reader.cancel();
-          } catch (_) {}
-          // Do not end the response here if we just received [DONE], it's handled below
-          // Actually, if we aborted due to secrets, we should end.
-          // Let's rely on sentContent to know if we need to send an error.
-          // And we will end the response later.
-        }
-
-        if (!sentContent) {
-          res.write(`data: ${JSON.stringify({
-            error: "Model tidak menghasilkan output. Periksa nama model, API key, atau limit API."
-          })}\n\n`);
-        }
-
-        res.write(`data: [DONE]\n\n`);
-        res.end();
-        return; // Success
-      } catch (err) {
-         console.warn(`Attempt ${attempt} for ${modelName} failed:`, err.message);
-         if (attempt === maxRetries) {
-             throw err; // throw to trigger next fallback
-         }
-         // Exponential backoff
-         await new Promise(resolve => setTimeout(resolve, baseDelay * Math.pow(2, attempt-1)));
-      }
-    }
-  }
-
-  // Orchestrator / Fallback Logic
   try {
-    // Percobaan 1: MiniMax (Primary)
-    if (!apiKey) throw new Error("MiniMax Key not available");
-    await streamNvidiaAPI("minimax/minimax-01", apiKey, sanitizedMessages);
-  } catch (error) {
-    console.warn('MiniMax Failed. Falling back to GLM-4...', error.message);
-    try {
-      // Percobaan 2: GLM-4 (Secondary Fallback)
-      if (!glmKey) throw new Error("GLM Key not available");
-      await streamNvidiaAPI("zhipuai/glm-4-9b-chat", glmKey, sanitizedMessages);
-    } catch (error2) {
-      if (streamStarted) {
-        console.warn("Stream error setelah output dimulai:", error2.message);
+    const response = await fetch('https://ai.geraikita.com/v1/claude/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey.trim()}`
+      },
+      body: JSON.stringify({
+        model: 'gpt-5.6-sol',
+        messages: sanitizedMessages,
+        temperature: 0.7,
+        stream: true
+      })
+    });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      console.error("Geraikita API Error:", response.status, errText);
+      res.write(`data: ${JSON.stringify({ error: `API Error (${response.status}): Gagal memproses ke server AI.` })}\n\n`);
+      res.write(`data: [DONE]\n\n`);
+      return res.end();
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder('utf-8');
+    let buffer = '';
+    let sentContent = false;
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split(/\r?\n/);
+      buffer = lines.pop();
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed || !trimmed.startsWith('data: ')) continue;
+
+        const dataStr = trimmed.replace(/^data: /, '').trim();
+        if (dataStr === '[DONE]') {
+          break;
+        }
 
         try {
-          res.write(`data: ${JSON.stringify({
-            error: "Stream terputus. Silakan coba lagi."
-          })}\n\n`);
+          const parsed = JSON.parse(dataStr);
+          const content = parsed.choices?.[0]?.delta?.content || '';
 
-          res.write(`data: [DONE]\n\n`);
-          res.end();
-        } catch (_) {}
-
-        return;
+          if (content) {
+            if (scanForSecrets(content)) {
+              res.write(`data: ${JSON.stringify({ content: "[REDACTED: SENSITIVE INFORMATION DETECTED]" })}\n\n`);
+              sentContent = true;
+              break;
+            }
+            res.write(`data: ${JSON.stringify({ content })}\n\n`);
+            sentContent = true;
+          }
+        } catch (e) {
+          // ignore partial json parsing
+        }
       }
-
-      console.warn(
-        'MiniMax and GLM both failed. Ultimate Fallback to Gemini:',
-        error2.message
-      );
-
-      return callGemini(sanitizedMessages);
     }
+
+    if (!sentContent) {
+      res.write(`data: ${JSON.stringify({ error: "Model tidak menghasilkan balasan. Cek API Key atau status limit." })}\n\n`);
+    }
+
+    res.write(`data: [DONE]\n\n`);
+    res.end();
+  } catch (err) {
+    console.error("Stream Fetch Error:", err);
+    res.write(`data: ${JSON.stringify({ error: `Koneksi gagal: ${err.message}` })}\n\n`);
+    res.write(`data: [DONE]\n\n`);
+    res.end();
   }
 }

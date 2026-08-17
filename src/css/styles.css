@@ -415,6 +415,90 @@ body {
 }
 
 /* ==========================================================================
+   AI CHAT PANEL & RESPONSIVE DRAWER FIX
+   ========================================================================== */
+
+.ai-qa-panel {
+  margin-top: 20px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-panel);
+  display: flex;
+  flex-direction: row;
+  height: 600px;
+  position: relative;
+  overflow: hidden;
+  width: 100%;
+}
+
+#aiSidebar {
+  width: 250px;
+  min-width: 250px;
+  border-right: 1px solid #555;
+  display: flex;
+  flex-direction: column;
+  background: #0a0a0a;
+  z-index: 100;
+  transition: transform 0.3s ease;
+}
+
+#aiMainChat {
+  flex: 1;
+  min-width: 0; /* Mencegah overflow horizontal flexbox */
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  width: 100%;
+}
+
+#btnToggleSidebar {
+  background: #222;
+  border: 1px solid #555;
+  color: #fff;
+  padding: 4px 8px;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+/* RESPONSIVE MOBILE FIX (Di bawah 768px) */
+@media (max-width: 768px) {
+  .ai-qa-panel {
+    height: 520px;
+  }
+
+  #aiSidebar {
+    position: absolute;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: 280px;
+    min-width: 280px;
+    transform: translateX(-100%);
+    box-shadow: 4px 0 15px rgba(0, 0, 0, 0.8);
+  }
+
+  #aiSidebar.drawer-open {
+    transform: translateX(0);
+  }
+
+  #btnCloseSidebar {
+    display: inline-block !important;
+  }
+
+  #aiMainChat {
+    width: 100%;
+    flex: 1;
+  }
+
+  .chat-message.user {
+    margin-left: 10px;
+  }
+
+  .chat-message.assistant {
+    margin-right: 10px;
+  }
+}
+
+/* ==========================================================================
    MOBILE RESPONSIVENESS FIXES
    ========================================================================== */
 @media (max-width: 650px) {
