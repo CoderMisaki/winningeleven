@@ -38,11 +38,11 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  // Mengambil API Key dari ENV 'luna5.6' di Vercel
-  const apiKey = process.env['luna5.6'] || process.env.luna5_6;
+  // Mengambil API Key dari ENV 'luna5_6' di Vercel
+  const apiKey = process.env.luna5_6 || process.env['luna5.6'];
   if (!apiKey) {
     return res.status(500).json({
-      error: 'API Key luna5.6 belum dikonfigurasi di Environment Variables Vercel.'
+      error: 'API Key luna5_6 belum dikonfigurasi di Environment Variables Vercel.'
     });
   }
 
