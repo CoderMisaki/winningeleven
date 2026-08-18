@@ -23,14 +23,16 @@ function scanForSecrets(text) {
   return blockedPatterns.some(pattern => pattern.test(text));
 }
 
+// Cache knowledge dengan batas aman (maks 15.000 karakter agar tidak over context)
 let cachedKnowledge = "";
 try {
   const knowledgePath = path.join(process.cwd(), 'src/js/knowledge.json');
   if (fs.existsSync(knowledgePath)) {
-    cachedKnowledge = fs.readFileSync(knowledgePath, 'utf8');
+    const raw = fs.readFileSync(knowledgePath, 'utf8');
+    cachedKnowledge = raw.length > 15000 ? raw.slice(0, 15000) + "\n...[Knowledge Truncated]" : raw;
   }
 } catch (e) {
-  console.error("Failed to pre-cache knowledge.json", e);
+  console.error("Knowledge load info:", e.message);
 }
 
 export default async function handler(req, res) {
@@ -38,7 +40,6 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  // Mengambil API Key dari ENV di Vercel
   const apiKey = process.env.luna5_6 || process.env['luna5.6'];
   if (!apiKey) {
     return res.status(500).json({
@@ -52,47 +53,39 @@ export default async function handler(req, res) {
   }
 
   const { messages, attachment, mode } = req.body || {};
-
   if (!Array.isArray(messages) || messages.length === 0) {
-    return res.status(400).json({ error: 'Invalid payload: messages must be a non-empty array' });
-  }
-
-  if (messages.length > 50) {
-    return res.status(400).json({ error: 'Invalid payload: too many messages' });
+    return res.status(400).json({ error: 'Payload messages kosong atau tidak valid.' });
   }
 
   // 1. Susun System Prompt
-  let systemPrompt = "You are an AI assistant for the WE10 Memory Research System.\n";
+  let systemContent = "You are an AI assistant for the WE10 Memory Research System.\n";
   if (mode === 'coding') {
-    systemPrompt += "MODE CODING: Anda adalah ahli pemrograman. Berikan kode lengkap dalam markdown code block.\n";
+    systemContent += "MODE CODING: Anda adalah ahli pemrograman tingkat dewa. Berikan kode LENGKAP dalam markdown code block.\n";
   } else if (mode === 'bola') {
-    systemPrompt += "MODE BOLA: Anda adalah ahli sepak bola global. Jawab semua pertanyaan seputar sepak bola dengan rapi.\n";
+    systemContent += "MODE BOLA: Anda adalah ahli sepak bola global. Berikan data akurat dan gunakan markdown rapi.\n";
   } else {
-    systemPrompt += "MODE NORMAL: Jawablah dengan profesional menggunakan format Markdown standar.\n";
+    systemContent += "MODE NORMAL: Jawablah dengan wajar, ringkas, dan profesional. Gunakan format Markdown standar.\n";
   }
 
   if (cachedKnowledge && (mode === 'normal' || !mode)) {
-    systemPrompt += "\n[KNOWLEDGE BASE]\n" + cachedKnowledge + "\n";
+    systemContent += "\n[KNOWLEDGE BASE]\n" + cachedKnowledge + "\n";
   }
 
-  // 2. Sanitasi & Normalisasi urutan pesan (Strict alternation untuk Claude)
-  const sanitizedMessages = [];
+  // 2. Sanitasi & Perbaiki Urutan Pesan
+  const sanitizedMessages = [{ role: 'system', content: systemContent }];
+
   for (const msg of messages) {
     if (!msg || typeof msg !== 'object') continue;
     if (msg.role !== 'user' && msg.role !== 'assistant') continue;
     if (typeof msg.content !== 'string' || !msg.content.trim()) continue;
 
-    if (msg.content.length > 30000) {
-      return res.status(400).json({ error: 'Message content too long' });
-    }
-
     if (msg.role === 'user' && checkPromptInjection(msg.content)) {
       return res.status(403).json({
-        error: "Security Violation: Malicious prompt detected and blocked."
+        error: "Security Violation: Malicious prompt detected."
       });
     }
 
-    // Gabungkan jika ada role berurutan sama
+    // Pastikan tidak ada role duplikat yang berurutan
     const last = sanitizedMessages[sanitizedMessages.length - 1];
     if (last && last.role === msg.role) {
       last.content += "\n\n" + msg.content;
@@ -104,11 +97,11 @@ export default async function handler(req, res) {
     }
   }
 
-  if (sanitizedMessages.length === 0) {
+  if (sanitizedMessages.length <= 1) {
     return res.status(400).json({ error: 'Tidak ada pesan yang valid untuk dikirim.' });
   }
 
-  // Handle attachment gambar jika ada
+  // Handle attachment jika ada gambar
   if (attachment && attachment.base64 && attachment.mimeType && attachment.mimeType.startsWith('image/')) {
     const lastMsg = sanitizedMessages[sanitizedMessages.length - 1];
     if (lastMsg && lastMsg.role === 'user') {
@@ -137,9 +130,8 @@ export default async function handler(req, res) {
       },
       body: JSON.stringify({
         model: 'gpt-5.6-sol',
-        system: systemPrompt,             // Format Claude-friendly
         messages: sanitizedMessages,
-        max_tokens: 4096,                 // Wajib untuk backend Claude
+        max_tokens: 8192,
         temperature: 0.7,
         stream: true
       })
@@ -147,17 +139,16 @@ export default async function handler(req, res) {
 
     if (!response.ok) {
       const errText = await response.text();
-      console.error("Geraikita API Error:", response.status, errText);
+      console.error("Upstream Error:", response.status, errText);
 
-      let detailMsg = "Gagal memproses ke server AI.";
+      // Ekstrak pesan detail error asli dari Geraikita
+      let detailMsg = errText;
       try {
         const parsed = JSON.parse(errText);
         detailMsg = parsed.error?.message || parsed.message || errText;
-      } catch (_) {
-        detailMsg = errText || detailMsg;
-      }
+      } catch (_) {}
 
-      res.write(`data: ${JSON.stringify({ error: `API Error (${response.status}): ${detailMsg}` })}\n\n`);
+      res.write(`data: ${JSON.stringify({ error: `Geraikita API (${response.status}): ${detailMsg}` })}\n\n`);
       res.write(`data: [DONE]\n\n`);
       return res.end();
     }
@@ -195,21 +186,19 @@ export default async function handler(req, res) {
             res.write(`data: ${JSON.stringify({ content })}\n\n`);
             sentContent = true;
           }
-        } catch (e) {
-          // ignore partial JSON stream
-        }
+        } catch (e) {}
       }
     }
 
     if (!sentContent) {
-      res.write(`data: ${JSON.stringify({ error: "Model tidak menghasilkan balasan. Cek kuota harian akun Geraikita." })}\n\n`);
+      res.write(`data: ${JSON.stringify({ error: "Server tidak mengirimkan teks jawaban. Periksa sisa kuota token harian Anda." })}\n\n`);
     }
 
     res.write(`data: [DONE]\n\n`);
     res.end();
   } catch (err) {
-    console.error("Stream Fetch Error:", err);
-    res.write(`data: ${JSON.stringify({ error: `Koneksi gagal: ${err.message}` })}\n\n`);
+    console.error("Fetch Exception:", err);
+    res.write(`data: ${JSON.stringify({ error: `Gagal terhubung ke AI: ${err.message}` })}\n\n`);
     res.write(`data: [DONE]\n\n`);
     res.end();
   }
