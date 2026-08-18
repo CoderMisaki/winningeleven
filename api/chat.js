@@ -38,7 +38,7 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  // Mengambil API Key dari ENV 'luna5_6' di Vercel
+  // Mengambil API Key dari ENV di Vercel
   const apiKey = process.env.luna5_6 || process.env['luna5.6'];
   if (!apiKey) {
     return res.status(500).json({
@@ -53,21 +53,34 @@ export default async function handler(req, res) {
 
   const { messages, attachment, mode } = req.body || {};
 
-  if (!Array.isArray(messages)) {
-    return res.status(400).json({ error: 'Invalid payload: messages must be an array' });
+  if (!Array.isArray(messages) || messages.length === 0) {
+    return res.status(400).json({ error: 'Invalid payload: messages must be a non-empty array' });
   }
 
   if (messages.length > 50) {
     return res.status(400).json({ error: 'Invalid payload: too many messages' });
   }
 
-  const validRoles = ['user', 'assistant'];
-  const sanitizedMessages = [];
+  // 1. Susun System Prompt
+  let systemPrompt = "You are an AI assistant for the WE10 Memory Research System.\n";
+  if (mode === 'coding') {
+    systemPrompt += "MODE CODING: Anda adalah ahli pemrograman. Berikan kode lengkap dalam markdown code block.\n";
+  } else if (mode === 'bola') {
+    systemPrompt += "MODE BOLA: Anda adalah ahli sepak bola global. Jawab semua pertanyaan seputar sepak bola dengan rapi.\n";
+  } else {
+    systemPrompt += "MODE NORMAL: Jawablah dengan profesional menggunakan format Markdown standar.\n";
+  }
 
+  if (cachedKnowledge && (mode === 'normal' || !mode)) {
+    systemPrompt += "\n[KNOWLEDGE BASE]\n" + cachedKnowledge + "\n";
+  }
+
+  // 2. Sanitasi & Normalisasi urutan pesan (Strict alternation untuk Claude)
+  const sanitizedMessages = [];
   for (const msg of messages) {
     if (!msg || typeof msg !== 'object') continue;
-    if (!validRoles.includes(msg.role)) continue;
-    if (typeof msg.content !== 'string') continue;
+    if (msg.role !== 'user' && msg.role !== 'assistant') continue;
+    if (typeof msg.content !== 'string' || !msg.content.trim()) continue;
 
     if (msg.content.length > 30000) {
       return res.status(400).json({ error: 'Message content too long' });
@@ -79,33 +92,28 @@ export default async function handler(req, res) {
       });
     }
 
-    sanitizedMessages.push({
-      role: msg.role,
-      content: msg.content
-    });
+    // Gabungkan jika ada role berurutan sama
+    const last = sanitizedMessages[sanitizedMessages.length - 1];
+    if (last && last.role === msg.role) {
+      last.content += "\n\n" + msg.content;
+    } else {
+      sanitizedMessages.push({
+        role: msg.role,
+        content: msg.content
+      });
+    }
   }
 
-  let systemContent = "You are an AI assistant for the WE10 Memory Research System.\n";
-  if (mode === 'coding') {
-    systemContent += "MODE CODING: Anda adalah ahli pemrograman tingkat dewa. Berikan jawaban dengan menyertakan kode dalam format markdown code block (```language ... ```). Berikan jawaban LENGKAP dan PASTIKAN KODE TIDAK PERNAH TERPOTONG. TULIS SAMPAI SELESAI.\n";
-  } else if (mode === 'bola') {
-    systemContent += "MODE BOLA: Anda adalah ahli sepak bola global. Gunakan format Markdown standar untuk mempercantik jawaban (bold, list, tabel). Anda boleh dan harus menjawab SEMUA pertanyaan tentang sepak bola.\n";
-  } else {
-    systemContent += "MODE NORMAL: Jawablah dengan wajar dan profesional. Gunakan format Markdown standar (seperti **bold**, *italic*, ## heading, dan list). Jika memberikan kode atau struktur data, SELALU gunakan fenced code block (```language ... ```).\n";
+  if (sanitizedMessages.length === 0) {
+    return res.status(400).json({ error: 'Tidak ada pesan yang valid untuk dikirim.' });
   }
 
-  if (cachedKnowledge && (mode === 'normal' || !mode)) {
-    systemContent += "\n[KNOWLEDGE BASE]\n" + cachedKnowledge + "\n";
-  }
-
-  sanitizedMessages.unshift({ role: 'system', content: systemContent });
-
-  // Handle attachment gambar jika ada (Format Vision OpenAI)
-  if (attachment && attachment.base64 && attachment.mimeType) {
+  // Handle attachment gambar jika ada
+  if (attachment && attachment.base64 && attachment.mimeType && attachment.mimeType.startsWith('image/')) {
     const lastMsg = sanitizedMessages[sanitizedMessages.length - 1];
     if (lastMsg && lastMsg.role === 'user') {
       lastMsg.content = [
-        { type: "text", text: lastMsg.content || "" },
+        { type: "text", text: typeof lastMsg.content === 'string' ? lastMsg.content : "" },
         {
           type: "image_url",
           image_url: {
@@ -129,7 +137,9 @@ export default async function handler(req, res) {
       },
       body: JSON.stringify({
         model: 'gpt-5.6-sol',
+        system: systemPrompt,             // Format Claude-friendly
         messages: sanitizedMessages,
+        max_tokens: 4096,                 // Wajib untuk backend Claude
         temperature: 0.7,
         stream: true
       })
@@ -138,7 +148,16 @@ export default async function handler(req, res) {
     if (!response.ok) {
       const errText = await response.text();
       console.error("Geraikita API Error:", response.status, errText);
-      res.write(`data: ${JSON.stringify({ error: `API Error (${response.status}): Gagal memproses ke server AI.` })}\n\n`);
+
+      let detailMsg = "Gagal memproses ke server AI.";
+      try {
+        const parsed = JSON.parse(errText);
+        detailMsg = parsed.error?.message || parsed.message || errText;
+      } catch (_) {
+        detailMsg = errText || detailMsg;
+      }
+
+      res.write(`data: ${JSON.stringify({ error: `API Error (${response.status}): ${detailMsg}` })}\n\n`);
       res.write(`data: [DONE]\n\n`);
       return res.end();
     }
@@ -161,9 +180,7 @@ export default async function handler(req, res) {
         if (!trimmed || !trimmed.startsWith('data: ')) continue;
 
         const dataStr = trimmed.replace(/^data: /, '').trim();
-        if (dataStr === '[DONE]') {
-          break;
-        }
+        if (dataStr === '[DONE]') break;
 
         try {
           const parsed = JSON.parse(dataStr);
@@ -179,13 +196,13 @@ export default async function handler(req, res) {
             sentContent = true;
           }
         } catch (e) {
-          // ignore partial json parsing
+          // ignore partial JSON stream
         }
       }
     }
 
     if (!sentContent) {
-      res.write(`data: ${JSON.stringify({ error: "Model tidak menghasilkan balasan. Cek API Key atau status limit." })}\n\n`);
+      res.write(`data: ${JSON.stringify({ error: "Model tidak menghasilkan balasan. Cek kuota harian akun Geraikita." })}\n\n`);
     }
 
     res.write(`data: [DONE]\n\n`);
