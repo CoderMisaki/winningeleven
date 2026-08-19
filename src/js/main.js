@@ -272,10 +272,10 @@ document.addEventListener("DOMContentLoaded", async () => {
     getCurrentSession() {
       return this.sessions[this.currentId];
     },
-    addMessage(role, content) {
+    addMessage(role, content, modelUsed = null) {
       const session = this.getCurrentSession();
       if (!session) return;
-      session.messages.push({ role, content, timestamp: Date.now() });
+      session.messages.push({ role, content, modelUsed, timestamp: Date.now() });
 
       if (session.messages.length === 1 && role === "user") {
         session.title = content.substring(0, 30) + (content.length > 30 ? "..." : "");
@@ -358,9 +358,16 @@ document.addEventListener("DOMContentLoaded", async () => {
         contentHtml = contentHtml.replace(/\n/g, '<br/>');
       }
 
+      const modelBadge = msg.role === 'assistant' && msg.modelUsed
+        ? `<span style="background: #003322; color: #00ff66; border: 1px solid #00ff66; padding: 1px 5px; border-radius: 3px; font-size: 0.55rem; font-family: var(--font-retro); margin-left: 6px;">\u2714 ${Security.escapeHtml(msg.modelUsed)}</span>`
+        : '';
+
       div.innerHTML = `
-        <div class="chat-message-meta">
-          <span>${msg.role === 'user' ? 'YOU' : 'AI ASSISTANT'}</span>
+        <div class="chat-message-meta" style="display: flex; align-items: center; justify-content: space-between;">
+          <div style="display: flex; align-items: center;">
+            <span style="font-weight: bold;">${msg.role === 'user' ? 'YOU' : 'AI ASSISTANT'}</span>
+            ${modelBadge}
+          </div>
           <span>${new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
         </div>
         <div class="chat-message-content">${msg.role === 'assistant' ? contentHtml : Security.escapeHtml(msg.content).replace(/\n/g, '<br>')}</div>
@@ -441,6 +448,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
       const contentBox = div.querySelector(".streaming-content");
       let accumulatedResponse = "";
+      let serverReportedModel = "";
       abortController = new AbortController();
 
       try {
@@ -488,6 +496,9 @@ document.addEventListener("DOMContentLoaded", async () => {
                   accumulatedResponse += `\n\n[Error: ${parsed.error}]`;
                   break;
                 }
+                if (parsed.model) {
+                  serverReportedModel = parsed.model;
+                }
                 if (parsed.content) {
                   accumulatedResponse += parsed.content;
                   contentBox.textContent = accumulatedResponse;
@@ -499,7 +510,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
 
         if (accumulatedResponse) {
-          sessionManager.addMessage("assistant", accumulatedResponse);
+          sessionManager.addMessage("assistant", accumulatedResponse, serverReportedModel || chatModel);
           renderChatWindow();
         }
       } catch (err) {
@@ -508,7 +519,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         } else {
           accumulatedResponse += `\n\n[Error: ${err.message}]`;
         }
-        sessionManager.addMessage("assistant", accumulatedResponse);
+        sessionManager.addMessage("assistant", accumulatedResponse, serverReportedModel || chatModel);
         renderChatWindow();
       } finally {
         isGenerating = false;
