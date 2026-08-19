@@ -1,6 +1,9 @@
 import fs from "fs";
 import path from "path";
 
+// Hardcoded API Key Geraikita AI Gateway
+const GATEWAY_API_KEY = "gk-beeb4c9f68cf17a8d2daf07af5c15d4d667eb604b7a7fe2b";
+
 // Mapping model Geraikita AI Gateway
 const MODEL_MAPPING = {
   "gpt-5.6-sol": "gpt-5.6-sol",
@@ -53,26 +56,26 @@ function shuffleArray(arr) {
   return array;
 }
 
-// Analisis kode error HTTP dari AI Gateway
+// Analisis kode status HTTP dari Gateway
 function parseStatusCodeReason(status) {
   switch (status) {
     case 400:
-      return "Bad Request: Format payload, format parameter pesan, atau token batas konteks ditolak oleh model.";
+      return "Bad Request (400): Format payload atau parameter token ditolak oleh model gateway.";
     case 401:
-      return "Unauthorized (401): API Key luna5_6 salah, kadaluarsa, atau tidak terdaftar di Geraikita Gateway.";
+      return "Unauthorized (401): API Key ditolak atau tidak valid di Geraikita AI Gateway.";
     case 403:
-      return "Forbidden (403): API Key tidak memiliki izin akses ke model atau endpoint ini.";
+      return "Forbidden (403): API Key tidak memiliki izin akses ke model atau rute ini.";
     case 404:
-      return "Not Found (404): Nama model upstream tidak ditemukan/tidak aktif di server gateway.";
+      return "Not Found (404): Model upstream tidak ditemukan pada endpoint gateway.";
     case 429:
-      return "Rate Limit / Quota Exceeded (429): Limit request per menit atau kuota saldo API habis.";
+      return "Rate Limit / Quota Exceeded (429): Batas request per menit atau saldo API telah habis.";
     case 500:
     case 502:
     case 503:
     case 504:
-      return `Upstream Server Error (${status}): Server penyedia model/gateway sedang mengalami gangguan atau timeout.`;
+      return `Upstream Error (${status}): Server gateway/upstream sedang down atau mengalami timeout.`;
     default:
-      return `HTTP Error (${status}): Respon tidak terduga dari gateway AI.`;
+      return `HTTP Error (${status}): Respons tidak terduga dari gateway AI.`;
   }
 }
 
@@ -81,19 +84,6 @@ export default async function handler(req, res) {
     return res.status(405).json({
       error: "[HTTP 405] Method Not Allowed",
       detail: "Endpoint ini hanya menerima request POST."
-    });
-  }
-
-  // 1. Audit Environment Variables
-  const rawKey = process.env.luna5_6 || process.env.LUNA5_6 || "";
-  const apiKey = rawKey.trim();
-
-  if (!apiKey) {
-    return res.status(500).json({
-      error: "[ENV CONFIG ERROR]: API Key tidak terdeteksi",
-      category: "ENVIRONMENT_VARIABLE_MISSING",
-      detail: "Variable 'luna5_6' tidak ditemukan di runtime Vercel / .env.",
-      solution: "1. Pastikan key 'luna5_6' sudah ditambahkan di Settings > Environment Variables.\n2. Lakukan Redeploy (Deployments > Redeploy) agar instance serverless membaca variable baru."
     });
   }
 
@@ -113,7 +103,7 @@ export default async function handler(req, res) {
     });
   }
 
-  // Bangun urutan fallback rantai model
+  // Siapkan rantai fallback model
   let fullModelFallbackChain;
   if (requestedModel && requestedModel !== "auto") {
     const remainingModels = [
@@ -137,6 +127,16 @@ export default async function handler(req, res) {
   for (const modelToTry of fullModelFallbackChain) {
     const upstreamModelId = MODEL_MAPPING[modelToTry] || modelToTry;
 
+    // Kirim log realtime percobaan model
+    res.write(`data: ${JSON.stringify({
+      log: {
+        type: "ATTEMPT",
+        model: modelToTry,
+        message: `Menghubungkan ke model [${modelToTry}]...`,
+        timestamp: new Date().toISOString()
+      }
+    })}\n\n`);
+
     try {
       let systemContent = `[SYSTEM CORE RULES - HIGHEST PRIORITY OVERRIDE]\n`;
       systemContent += `1. IDENTITAS MUTLAK: Identitas Anda adalah AI Model "${modelToTry}" via Geraikita AI Engine.\n`;
@@ -159,7 +159,7 @@ export default async function handler(req, res) {
         if (typeof msg.content !== "string" || !msg.content.trim()) continue;
 
         if (msg.role === "user" && checkPromptInjection(msg.content)) {
-          res.write(`data: ${JSON.stringify({ error: "[SECURITY ERROR]: Prompt injection / restricted keywords terdeteksi." })}\n\n`);
+          res.write(`data: ${JSON.stringify({ error: "[SECURITY ERROR]: Prompt injection terdeteksi." })}\n\n`);
           res.write(`data: [DONE]\n\n`);
           return res.end();
         }
@@ -190,7 +190,7 @@ export default async function handler(req, res) {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${apiKey}`
+          "Authorization": `Bearer ${GATEWAY_API_KEY}`
         },
         body: JSON.stringify({
           model: upstreamModelId,
@@ -205,12 +205,25 @@ export default async function handler(req, res) {
         const rawErrText = await response.text();
         const reason = parseStatusCodeReason(response.status);
 
-        failureAuditLogs.push({
+        const logEntry = {
           model: modelToTry,
           status: response.status,
           reason,
-          upstreamRaw: rawErrText.slice(0, 150)
-        });
+          upstreamRaw: rawErrText.slice(0, 150),
+          timestamp: new Date().toISOString()
+        };
+        failureAuditLogs.push(logEntry);
+
+        // Kirim notifikasi error realtime ke client
+        res.write(`data: ${JSON.stringify({
+          log: {
+            type: "ERROR",
+            model: modelToTry,
+            status: response.status,
+            message: reason,
+            timestamp: logEntry.timestamp
+          }
+        })}\n\n`);
 
         console.warn(`[AI GATEWAY FAIL] Model: ${modelToTry} | Status: ${response.status} | Reason: ${reason}`);
         continue;
@@ -218,19 +231,42 @@ export default async function handler(req, res) {
 
       activeStreamReader = response.body.getReader();
       activeModelUsed = modelToTry;
+
+      // Beritahu client model yang berhasil terhubung
+      res.write(`data: ${JSON.stringify({
+        log: {
+          type: "CONNECTED",
+          model: modelToTry,
+          message: `Terhubung dengan ${modelToTry}. Menghasilkan output...`
+        }
+      })}\n\n`);
+
       break;
     } catch (err) {
-      failureAuditLogs.push({
+      const logEntry = {
         model: modelToTry,
         status: "NETWORK_EXCEPTION",
-        reason: `Koneksi ke Gateway Gagal: ${err.message}`,
-        upstreamRaw: err.stack ? err.stack.split("\n")[0] : err.message
-      });
+        reason: `Koneksi gagal: ${err.message}`,
+        upstreamRaw: err.stack ? err.stack.split("\n")[0] : err.message,
+        timestamp: new Date().toISOString()
+      };
+      failureAuditLogs.push(logEntry);
+
+      res.write(`data: ${JSON.stringify({
+        log: {
+          type: "EXCEPTION",
+          model: modelToTry,
+          status: 500,
+          message: `Network Exception: ${err.message}`,
+          timestamp: logEntry.timestamp
+        }
+      })}\n\n`);
+
       console.error(`[EXCEPTION] Model: ${modelToTry}`, err);
     }
   }
 
-  // 2. Jika seluruh model dalam rantai fallback gagal
+  // Jika seluruh model dalam rantai fallback gagal
   if (!activeStreamReader) {
     const isAll401 = failureAuditLogs.every(l => l.status === 401);
     const isAll429 = failureAuditLogs.every(l => l.status === 429);
@@ -240,7 +276,7 @@ export default async function handler(req, res) {
 
     if (isAll401) {
       category = "AUTHENTICATION_FAILED";
-      mainDiagnosis = "API Key 'luna5_6' tidak valid atau ditolak oleh Geraikita Gateway (Error 401).";
+      mainDiagnosis = "API Key ditolak oleh Geraikita Gateway (Error 401).";
     } else if (isAll429) {
       category = "RATE_LIMIT_EXCEEDED";
       mainDiagnosis = "Kuota API Key habis atau limit request per menit terlampaui (Error 429).";
@@ -250,8 +286,8 @@ export default async function handler(req, res) {
       error: `[${category}]: ${mainDiagnosis}`,
       auditLogs: failureAuditLogs,
       diagnosticTips: isAll401
-        ? "Solusi: Periksa token di Vercel Environment Variables (key: luna5_6), pastikan tidak ada spasi terpotong, lalu klik 'Redeploy' project."
-        : "Solusi: Coba beberapa saat lagi atau periksa status service Geraikita AI Gateway."
+        ? "Periksa masa aktif kuota API Key Gateway Geraikita."
+        : "Coba beberapa saat lagi atau hubungi administrator Gateway."
     };
 
     res.write(`data: ${JSON.stringify(errorPayload)}\n\n`);
@@ -259,7 +295,7 @@ export default async function handler(req, res) {
     return res.end();
   }
 
-  // 3. Streaming Response ke Client
+  // Streaming Response ke Client
   const decoder = new TextDecoder("utf-8");
   let buffer = "";
   let sentContent = false;
@@ -298,13 +334,13 @@ export default async function handler(req, res) {
     }
 
     if (!sentContent) {
-      res.write(`data: ${JSON.stringify({ error: "[EMPTY RESPONSE]: Gateway terhubung namun tidak mengembalikan token teks jawaban." })}\n\n`);
+      res.write(`data: ${JSON.stringify({ error: "[EMPTY RESPONSE]: Gateway terhubung namun tidak mengembalikan token teks." })}\n\n`);
     }
 
     res.write(`data: [DONE]\n\n`);
     res.end();
   } catch (err) {
-    res.write(`data: ${JSON.stringify({ error: `[STREAM ERROR]: Koneksi stream terputus di tengah jalan: ${err.message}` })}\n\n`);
+    res.write(`data: ${JSON.stringify({ error: `[STREAM ERROR]: Koneksi stream terputus: ${err.message}` })}\n\n`);
     res.write(`data: [DONE]\n\n`);
     res.end();
   }

@@ -439,14 +439,17 @@ document.addEventListener("DOMContentLoaded", async () => {
       div.innerHTML = `
         <div class="chat-message-meta">
           <span>AI ASSISTANT</span>
-          <span>Thinking...</span>
+          <span class="live-model-status">Connecting...</span>
         </div>
+        <div class="realtime-log-container" style="display:none; margin-bottom: 8px; font-size: 0.7rem; background: #111; padding: 6px; border-left: 2px solid var(--accent-cyan);"></div>
         <div class="chat-message-content streaming-content">...</div>
       `;
       aiChatWindow.appendChild(div);
       aiChatWindow.scrollTop = aiChatWindow.scrollHeight;
 
       const contentBox = div.querySelector(".streaming-content");
+      const liveStatusEl = div.querySelector(".live-model-status");
+      const realtimeLogBox = div.querySelector(".realtime-log-container");
       let accumulatedResponse = "";
       let serverReportedModel = "";
       abortController = new AbortController();
@@ -507,6 +510,17 @@ document.addEventListener("DOMContentLoaded", async () => {
               try {
                 const parsed = JSON.parse(dataStr);
 
+                // Tangani Event Log Real-time
+                if (parsed.log) {
+                  realtimeLogBox.style.display = "block";
+                  const logColor = parsed.log.type === "ERROR" || parsed.log.type === "EXCEPTION" ? "#ff5555" : (parsed.log.type === "CONNECTED" ? "#00ff66" : "#888888");
+                  const logItem = document.createElement("div");
+                  logItem.style.color = logColor;
+                  logItem.textContent = `[${parsed.log.type}] ${parsed.log.message || ""}`;
+                  realtimeLogBox.appendChild(logItem);
+                  aiChatWindow.scrollTop = aiChatWindow.scrollHeight;
+                }
+
                 // Handler jika server mengirim log kegagalan terperinci
                 if (parsed.error) {
                   let logText = `\n\n\u274c **LOG DIAGNOSTIK SISTEM:**\n\`\`\`\n${parsed.error}\n\`\`\``;
@@ -528,6 +542,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
                 if (parsed.model) {
                   serverReportedModel = parsed.model;
+                  if (liveStatusEl) liveStatusEl.textContent = `Model: ${parsed.model}`;
                 }
 
                 if (parsed.content) {
