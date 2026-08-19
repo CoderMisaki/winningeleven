@@ -77,16 +77,28 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'Invalid content type. Must be application/json' });
   }
 
-  const { messages, attachment, mode } = req.body || {};
+  const { messages, attachment, mode, model: requestedModel } = req.body || {};
   if (!Array.isArray(messages) || messages.length === 0) {
     return res.status(400).json({ error: 'Payload messages kosong atau tidak valid.' });
   }
 
-  // Bangun Urutan Fallback Model (sol -> terra -> luna -> random pool sisanya)
-  const fullModelFallbackChain = [
-    ...PRIMARY_CHAIN,
-    ...shuffleArray(POOL_MODELS)
-  ];
+  // 2. Bangun rantai fallback berdasarkan model terpilih
+  let fullModelFallbackChain;
+
+  if (requestedModel && requestedModel !== 'auto') {
+    // Jika memilih model spesifik, tempatkan model tersebut di urutan terdepan
+    const remainingModels = [
+      ...PRIMARY_CHAIN.filter(m => m !== requestedModel),
+      ...shuffleArray(POOL_MODELS.filter(m => m !== requestedModel))
+    ];
+    fullModelFallbackChain = [requestedModel, ...remainingModels];
+  } else {
+    // Default: Mode Random / Fallback (sol -> terra -> luna -> pool acak)
+    fullModelFallbackChain = [
+      ...PRIMARY_CHAIN,
+      ...shuffleArray(POOL_MODELS)
+    ];
+  }
 
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');

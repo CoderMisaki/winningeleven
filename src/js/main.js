@@ -445,12 +445,14 @@ document.addEventListener("DOMContentLoaded", async () => {
 
       try {
         const chatMode = document.getElementById("aiChatMode")?.value || "normal";
+        const chatModel = document.getElementById("aiChatModel")?.value || "auto";
 
         const response = await fetch("/api/chat", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             mode: chatMode,
+            model: chatModel,
             messages: session.messages.map(m => ({ role: m.role, content: m.content })),
             attachment: prevAttachment ? {
               base64: prevAttachment.base64,
