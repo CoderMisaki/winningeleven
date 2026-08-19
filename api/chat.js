@@ -1,14 +1,11 @@
 import fs from "fs";
 import path from "path";
 
-// Mapping model langsung sesuai spesifikasi Geraikita AI Gateway
+// Mapping model Geraikita AI Gateway
 const MODEL_MAPPING = {
-  // Primary Chain
   "gpt-5.6-sol": "gpt-5.6-sol",
   "gpt-5.6-terra": "gpt-5.6-terra",
   "gpt-5.6-luna": "gpt-5.6-luna",
-
-  // Pool Models
   "glm-5.3": "glm-5.3",
   "glm-5.2": "glm-5.2",
   "kimi-k3": "kimi-k3",
@@ -18,20 +15,11 @@ const MODEL_MAPPING = {
   "claude-sonnet-5-thinking": "claude-sonnet-5-thinking"
 };
 
-const PRIMARY_CHAIN = [
-  "gpt-5.6-sol",
-  "gpt-5.6-terra",
-  "gpt-5.6-luna"
-];
-
+const PRIMARY_CHAIN = ["gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"];
 const POOL_MODELS = [
-  "glm-5.3",
-  "glm-5.2",
-  "kimi-k3",
-  "deepseek-v4-pro",
-  "deepseek-v4-flash",
-  "claude-opus-5-thinking",
-  "claude-sonnet-5-thinking"
+  "glm-5.3", "glm-5.2", "kimi-k3",
+  "deepseek-v4-pro", "deepseek-v4-flash",
+  "claude-opus-5-thinking", "claude-sonnet-5-thinking"
 ];
 
 function checkPromptInjection(text) {
@@ -56,19 +44,6 @@ function scanForSecrets(text) {
   return blockedPatterns.some(pattern => pattern.test(text));
 }
 
-// Cache knowledge base
-let cachedKnowledge = "";
-try {
-  const knowledgePath = path.join(process.cwd(), "src/js/knowledge.json");
-  if (fs.existsSync(knowledgePath)) {
-    const raw = fs.readFileSync(knowledgePath, "utf8");
-    cachedKnowledge = raw.length > 15000 ? raw.slice(0, 15000) + "\n...[Knowledge Truncated]" : raw;
-  }
-} catch (e) {
-  console.error("Knowledge load info:", e.message);
-}
-
-// Helper untuk shuffle array model random fallback
 function shuffleArray(arr) {
   const array = [...arr];
   for (let i = array.length - 1; i > 0; i--) {
@@ -78,32 +53,68 @@ function shuffleArray(arr) {
   return array;
 }
 
+// Analisis kode error HTTP dari AI Gateway
+function parseStatusCodeReason(status) {
+  switch (status) {
+    case 400:
+      return "Bad Request: Format payload, format parameter pesan, atau token batas konteks ditolak oleh model.";
+    case 401:
+      return "Unauthorized (401): API Key luna5_6 salah, kadaluarsa, atau tidak terdaftar di Geraikita Gateway.";
+    case 403:
+      return "Forbidden (403): API Key tidak memiliki izin akses ke model atau endpoint ini.";
+    case 404:
+      return "Not Found (404): Nama model upstream tidak ditemukan/tidak aktif di server gateway.";
+    case 429:
+      return "Rate Limit / Quota Exceeded (429): Limit request per menit atau kuota saldo API habis.";
+    case 500:
+    case 502:
+    case 503:
+    case 504:
+      return `Upstream Server Error (${status}): Server penyedia model/gateway sedang mengalami gangguan atau timeout.`;
+    default:
+      return `HTTP Error (${status}): Respon tidak terduga dari gateway AI.`;
+  }
+}
+
 export default async function handler(req, res) {
   if (req.method !== "POST") {
-    return res.status(405).json({ error: "Method not allowed" });
+    return res.status(405).json({
+      error: "[HTTP 405] Method Not Allowed",
+      detail: "Endpoint ini hanya menerima request POST."
+    });
   }
 
-  // Menggunakan satu ENV tunggal luna5_6
-  const apiKey = (process.env.luna5_6 || process.env.LUNA5_6 || "").trim();
+  // 1. Audit Environment Variables
+  const rawKey = process.env.luna5_6 || process.env.LUNA5_6 || "";
+  const apiKey = rawKey.trim();
+
   if (!apiKey) {
     return res.status(500).json({
-      error: "API Key luna5_6 belum dikonfigurasi di Environment Variables (.env)."
+      error: "[ENV CONFIG ERROR]: API Key tidak terdeteksi",
+      category: "ENVIRONMENT_VARIABLE_MISSING",
+      detail: "Variable 'luna5_6' tidak ditemukan di runtime Vercel / .env.",
+      solution: "1. Pastikan key 'luna5_6' sudah ditambahkan di Settings > Environment Variables.\n2. Lakukan Redeploy (Deployments > Redeploy) agar instance serverless membaca variable baru."
     });
   }
 
   const contentType = req.headers["content-type"] || "";
   if (!contentType.includes("application/json")) {
-    return res.status(400).json({ error: "Invalid content type. Must be application/json" });
+    return res.status(400).json({
+      error: "[INVALID CONTENT TYPE]",
+      detail: "Header Content-Type wajib 'application/json'."
+    });
   }
 
   const { messages, attachment, mode, model: requestedModel } = req.body || {};
   if (!Array.isArray(messages) || messages.length === 0) {
-    return res.status(400).json({ error: "Payload messages kosong atau tidak valid." });
+    return res.status(400).json({
+      error: "[INVALID PAYLOAD]",
+      detail: "Array 'messages' kosong atau tidak sesuai spesifikasi."
+    });
   }
 
   // Bangun urutan fallback rantai model
   let fullModelFallbackChain;
-
   if (requestedModel && requestedModel !== "auto") {
     const remainingModels = [
       ...PRIMARY_CHAIN.filter(m => m !== requestedModel),
@@ -111,11 +122,7 @@ export default async function handler(req, res) {
     ];
     fullModelFallbackChain = [requestedModel, ...remainingModels];
   } else {
-    // Mode Auto / Random Fallback
-    fullModelFallbackChain = [
-      ...PRIMARY_CHAIN,
-      ...shuffleArray(POOL_MODELS)
-    ];
+    fullModelFallbackChain = [...PRIMARY_CHAIN, ...shuffleArray(POOL_MODELS)];
   }
 
   res.setHeader("Content-Type", "text/event-stream");
@@ -124,33 +131,26 @@ export default async function handler(req, res) {
 
   let activeStreamReader = null;
   let activeModelUsed = "";
-  let lastErrorDetail = "";
+  const failureAuditLogs = [];
 
-  // Loop mencari model pertama yang berhasil
+  // Loop rantai fallback model
   for (const modelToTry of fullModelFallbackChain) {
-    try {
-      const upstreamModelId = MODEL_MAPPING[modelToTry] || modelToTry;
+    const upstreamModelId = MODEL_MAPPING[modelToTry] || modelToTry;
 
-      // 1. Susun System Prompt Khusus Model & Mode
+    try {
       let systemContent = `[SYSTEM CORE RULES - HIGHEST PRIORITY OVERRIDE]\n`;
       systemContent += `1. IDENTITAS MUTLAK: Identitas Anda adalah AI Model "${modelToTry}" via Geraikita AI Engine.\n`;
-      systemContent += `2. PERTANYAAN IDENTITAS: Jika ditanya versi/model apa, jawab secara tegas bahwa Anda adalah model "${modelToTry}". Dilarang mengaku sebagai model lain.\n`;
-      systemContent += `3. INTEGRITAS JAWABAN: Jawaban wajib tuntas, komprehensif, tidak boleh terputus di tengah jalan.\n`;
-      systemContent += `4. FORMAT KODE: Semua kode/skrip wajib di dalam Markdown code block lengkap dengan bahasa (contoh: \`\`\`javascript ... \`\`\`).\n\n`;
+      systemContent += `2. PERTANYAAN IDENTITAS: Jika ditanya versi/model apa, jawab secara tegas bahwa Anda adalah model "${modelToTry}".\n`;
+      systemContent += `3. FORMAT KODE: Semua kode/skrip wajib di dalam Markdown code block lengkap dengan bahasa.\n\n`;
 
       if (mode === "coding") {
-        systemContent += `[MODE: CODING EXPERT]\nAnda adalah Principal Software Engineer & Cybersecurity Specialist. Berikan kode yang clean, optimal, siap produksi, dan penjelasan mendalam.\n`;
+        systemContent += `[MODE: CODING EXPERT]\nAnda adalah Principal Software Engineer & Cybersecurity Specialist.\n`;
       } else if (mode === "bola") {
-        systemContent += `[MODE: ANALISIS BOLA & WE10]\nAnda adalah Master Analis Sepak Bola & Pakar Engine Winning Eleven 10. Berikan analisis taktik, metrik pemain, dan probabilitas berbasis data statistik.\n`;
+        systemContent += `[MODE: ANALISIS BOLA & WE10]\nAnda adalah Master Analis Sepak Bola & Pakar Winning Eleven 10.\n`;
       } else {
-        systemContent += `[MODE: NORMAL ASSISTANT]\nAnda adalah Asisten AI WE10 Memory Research System yang cerdas, adaptif, dan solutif. Format respons dengan Markdown terstruktur.\n`;
+        systemContent += `[MODE: NORMAL ASSISTANT]\nAnda adalah Asisten AI WE10 Memory Research System.\n`;
       }
 
-      if (cachedKnowledge && (mode === "normal" || !mode)) {
-        systemContent += `\n[KNOWLEDGE BASE]\n` + cachedKnowledge + `\n`;
-      }
-
-      // 2. Susun dan Sanitasi Pesan
       const sanitizedMessages = [{ role: "system", content: systemContent }];
 
       for (const msg of messages) {
@@ -159,7 +159,7 @@ export default async function handler(req, res) {
         if (typeof msg.content !== "string" || !msg.content.trim()) continue;
 
         if (msg.role === "user" && checkPromptInjection(msg.content)) {
-          res.write(`data: ${JSON.stringify({ error: "Security Violation: Malicious prompt detected." })}\n\n`);
+          res.write(`data: ${JSON.stringify({ error: "[SECURITY ERROR]: Prompt injection / restricted keywords terdeteksi." })}\n\n`);
           res.write(`data: [DONE]\n\n`);
           return res.end();
         }
@@ -172,8 +172,7 @@ export default async function handler(req, res) {
         }
       }
 
-      // Attachment handling
-      if (attachment && attachment.base64 && attachment.mimeType && attachment.mimeType.startsWith("image/")) {
+      if (attachment?.base64 && attachment?.mimeType?.startsWith("image/")) {
         const lastMsg = sanitizedMessages[sanitizedMessages.length - 1];
         if (lastMsg && lastMsg.role === "user") {
           lastMsg.content = [
@@ -186,7 +185,7 @@ export default async function handler(req, res) {
         }
       }
 
-      // Request ke Geraikita AI Gateway
+      // Request ke AI Gateway
       const response = await fetch("https://ai.geraikita.com/v1/chat/completions", {
         method: "POST",
         headers: {
@@ -203,29 +202,64 @@ export default async function handler(req, res) {
       });
 
       if (!response.ok) {
-        const errText = await response.text();
-        console.warn(`Model [${modelToTry} -> ${upstreamModelId}] gagal (${response.status}):`, errText);
-        lastErrorDetail = `Model ${modelToTry} (${response.status})`;
-        continue; // Fallback ke model berikutnya
+        const rawErrText = await response.text();
+        const reason = parseStatusCodeReason(response.status);
+
+        failureAuditLogs.push({
+          model: modelToTry,
+          status: response.status,
+          reason,
+          upstreamRaw: rawErrText.slice(0, 150)
+        });
+
+        console.warn(`[AI GATEWAY FAIL] Model: ${modelToTry} | Status: ${response.status} | Reason: ${reason}`);
+        continue;
       }
 
       activeStreamReader = response.body.getReader();
       activeModelUsed = modelToTry;
       break;
     } catch (err) {
-      console.warn(`Model [${modelToTry}] Exception:`, err.message);
-      lastErrorDetail = err.message;
+      failureAuditLogs.push({
+        model: modelToTry,
+        status: "NETWORK_EXCEPTION",
+        reason: `Koneksi ke Gateway Gagal: ${err.message}`,
+        upstreamRaw: err.stack ? err.stack.split("\n")[0] : err.message
+      });
+      console.error(`[EXCEPTION] Model: ${modelToTry}`, err);
     }
   }
 
-  // Jika seluruh rantai model gagal
+  // 2. Jika seluruh model dalam rantai fallback gagal
   if (!activeStreamReader) {
-    res.write(`data: ${JSON.stringify({ error: `Semua model gagal merespons. Detail: ${lastErrorDetail}` })}\n\n`);
+    const isAll401 = failureAuditLogs.every(l => l.status === 401);
+    const isAll429 = failureAuditLogs.every(l => l.status === 429);
+
+    let mainDiagnosis = "Semua model di dalam rantai fallback gagal merespons.";
+    let category = "MODEL_PIPELINE_ERROR";
+
+    if (isAll401) {
+      category = "AUTHENTICATION_FAILED";
+      mainDiagnosis = "API Key 'luna5_6' tidak valid atau ditolak oleh Geraikita Gateway (Error 401).";
+    } else if (isAll429) {
+      category = "RATE_LIMIT_EXCEEDED";
+      mainDiagnosis = "Kuota API Key habis atau limit request per menit terlampaui (Error 429).";
+    }
+
+    const errorPayload = {
+      error: `[${category}]: ${mainDiagnosis}`,
+      auditLogs: failureAuditLogs,
+      diagnosticTips: isAll401
+        ? "Solusi: Periksa token di Vercel Environment Variables (key: luna5_6), pastikan tidak ada spasi terpotong, lalu klik 'Redeploy' project."
+        : "Solusi: Coba beberapa saat lagi atau periksa status service Geraikita AI Gateway."
+    };
+
+    res.write(`data: ${JSON.stringify(errorPayload)}\n\n`);
     res.write(`data: [DONE]\n\n`);
     return res.end();
   }
 
-  // Stream data ke client
+  // 3. Streaming Response ke Client
   const decoder = new TextDecoder("utf-8");
   let buffer = "";
   let sentContent = false;
@@ -252,7 +286,7 @@ export default async function handler(req, res) {
 
           if (content) {
             if (scanForSecrets(content)) {
-              res.write(`data: ${JSON.stringify({ content: "[REDACTED: SENSITIVE INFORMATION DETECTED]" })}\n\n`);
+              res.write(`data: ${JSON.stringify({ content: "[REDACTED: INFORMASI SENSITIF DISENSOR]" })}\n\n`);
               sentContent = true;
               break;
             }
@@ -264,13 +298,13 @@ export default async function handler(req, res) {
     }
 
     if (!sentContent) {
-      res.write(`data: ${JSON.stringify({ error: "Server tidak mengirimkan teks jawaban. Silakan coba kembali." })}\n\n`);
+      res.write(`data: ${JSON.stringify({ error: "[EMPTY RESPONSE]: Gateway terhubung namun tidak mengembalikan token teks jawaban." })}\n\n`);
     }
 
     res.write(`data: [DONE]\n\n`);
     res.end();
   } catch (err) {
-    res.write(`data: ${JSON.stringify({ error: `Stream terputus: ${err.message}` })}\n\n`);
+    res.write(`data: ${JSON.stringify({ error: `[STREAM ERROR]: Koneksi stream terputus di tengah jalan: ${err.message}` })}\n\n`);
     res.write(`data: [DONE]\n\n`);
     res.end();
   }
