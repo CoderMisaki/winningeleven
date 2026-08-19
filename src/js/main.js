@@ -7,6 +7,50 @@ import { ImportExportService } from "./services/importExport.js";
 import { Security } from "./utils/security.js";
 import { MemoryManager } from "./services/memoryManager.js";
 
+// ==========================================
+// CUSTOM MARKED RENDERER FOR CODE BLOCKS
+// ==========================================
+if (typeof marked !== "undefined") {
+  const customRenderer = new marked.Renderer();
+
+  customRenderer.code = function (code, lang) {
+    const validLang = lang && hljs.getLanguage(lang) ? lang : "";
+    let highlightedCode = Security.escapeHtml(code);
+
+    if (validLang && typeof hljs !== "undefined") {
+      try {
+        highlightedCode = hljs.highlight(code, { language: validLang }).value;
+      } catch (_) {}
+    }
+
+    const languageDisplay = (validLang || lang || "TEXT").toUpperCase();
+    const encodedRawCode = encodeURIComponent(code);
+
+    return `
+      <div class="ai-code-block">
+        <div class="ai-code-header">
+          <span class="ai-code-lang">${Security.escapeHtml(languageDisplay)}</span>
+          <div class="ai-code-actions">
+            <button type="button" class="btn-copy-code" data-code="${encodedRawCode}">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 4px; vertical-align: middle;">
+                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+              </svg>Copy Code
+            </button>
+          </div>
+        </div>
+        <pre><code class="hljs ${validLang}">${highlightedCode}</code></pre>
+      </div>
+    `;
+  };
+
+  marked.setOptions({
+    renderer: customRenderer,
+    breaks: true,
+    gfm: true
+  });
+}
+
 document.addEventListener("DOMContentLoaded", async () => {
   window.UIRenderer = UIRenderer;
   await StateManager.init();
@@ -38,7 +82,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
   });
 
-  // 3. Database Modal Delegate Handlers (Include Walk-Forward Backtest)
+  // 3. Database Modal Delegate Handlers
   const databaseModalList = document.getElementById("databaseModalList");
   const jsonImportField = document.getElementById("jsonImportField");
   let importTargetMemoryId = null;
@@ -132,7 +176,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     document.getElementById("predictPanel")?.classList.add("hidden");
   });
 
-  // 5. Predict Button Execution
+  // 5. Predict Execution
   bindClick("btnPredict", () => {
     const predictPanel = document.getElementById("predictPanel");
     const predictOutput = document.getElementById("predictOutput");
@@ -157,394 +201,391 @@ document.addEventListener("DOMContentLoaded", async () => {
     }, 40);
   });
 
-// ============================================================
-// PATCH B: stub sementara untuk variabel chat yang hilang
-// ============================================================
+  // ============================================================
+  // AI CHAT CORE & SESSION MANAGEMENT
+  // ============================================================
+  const btnUploadAiChat = document.getElementById("btnUploadAiChat");
+  const aiChatUploadMenu = document.getElementById("aiChatUploadMenu");
+  const aiChatFile = document.getElementById("aiChatFile");
+  const aiChatAttachmentPreview = document.getElementById("aiChatAttachmentPreview");
+  const aiChatWindow = document.getElementById("aiChatWindow");
+  const aiChatInput = document.getElementById("aiChatInput");
+  const btnSendAiChat = document.getElementById("btnSendAiChat");
 
-const btnUploadAiChat = document.getElementById("btnUploadAiChat");
-const aiChatUploadMenu = document.getElementById("aiChatUploadMenu");
-const aiChatFile = document.getElementById("aiChatFile");
-const aiChatAttachmentPreview = document.getElementById("aiChatAttachmentPreview");
-const aiChatWindow = document.getElementById("aiChatWindow");
-const aiChatInput = document.getElementById("aiChatInput");
-const btnSendAiChat = document.getElementById("btnSendAiChat");
+  let isGenerating = false;
+  let currentAttachment = null;
+  let abortController = null;
 
-let isGenerating = false;
-let currentAttachment = null;
-
-const Toast = {
-  show(message) {
-    console.log("[TOAST]", message);
-  }
-};
-
-const sessionManager = {
-  sessions: {},
-  currentId: null,
-  STORAGE_KEY: "we10_ai_sessions",
-  init() {
-    try {
-      const data = localStorage.getItem(this.STORAGE_KEY);
-      if (data) {
-        this.sessions = JSON.parse(data);
-        const keys = Object.keys(this.sessions);
-        if (keys.length > 0) {
-          // Find the most recent session
-          this.currentId = keys.sort((a, b) => this.sessions[b].updatedAt - this.sessions[a].updatedAt)[0];
-        }
-      }
-    } catch (e) {
-      console.error("Failed to load sessions", e);
-    }
-    if (!this.currentId) {
-      this.createNewSession();
-    }
-  },
-  save() {
-    try {
-      localStorage.setItem(this.STORAGE_KEY, JSON.stringify(this.sessions));
-    } catch (e) {
-      console.error("Failed to save sessions", e);
-    }
-  },
-  createNewSession() {
-    const id = Date.now().toString();
-    this.sessions[id] = {
-      id,
-      title: "New Chat",
-      messages: [],
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-      parentId: null,
-      children: []
-    };
-    this.currentId = id;
-    this.save();
-    return id;
-  },
-  clearAll() {
-    this.sessions = {};
-    this.currentId = null;
-    this.save();
-    this.createNewSession();
-  },
-  getCurrentSession() {
-    return this.sessions[this.currentId];
-  },
-  addMessage(role, content) {
-    const session = this.getCurrentSession();
-    if (!session) return;
-    session.messages.push({ role, content, timestamp: Date.now() });
-
-    // Auto-generate title if it's the first user message
-    if (session.messages.length === 1 && role === "user") {
-        session.title = content.substring(0, 30) + (content.length > 30 ? "..." : "");
-    }
-
-    session.updatedAt = Date.now();
-    this.save();
-  },
-  switchSession(id) {
-    if (this.sessions[id]) {
-      this.currentId = id;
-      this.save();
-    }
-  }
-};
-sessionManager.init();
-
-function renderSidebar() {
-  const list = document.getElementById("chatSessionList");
-  if (!list) return;
-  list.innerHTML = "";
-
-  const query = (document.getElementById("chatSearchInput")?.value || "").toLowerCase();
-
-  const sessionsArr = Object.values(sessionManager.sessions).sort((a, b) => b.updatedAt - a.updatedAt);
-
-  sessionsArr.forEach(session => {
-    if (query && !session.title.toLowerCase().includes(query)) return;
-
-    const div = document.createElement("div");
-    div.className = "chat-session-item" + (session.id === sessionManager.currentId ? " active" : "");
-    div.dataset.id = session.id;
-
-    div.innerHTML = `
-      <div class="chat-session-title">${Security.escapeHtml(session.title)}</div>
-      <div class="chat-session-date">${new Date(session.updatedAt).toLocaleDateString()} ${new Date(session.updatedAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>
-    `;
-
-    div.addEventListener("click", () => {
-      if(isGenerating) return;
-      sessionManager.switchSession(session.id);
-      renderSidebar();
-      renderChatWindow();
-      if(window.innerWidth <= 768) {
-          document.getElementById("aiSidebar")?.classList.remove("drawer-open");
-      }
-    });
-
-    list.appendChild(div);
-  });
-}
-function renderChatWindow() {
-  if (!aiChatWindow) return;
-  aiChatWindow.innerHTML = "";
-
-  const titleEl = document.getElementById("currentChatTitle");
-  const session = sessionManager.getCurrentSession();
-
-  if (titleEl) {
-      titleEl.textContent = session ? session.title : "New Chat";
-  }
-
-  if (!session || session.messages.length === 0) {
-    aiChatWindow.innerHTML = '<div style="color: #aaa; text-align: center; font-size: 0.7rem; margin-top: 20px;">[SYSTEM] AI Assistant Ready. ChatGPT Professional V4 Experience.</div>';
-    updateContextBudget();
-    return;
-  }
-
-  session.messages.forEach(msg => {
-    const div = document.createElement("div");
-    div.className = `chat-message ${msg.role}`;
-
-    // Check if DOMPurify and marked are available
-    let contentHtml = Security.escapeHtml(msg.content);
-    if (msg.role === 'assistant' && window.marked && window.DOMPurify) {
-       contentHtml = window.DOMPurify.sanitize(window.marked.parse(msg.content));
-    } else if (msg.role === 'assistant') {
-       // Fallback simple parsing if libraries not loaded
-       contentHtml = contentHtml.replace(/\n/g, '<br/>');
-    }
-
-    div.innerHTML = `
-      <div class="chat-message-meta">
-        <span>${msg.role === 'user' ? 'YOU' : 'AI ASSISTANT'}</span>
-        <span>${new Date(msg.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
-      </div>
-      <div class="chat-message-content">${msg.role === 'assistant' ? contentHtml : Security.escapeHtml(msg.content).replace(/\n/g, '<br>')}</div>
-    `;
-    aiChatWindow.appendChild(div);
-  });
-
-  aiChatWindow.scrollTop = aiChatWindow.scrollHeight;
-  updateContextBudget();
-}
-
-
-
-let abortController = null;
-
-if (btnSendAiChat && aiChatInput) {
-  const sendChat = async () => {
-    if (isGenerating) return;
-    const text = aiChatInput.value.trim();
-    if (!text && !currentAttachment) return;
-
-    const session = sessionManager.getCurrentSession();
-    if (!session) return;
-
-    let userMsg = text;
-    if (currentAttachment) {
-      userMsg = `[Attachment: ${currentAttachment.filename}] ${text}`;
-    }
-
-    sessionManager.addMessage("user", userMsg);
-    aiChatInput.value = "";
-
-    // reset attachment UI
-    const prevAttachment = currentAttachment;
-    currentAttachment = null;
-    if (aiChatFile) aiChatFile.value = "";
-    if (aiChatAttachmentPreview) {
-      aiChatAttachmentPreview.style.display = "none";
-      aiChatAttachmentPreview.innerHTML = "";
-    }
-
-    renderSidebar();
-    renderChatWindow();
-
-    isGenerating = true;
-    btnSendAiChat.style.display = "none";
-    const btnStop = document.getElementById("btnStopAiChat");
-    if (btnStop) btnStop.style.display = "block";
-
-    // Add placeholder for AI response
-    const div = document.createElement("div");
-    div.className = "chat-message assistant";
-    div.innerHTML = `
-      <div class="chat-message-meta">
-        <span>AI ASSISTANT</span>
-        <span>Loading...</span>
-      </div>
-      <div class="chat-message-content streaming-content">...</div>
-    `;
-    aiChatWindow.appendChild(div);
-    aiChatWindow.scrollTop = aiChatWindow.scrollHeight;
-
-    const contentBox = div.querySelector(".streaming-content");
-    let accumulatedResponse = "";
-
-    abortController = new AbortController();
-
-    try {
-      const chatMode = document.getElementById("aiChatMode")?.value || "normal";
-
-      const response = await fetch("/api/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          mode: chatMode,
-          messages: session.messages.map(m => ({ role: m.role, content: m.content })),
-          attachment: prevAttachment ? {
-             base64: prevAttachment.base64,
-             mimeType: prevAttachment.mimeType,
-             filename: prevAttachment.filename
-          } : null
-        }),
-        signal: abortController.signal
-      });
-
-      if (!response.ok) {
-        throw new Error(`Server error: ${response.status}`);
-      }
-
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder("utf-8");
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        const chunk = decoder.decode(value, { stream: true });
-        const lines = chunk.split('\n');
-
-        for (const line of lines) {
-          if (line.startsWith("data: ")) {
-            const dataStr = line.replace("data: ", "").trim();
-            if (dataStr === "[DONE]") {
-              break;
-            }
-            try {
-              const parsed = JSON.parse(dataStr);
-              if (parsed.error) {
-                accumulatedResponse += `<br><span style="color:#f55">${Security.escapeHtml(parsed.error)}</span>`;
-                break;
-              }
-              if (parsed.content) {
-                accumulatedResponse += parsed.content;
-
-                // Render streaming (raw text to prevent broken markdown while streaming)
-                contentBox.textContent = accumulatedResponse;
-                aiChatWindow.scrollTop = aiChatWindow.scrollHeight;
-              }
-            } catch (e) {
-              // Ignore parse errors on incomplete chunks
-            }
-          }
-        }
-      }
-
-      // Finalize response
-      if (accumulatedResponse) {
-          sessionManager.addMessage("assistant", accumulatedResponse);
-          // Re-render completely with Markdown
-          renderChatWindow();
-      }
-
-    } catch (err) {
-      if (err.name === 'AbortError') {
-        accumulatedResponse += " [Aborted by user]";
-      } else {
-        accumulatedResponse += `\n\n[Error: ${err.message}]`;
-      }
-      sessionManager.addMessage("assistant", accumulatedResponse);
-      renderChatWindow();
-    } finally {
-      isGenerating = false;
-      btnSendAiChat.style.display = "block";
-      if (btnStop) btnStop.style.display = "none";
-      abortController = null;
+  const Toast = {
+    show(message) {
+      console.log("[TOAST]", message);
     }
   };
 
-  btnSendAiChat.addEventListener("click", sendChat);
-
-  aiChatInput.addEventListener("keydown", (e) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      sendChat();
-    }
-  });
-
-  const btnStop = document.getElementById("btnStopAiChat");
-  if (btnStop) {
-      btnStop.addEventListener("click", () => {
-          if (abortController) {
-              abortController.abort();
+  const sessionManager = {
+    sessions: {},
+    currentId: null,
+    STORAGE_KEY: "we10_ai_sessions",
+    init() {
+      try {
+        const data = localStorage.getItem(this.STORAGE_KEY);
+        if (data) {
+          this.sessions = JSON.parse(data);
+          const keys = Object.keys(this.sessions);
+          if (keys.length > 0) {
+            this.currentId = keys.sort((a, b) => this.sessions[b].updatedAt - this.sessions[a].updatedAt)[0];
           }
+        }
+      } catch (e) {
+        console.error("Failed to load sessions", e);
+      }
+      if (!this.currentId) {
+        this.createNewSession();
+      }
+    },
+    save() {
+      try {
+        localStorage.setItem(this.STORAGE_KEY, JSON.stringify(this.sessions));
+      } catch (e) {
+        console.error("Failed to save sessions", e);
+      }
+    },
+    createNewSession() {
+      const id = Date.now().toString();
+      this.sessions[id] = {
+        id,
+        title: "New Chat",
+        messages: [],
+        createdAt: Date.now(),
+        updatedAt: Date.now()
+      };
+      this.currentId = id;
+      this.save();
+      return id;
+    },
+    clearAll() {
+      this.sessions = {};
+      this.currentId = null;
+      this.save();
+      this.createNewSession();
+    },
+    getCurrentSession() {
+      return this.sessions[this.currentId];
+    },
+    addMessage(role, content) {
+      const session = this.getCurrentSession();
+      if (!session) return;
+      session.messages.push({ role, content, timestamp: Date.now() });
+
+      if (session.messages.length === 1 && role === "user") {
+        session.title = content.substring(0, 30) + (content.length > 30 ? "..." : "");
+      }
+
+      session.updatedAt = Date.now();
+      this.save();
+    },
+    switchSession(id) {
+      if (this.sessions[id]) {
+        this.currentId = id;
+        this.save();
+      }
+    }
+  };
+
+  sessionManager.init();
+
+  function renderSidebar() {
+    const list = document.getElementById("chatSessionList");
+    if (!list) return;
+    list.innerHTML = "";
+
+    const query = (document.getElementById("chatSearchInput")?.value || "").toLowerCase();
+    const sessionsArr = Object.values(sessionManager.sessions).sort((a, b) => b.updatedAt - a.updatedAt);
+
+    sessionsArr.forEach(session => {
+      if (query && !session.title.toLowerCase().includes(query)) return;
+
+      const div = document.createElement("div");
+      div.className = "chat-session-item" + (session.id === sessionManager.currentId ? " active" : "");
+      div.dataset.id = session.id;
+
+      div.innerHTML = `
+        <div class="chat-session-title">${Security.escapeHtml(session.title)}</div>
+        <div class="chat-session-date">${new Date(session.updatedAt).toLocaleDateString()} ${new Date(session.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
+      `;
+
+      div.addEventListener("click", () => {
+        if (isGenerating) return;
+        sessionManager.switchSession(session.id);
+        renderSidebar();
+        renderChatWindow();
+        if (window.innerWidth <= 768) {
+          document.getElementById("aiSidebar")?.classList.remove("drawer-open");
+        }
       });
+
+      list.appendChild(div);
+    });
   }
-}
-// Attachments logic
 
+  function renderChatWindow() {
+    if (!aiChatWindow) return;
+    aiChatWindow.innerHTML = "";
 
-  document.getElementById("btnNewChat")?.addEventListener("click", () => {
-      if(isGenerating) return;
-      sessionManager.createNewSession();
+    const titleEl = document.getElementById("currentChatTitle");
+    const session = sessionManager.getCurrentSession();
+
+    if (titleEl) {
+      titleEl.textContent = session ? session.title : "New Chat";
+    }
+
+    if (!session || session.messages.length === 0) {
+      aiChatWindow.innerHTML = '<div style="color: #aaa; text-align: center; font-size: 0.7rem; margin-top: 20px;">[SYSTEM] AI Assistant Ready. Enhanced Multi-Model Intelligence.</div>';
+      updateContextBudget();
+      return;
+    }
+
+    session.messages.forEach(msg => {
+      const div = document.createElement("div");
+      div.className = `chat-message ${msg.role}`;
+
+      let contentHtml = Security.escapeHtml(msg.content);
+      if (msg.role === 'assistant' && window.marked && window.DOMPurify) {
+        contentHtml = window.DOMPurify.sanitize(window.marked.parse(msg.content), {
+          ADD_ATTR: ['data-code', 'target']
+        });
+      } else if (msg.role === 'assistant') {
+        contentHtml = contentHtml.replace(/\n/g, '<br/>');
+      }
+
+      div.innerHTML = `
+        <div class="chat-message-meta">
+          <span>${msg.role === 'user' ? 'YOU' : 'AI ASSISTANT'}</span>
+          <span>${new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+        </div>
+        <div class="chat-message-content">${msg.role === 'assistant' ? contentHtml : Security.escapeHtml(msg.content).replace(/\n/g, '<br>')}</div>
+      `;
+      aiChatWindow.appendChild(div);
+    });
+
+    aiChatWindow.scrollTop = aiChatWindow.scrollHeight;
+    updateContextBudget();
+  }
+
+  // Handle Event Delegasi Tombol Copy Code
+  if (aiChatWindow) {
+    aiChatWindow.addEventListener("click", (e) => {
+      const copyBtn = e.target.closest(".btn-copy-code");
+      if (copyBtn) {
+        const rawCode = decodeURIComponent(copyBtn.dataset.code || "");
+        navigator.clipboard.writeText(rawCode).then(() => {
+          const originalHTML = copyBtn.innerHTML;
+          copyBtn.innerHTML = "✓ Copied!";
+          copyBtn.classList.add("copied");
+          setTimeout(() => {
+            copyBtn.innerHTML = originalHTML;
+            copyBtn.classList.remove("copied");
+          }, 2000);
+        }).catch(err => {
+          console.error("Copy failed:", err);
+        });
+      }
+    });
+  }
+
+  // Handle Pengiriman Pesan
+  if (btnSendAiChat && aiChatInput) {
+    const sendChat = async () => {
+      if (isGenerating) return;
+      const text = aiChatInput.value.trim();
+      if (!text && !currentAttachment) return;
+
+      const session = sessionManager.getCurrentSession();
+      if (!session) return;
+
+      let userMsg = text;
+      if (currentAttachment) {
+        userMsg = `[Attachment: ${currentAttachment.filename}] ${text}`;
+      }
+
+      sessionManager.addMessage("user", userMsg);
+      aiChatInput.value = "";
+
+      const prevAttachment = currentAttachment;
+      currentAttachment = null;
+      if (aiChatFile) aiChatFile.value = "";
+      if (aiChatAttachmentPreview) {
+        aiChatAttachmentPreview.style.display = "none";
+        aiChatAttachmentPreview.innerHTML = "";
+      }
+
       renderSidebar();
       renderChatWindow();
+
+      isGenerating = true;
+      btnSendAiChat.style.display = "none";
+      const btnStop = document.getElementById("btnStopAiChat");
+      if (btnStop) btnStop.style.display = "block";
+
+      const div = document.createElement("div");
+      div.className = "chat-message assistant";
+      div.innerHTML = `
+        <div class="chat-message-meta">
+          <span>AI ASSISTANT</span>
+          <span>Thinking...</span>
+        </div>
+        <div class="chat-message-content streaming-content">...</div>
+      `;
+      aiChatWindow.appendChild(div);
+      aiChatWindow.scrollTop = aiChatWindow.scrollHeight;
+
+      const contentBox = div.querySelector(".streaming-content");
+      let accumulatedResponse = "";
+      abortController = new AbortController();
+
+      try {
+        const chatMode = document.getElementById("aiChatMode")?.value || "normal";
+
+        const response = await fetch("/api/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            mode: chatMode,
+            messages: session.messages.map(m => ({ role: m.role, content: m.content })),
+            attachment: prevAttachment ? {
+              base64: prevAttachment.base64,
+              mimeType: prevAttachment.mimeType,
+              filename: prevAttachment.filename
+            } : null
+          }),
+          signal: abortController.signal
+        });
+
+        if (!response.ok) {
+          throw new Error(`Server error: ${response.status}`);
+        }
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder("utf-8");
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          const chunk = decoder.decode(value, { stream: true });
+          const lines = chunk.split('\n');
+
+          for (const line of lines) {
+            if (line.startsWith("data: ")) {
+              const dataStr = line.replace("data: ", "").trim();
+              if (dataStr === "[DONE]") break;
+
+              try {
+                const parsed = JSON.parse(dataStr);
+                if (parsed.error) {
+                  accumulatedResponse += `\n\n[Error: ${parsed.error}]`;
+                  break;
+                }
+                if (parsed.content) {
+                  accumulatedResponse += parsed.content;
+                  contentBox.textContent = accumulatedResponse;
+                  aiChatWindow.scrollTop = aiChatWindow.scrollHeight;
+                }
+              } catch (_) {}
+            }
+          }
+        }
+
+        if (accumulatedResponse) {
+          sessionManager.addMessage("assistant", accumulatedResponse);
+          renderChatWindow();
+        }
+      } catch (err) {
+        if (err.name === 'AbortError') {
+          accumulatedResponse += " [Dibatalkan oleh user]";
+        } else {
+          accumulatedResponse += `\n\n[Error: ${err.message}]`;
+        }
+        sessionManager.addMessage("assistant", accumulatedResponse);
+        renderChatWindow();
+      } finally {
+        isGenerating = false;
+        btnSendAiChat.style.display = "block";
+        if (btnStop) btnStop.style.display = "none";
+        abortController = null;
+      }
+    };
+
+    btnSendAiChat.addEventListener("click", sendChat);
+
+    aiChatInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        sendChat();
+      }
+    });
+
+    const btnStop = document.getElementById("btnStopAiChat");
+    if (btnStop) {
+      btnStop.addEventListener("click", () => {
+        if (abortController) abortController.abort();
+      });
+    }
+  }
+
+  document.getElementById("btnNewChat")?.addEventListener("click", () => {
+    if (isGenerating) return;
+    sessionManager.createNewSession();
+    renderSidebar();
+    renderChatWindow();
   });
 
   document.getElementById("chatSearchInput")?.addEventListener("input", renderSidebar);
 
   document.getElementById("btnExportChats")?.addEventListener("click", () => {
-      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(sessionManager.sessions, null, 2));
-      const downloadAnchorNode = document.createElement('a');
-      downloadAnchorNode.setAttribute("href", dataStr);
-      downloadAnchorNode.setAttribute("download", "we10_ai_sessions.json");
-      document.body.appendChild(downloadAnchorNode);
-      downloadAnchorNode.click();
-      downloadAnchorNode.remove();
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(sessionManager.sessions, null, 2));
+    const downloadAnchorNode = document.createElement('a');
+    downloadAnchorNode.setAttribute("href", dataStr);
+    downloadAnchorNode.setAttribute("download", "we10_ai_sessions.json");
+    document.body.appendChild(downloadAnchorNode);
+    downloadAnchorNode.click();
+    downloadAnchorNode.remove();
   });
 
   const importChatsFile = document.getElementById("importChatsFile");
   document.getElementById("btnImportChats")?.addEventListener("click", () => {
-      importChatsFile?.click();
+    importChatsFile?.click();
   });
 
   importChatsFile?.addEventListener("change", (e) => {
-      const file = e.target.files[0];
-      if (!file) return;
-      const reader = new FileReader();
-      reader.onload = (event) => {
-          try {
-              const importedData = JSON.parse(event.target.result);
-              // Merge sessions
-              sessionManager.sessions = { ...sessionManager.sessions, ...importedData };
-              sessionManager.save();
-              Toast.show("Chats Imported Successfully!");
-              renderSidebar();
-              renderChatWindow();
-          } catch (err) {
-              Toast.show("Error parsing JSON file");
-          }
-      };
-      reader.readAsText(file);
-      importChatsFile.value = ""; // reset
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const importedData = JSON.parse(event.target.result);
+        sessionManager.sessions = { ...sessionManager.sessions, ...importedData };
+        sessionManager.save();
+        Toast.show("Chats Imported Successfully!");
+        renderSidebar();
+        renderChatWindow();
+      } catch (err) {
+        Toast.show("Error parsing JSON file");
+      }
+    };
+    reader.readAsText(file);
+    importChatsFile.value = "";
   });
-
 
   document.getElementById("btnClearChats")?.addEventListener("click", () => {
-      if(confirm("Clear ALL chat sessions? This cannot be undone.")) {
-          sessionManager.clearAll();
-          renderSidebar();
-          renderChatWindow();
-      }
+    if (confirm("Hapus SEMUA riwayat chat? Tindakan ini tidak dapat dibatalkan.")) {
+      sessionManager.clearAll();
+      renderSidebar();
+      renderChatWindow();
+    }
   });
 
-  // Attachments logic
-
+  // Attachments Handler
   if (btnUploadAiChat && aiChatUploadMenu) {
     btnUploadAiChat.addEventListener("click", (e) => {
       e.stopPropagation();
@@ -568,10 +609,8 @@ if (btnSendAiChat && aiChatInput) {
         else if (type === "audio") aiChatFile.accept = "audio/*";
         else if (type === "video") aiChatFile.accept = "video/*";
         else if (type === "document") {
-          aiChatFile.accept =
-            ".pdf,.txt,.md,.json,.csv,application/pdf,text/plain,text/markdown,application/json";
+          aiChatFile.accept = ".pdf,.txt,.md,.json,.csv,application/pdf,text/plain,text/markdown,application/json";
         }
-
         aiChatUploadMenu.style.display = "none";
         aiChatFile.dataset.fileType = type;
         aiChatFile.click();
@@ -580,164 +619,108 @@ if (btnSendAiChat && aiChatInput) {
   }
 
   if (aiChatFile) {
-  aiChatFile.addEventListener("change", e => {
-    const file = e.target.files[0];
+    aiChatFile.addEventListener("change", e => {
+      const file = e.target.files[0];
+      if (!file) return;
 
-    if (!file) return;
+      const MAX_FILE_MB = 4;
+      const MAX_FILE_SIZE = MAX_FILE_MB * 1024 * 1024;
 
-    const MAX_FILE_MB = 4;
-    const MAX_FILE_SIZE = MAX_FILE_MB * 1024 * 1024;
+      if (file.size > MAX_FILE_SIZE) {
+        Toast.show(`File terlalu besar. Maksimal ${MAX_FILE_MB}MB.`);
+        aiChatFile.value = "";
+        return;
+      }
 
-    if (file.size > MAX_FILE_SIZE) {
-      Toast.show(`File terlalu besar. Maksimal ${MAX_FILE_MB}MB.`);
-      aiChatFile.value = "";
-      return;
-    }
+      const reader = new FileReader();
+      reader.onload = event => {
+        const base64Data = event.target.result.split(",")[1];
+        currentAttachment = {
+          type: aiChatFile.dataset.fileType || "document",
+          base64: base64Data,
+          mimeType: file.type || "application/octet-stream",
+          filename: file.name
+        };
 
-    const reader = new FileReader();
+        if (aiChatAttachmentPreview) {
+          aiChatAttachmentPreview.innerHTML =
+            `<span>📎 ${Security.escapeHtml(file.name)}</span> ` +
+            `<button id="btnRemoveAttachment" style="background:none; border:none; color:#f55; cursor:pointer; font-weight:bold;">X</button>`;
+          aiChatAttachmentPreview.style.display = "flex";
 
-    reader.onload = event => {
-      const base64Data = event.target.result.split(",")[1];
-
-      currentAttachment = {
-        type: aiChatFile.dataset.fileType || "document",
-        base64: base64Data,
-        mimeType: file.type || "application/octet-stream",
-        filename: file.name
+          document.getElementById("btnRemoveAttachment").addEventListener("click", () => {
+            currentAttachment = null;
+            aiChatFile.value = "";
+            aiChatAttachmentPreview.style.display = "none";
+            aiChatAttachmentPreview.innerHTML = "";
+          });
+        }
       };
 
-      if (aiChatAttachmentPreview) {
-        aiChatAttachmentPreview.innerHTML =
-          `<span>📎 ${Security.escapeHtml(file.name)}</span> ` +
-          `<button id="btnRemoveAttachment" style="background:none; border:none; color:#f55; cursor:pointer; font-weight:bold;">X</button>`;
+      reader.onerror = () => {
+        Toast.show("Gagal membaca file.");
+        aiChatFile.value = "";
+      };
 
-        aiChatAttachmentPreview.style.display = "flex";
-
-        document.getElementById("btnRemoveAttachment").addEventListener("click", () => {
-          currentAttachment = null;
-          aiChatFile.value = "";
-          aiChatAttachmentPreview.style.display = "none";
-          aiChatAttachmentPreview.innerHTML = "";
-        });
-      }
-    };
-
-    reader.onerror = () => {
-      Toast.show("Gagal membaca file.");
-      aiChatFile.value = "";
-    };
-
-    reader.readAsDataURL(file);
-  });
-}
-
-  // Delegate event listener for Copy Code & Collapse buttons
-  if (aiChatWindow) {
-    aiChatWindow.addEventListener("click", (e) => {
-      if (e.target.classList.contains("btn-copy-code")) {
-        const codeToCopy = decodeURIComponent(e.target.dataset.code);
-        navigator.clipboard.writeText(codeToCopy).then(() => {
-          const originalText = e.target.textContent;
-          e.target.textContent = "✓ Copied";
-          Toast.show("Code Copied!");
-          setTimeout(() => { e.target.textContent = originalText; }, 2000);
-        });
-            } else if (e.target.classList.contains("btn-toggle-wrap")) {
-        const pre = e.target.closest('.ai-code-block').querySelector('pre');
-        if (pre) {
-            pre.classList.toggle('wrap-text');
-        }
-      } else if (e.target.classList.contains("btn-toggle-code")) {
-        const block = e.target.closest('.ai-code-block');
-        if (block) {
-            block.classList.toggle('code-collapsed');
-            e.target.textContent = block.classList.contains('code-collapsed') ? "▶ Expand" : "▼ Collapse";
-        }
-      }
+      reader.readAsDataURL(file);
     });
   }
 
-  // View Branches Dummy Handler
-  document.getElementById("btnViewBranches")?.addEventListener("click", () => {
-      const session = sessionManager.getCurrentSession();
-      let treeInfo = `Current Branch ID: ${session.id}\nParent: ${session.parentId || 'Root'}\nChildren: ${session.children.join(', ') || 'None'}`;
-      alert(`Conversation Tree Info:\n\n${treeInfo}\n\n(UI for tree visualization to be implemented)`);
-  });
-
-
-
+  // Sidebar toggle
   const btnToggleSidebar = document.getElementById("btnToggleSidebar");
   if (btnToggleSidebar) {
     btnToggleSidebar.addEventListener("click", (e) => {
       e.stopPropagation();
-      const sidebar = document.getElementById("aiSidebar");
-      if (sidebar) sidebar.classList.toggle("drawer-open");
-  });
+      document.getElementById("aiSidebar")?.classList.toggle("drawer-open");
+    });
   }
-
 
   const btnCloseSidebar = document.getElementById("btnCloseSidebar");
   if (btnCloseSidebar) {
     btnCloseSidebar.addEventListener("click", (e) => {
       e.stopPropagation();
-      const sidebar = document.getElementById("aiSidebar");
-      if (sidebar) sidebar.classList.remove("drawer-open");
-  });
+      document.getElementById("aiSidebar")?.classList.remove("drawer-open");
+    });
   }
 
-
-
-  // --- Offline Mode ---
+  // Offline status indicator
   function updateOnlineStatus() {
-      const isOnline = navigator.onLine;
-      const indicator = document.getElementById("offlineIndicator");
-      if (indicator) {
-          indicator.style.display = isOnline ? "none" : "block";
-      }
-      if (aiChatInput) {
-          aiChatInput.disabled = !isOnline;
-          aiChatInput.placeholder = isOnline ? "Message AI..." : "Offline mode - Chat disabled";
-      }
-      if (btnSendAiChat) btnSendAiChat.disabled = !isOnline;
-      if (btnUploadAiChat) btnUploadAiChat.disabled = !isOnline;
+    const isOnline = navigator.onLine;
+    const indicator = document.getElementById("offlineIndicator");
+    if (indicator) indicator.style.display = isOnline ? "none" : "block";
+    if (aiChatInput) {
+      aiChatInput.disabled = !isOnline;
+      aiChatInput.placeholder = isOnline ? "Message AI..." : "Offline mode - Chat disabled";
+    }
+    if (btnSendAiChat) btnSendAiChat.disabled = !isOnline;
+    if (btnUploadAiChat) btnUploadAiChat.disabled = !isOnline;
   }
 
   window.addEventListener('online', updateOnlineStatus);
   window.addEventListener('offline', updateOnlineStatus);
-  updateOnlineStatus(); // init
+  updateOnlineStatus();
 
-
-  // --- Token Budget Estimator ---
   function updateContextBudget() {
-      const session = sessionManager.getCurrentSession();
-      if (!session) return;
+    const session = sessionManager.getCurrentSession();
+    if (!session) return;
+    const indicator = document.getElementById("contextBudgetIndicator");
+    if (!indicator) return;
 
-      const indicator = document.getElementById("contextBudgetIndicator");
-      if (!indicator) return;
+    let totalChars = 0;
+    session.messages.forEach(m => { totalChars += m.content.length; });
+    const estTokens = Math.round(totalChars / 4);
+    const MAX_TOKENS = 8192;
 
-      // Rough estimation: 4 chars = 1 token
-      let totalChars = 0;
-      session.messages.forEach(m => {
-          totalChars += m.content.length;
-      });
-
-      const estTokens = Math.round(totalChars / 4);
-      const MAX_TOKENS = 8192;
-
-      indicator.textContent = `Est. Context: ${estTokens} / ${MAX_TOKENS} tokens`;
-
-      if (estTokens > MAX_TOKENS * 0.9) {
-          indicator.style.color = "#f55";
-          indicator.textContent += " (Approaching Limit!)";
-      } else if (estTokens > MAX_TOKENS * 0.75) {
-          indicator.style.color = "gold";
-      } else {
-          indicator.style.color = "#888";
-      }
+    indicator.textContent = `Est. Context: ${estTokens} / ${MAX_TOKENS} tokens`;
+    if (estTokens > MAX_TOKENS * 0.9) {
+      indicator.style.color = "#f55";
+    } else if (estTokens > MAX_TOKENS * 0.75) {
+      indicator.style.color = "gold";
+    } else {
+      indicator.style.color = "#888";
+    }
   }
 
-  // Initial Render
   renderSidebar();
   renderChatWindow();
-
 });
