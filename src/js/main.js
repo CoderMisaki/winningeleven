@@ -471,8 +471,22 @@ document.addEventListener("DOMContentLoaded", async () => {
           signal: abortController.signal
         });
 
+        // Handle Error Status HTTP (500 ENV error, 400 bad request, dsb)
         if (!response.ok) {
-          throw new Error(`Server error: ${response.status}`);
+          let errDetail = `HTTP Error ${response.status}`;
+          try {
+            const errJson = await response.json();
+            if (errJson.error) {
+              errDetail = `${errJson.error}\n\nDetail: ${errJson.detail || ""}`;
+              if (errJson.solution) {
+                errDetail += `\n\nSaran Perbaikan:\n${errJson.solution}`;
+              }
+            }
+          } catch (_) {
+            const raw = await response.text();
+            if (raw) errDetail += ` - ${raw}`;
+          }
+          throw new Error(errDetail);
         }
 
         const reader = response.body.getReader();
@@ -492,13 +506,30 @@ document.addEventListener("DOMContentLoaded", async () => {
 
               try {
                 const parsed = JSON.parse(dataStr);
+
+                // Handler jika server mengirim log kegagalan terperinci
                 if (parsed.error) {
-                  accumulatedResponse += `\n\n[Error: ${parsed.error}]`;
+                  let logText = `\n\n\u274c **LOG DIAGNOSTIK SISTEM:**\n\`\`\`\n${parsed.error}\n\`\`\``;
+
+                  if (Array.isArray(parsed.auditLogs) && parsed.auditLogs.length > 0) {
+                    logText += `\n**Riwayat Percobaan Model:**\n`;
+                    parsed.auditLogs.forEach(l => {
+                      logText += `• [${l.model}] Status: ${l.status} \u2794 ${l.reason}\n`;
+                    });
+                  }
+
+                  if (parsed.diagnosticTips) {
+                    logText += `\n\ud83d\udca1 **Tindakan yang Disarankan:**\n${parsed.diagnosticTips}`;
+                  }
+
+                  accumulatedResponse += logText;
                   break;
                 }
+
                 if (parsed.model) {
                   serverReportedModel = parsed.model;
                 }
+
                 if (parsed.content) {
                   accumulatedResponse += parsed.content;
                   contentBox.textContent = accumulatedResponse;
@@ -515,9 +546,9 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
       } catch (err) {
         if (err.name === 'AbortError') {
-          accumulatedResponse += " [Dibatalkan oleh user]";
+          accumulatedResponse += "\n\n[Dibatalkan oleh user]";
         } else {
-          accumulatedResponse += `\n\n[Error: ${err.message}]`;
+          accumulatedResponse += `\n\n\u274c **SYSTEM LOG:**\n\`\`\`\n${err.message}\n\`\`\``;
         }
         sessionManager.addMessage("assistant", accumulatedResponse, serverReportedModel || chatModel);
         renderChatWindow();
