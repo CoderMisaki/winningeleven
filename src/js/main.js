@@ -294,6 +294,108 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   sessionManager.init();
 
+  // ==========================================
+  // ERROR LOGS MANAGER (PERSISTENT IN SIDEBAR)
+  // ==========================================
+  const ErrorLogManager = {
+    STORAGE_KEY: "we10_system_error_logs",
+    logs: [],
+
+    init() {
+      try {
+        const raw = localStorage.getItem(this.STORAGE_KEY);
+        this.logs = raw ? JSON.parse(raw) : [];
+      } catch (_) {
+        this.logs = [];
+      }
+      this.render();
+    },
+
+    save() {
+      try {
+        localStorage.setItem(this.STORAGE_KEY, JSON.stringify(this.logs));
+      } catch (_) {}
+    },
+
+    add(title, detail = "", model = "system") {
+      this.logs.unshift({
+        id: Date.now().toString(),
+        title,
+        detail,
+        model,
+        timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })
+      });
+      if (this.logs.length > 50) this.logs.pop();
+      this.save();
+      this.render();
+    },
+
+    clear() {
+      this.logs = [];
+      this.save();
+      this.render();
+    },
+
+    render() {
+      const container = document.getElementById("errorLogsList");
+      const badge = document.getElementById("errorLogsBadge");
+      if (!container) return;
+
+      if (badge) {
+        if (this.logs.length > 0) {
+          badge.textContent = this.logs.length;
+          badge.style.display = "inline-block";
+        } else {
+          badge.style.display = "none";
+        }
+      }
+
+      if (this.logs.length === 0) {
+        container.innerHTML = `<div style="text-align: center; color: #666; font-size: 0.7rem; padding: 20px;">Tidak ada catatan error.</div>`;
+        return;
+      }
+
+      container.innerHTML = this.logs.map(log => `
+        <div class="error-log-card">
+          <div class="error-log-header">
+            <span class="error-log-model">${Security.escapeHtml(log.model)}</span>
+            <span>${Security.escapeHtml(log.timestamp)}</span>
+          </div>
+          <div class="error-log-body">
+            <strong>${Security.escapeHtml(log.title)}</strong>
+            ${log.detail ? `<div style="color: #aaa; margin-top: 3px; font-size: 0.65rem;">${Security.escapeHtml(log.detail)}</div>` : ''}
+          </div>
+        </div>
+      `).join("");
+    }
+  };
+
+  ErrorLogManager.init();
+
+  // Switch Tab Sidebar
+  const tabBtnChats = document.getElementById("tabBtnChats");
+  const tabBtnLogs = document.getElementById("tabBtnLogs");
+  const sidebarChatsTab = document.getElementById("sidebarChatsTab");
+  const sidebarLogsTab = document.getElementById("sidebarLogsTab");
+
+  tabBtnChats?.addEventListener("click", () => {
+    tabBtnChats.classList.add("active");
+    tabBtnLogs?.classList.remove("active");
+    if (sidebarChatsTab) sidebarChatsTab.style.display = "flex";
+    if (sidebarLogsTab) sidebarLogsTab.style.display = "none";
+  });
+
+  tabBtnLogs?.addEventListener("click", () => {
+    tabBtnLogs.classList.add("active");
+    tabBtnChats?.classList.remove("active");
+    if (sidebarLogsTab) sidebarLogsTab.style.display = "flex";
+    if (sidebarChatsTab) sidebarChatsTab.style.display = "none";
+  });
+
+  document.getElementById("btnClearErrorLogs")?.addEventListener("click", () => {
+    ErrorLogManager.clear();
+  });
+
   function renderSidebar() {
     const list = document.getElementById("chatSessionList");
     if (!list) return;
@@ -439,9 +541,8 @@ document.addEventListener("DOMContentLoaded", async () => {
       div.innerHTML = `
         <div class="chat-message-meta">
           <span>AI ASSISTANT</span>
-          <span class="live-model-status">Connecting...</span>
+          <span class="live-model-status" style="color: #888;">Generating...</span>
         </div>
-        <div class="realtime-log-container" style="display:none; margin-bottom: 8px; font-size: 0.7rem; background: #111; padding: 6px; border-left: 2px solid var(--accent-cyan);"></div>
         <div class="chat-message-content streaming-content">...</div>
       `;
       aiChatWindow.appendChild(div);
@@ -449,7 +550,6 @@ document.addEventListener("DOMContentLoaded", async () => {
 
       const contentBox = div.querySelector(".streaming-content");
       const liveStatusEl = div.querySelector(".live-model-status");
-      const realtimeLogBox = div.querySelector(".realtime-log-container");
       let accumulatedResponse = "";
       let serverReportedModel = "";
       abortController = new AbortController();
@@ -474,22 +574,10 @@ document.addEventListener("DOMContentLoaded", async () => {
           signal: abortController.signal
         });
 
-        // Handle Error Status HTTP (500 ENV error, 400 bad request, dsb)
         if (!response.ok) {
-          let errDetail = `HTTP Error ${response.status}`;
-          try {
-            const errJson = await response.json();
-            if (errJson.error) {
-              errDetail = `${errJson.error}\n\nDetail: ${errJson.detail || ""}`;
-              if (errJson.solution) {
-                errDetail += `\n\nSaran Perbaikan:\n${errJson.solution}`;
-              }
-            }
-          } catch (_) {
-            const raw = await response.text();
-            if (raw) errDetail += ` - ${raw}`;
-          }
-          throw new Error(errDetail);
+          const errRaw = await response.text();
+          ErrorLogManager.add(`HTTP ${response.status}`, errRaw, chatModel);
+          throw new Error(`Koneksi gateway gagal (HTTP ${response.status}). Cek tab Logs di menu ☰.`);
         }
 
         const reader = response.body.getReader();
@@ -510,33 +598,14 @@ document.addEventListener("DOMContentLoaded", async () => {
               try {
                 const parsed = JSON.parse(dataStr);
 
-                // Tangani Event Log Real-time
-                if (parsed.log) {
-                  realtimeLogBox.style.display = "block";
-                  const logColor = parsed.log.type === "ERROR" || parsed.log.type === "EXCEPTION" ? "#ff5555" : (parsed.log.type === "CONNECTED" ? "#00ff66" : "#888888");
-                  const logItem = document.createElement("div");
-                  logItem.style.color = logColor;
-                  logItem.textContent = `[${parsed.log.type}] ${parsed.log.message || ""}`;
-                  realtimeLogBox.appendChild(logItem);
-                  aiChatWindow.scrollTop = aiChatWindow.scrollHeight;
-                }
-
-                // Handler jika server mengirim log kegagalan terperinci
+                // Catat ke ErrorLogManager di Sidebar jika ada error
                 if (parsed.error) {
-                  let logText = `\n\n\u274c **LOG DIAGNOSTIK SISTEM:**\n\`\`\`\n${parsed.error}\n\`\`\``;
-
-                  if (Array.isArray(parsed.auditLogs) && parsed.auditLogs.length > 0) {
-                    logText += `\n**Riwayat Percobaan Model:**\n`;
-                    parsed.auditLogs.forEach(l => {
-                      logText += `• [${l.model}] Status: ${l.status} \u2794 ${l.reason}\n`;
-                    });
+                  let auditDetail = "";
+                  if (Array.isArray(parsed.auditLogs)) {
+                    auditDetail = parsed.auditLogs.map(l => `[${l.model}] ${l.status}: ${l.reason}`).join("\n");
                   }
-
-                  if (parsed.diagnosticTips) {
-                    logText += `\n\ud83d\udca1 **Tindakan yang Disarankan:**\n${parsed.diagnosticTips}`;
-                  }
-
-                  accumulatedResponse += logText;
+                  ErrorLogManager.add(parsed.error, auditDetail, parsed.model || chatModel);
+                  accumulatedResponse = "\u26a0\ufe0f *Gagal memuat respons.* Buka menu \u2630 (Tab LOGS) untuk melihat rincian error.";
                   break;
                 }
 
@@ -561,9 +630,10 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
       } catch (err) {
         if (err.name === 'AbortError') {
-          accumulatedResponse += "\n\n[Dibatalkan oleh user]";
+          accumulatedResponse = "[Dibatalkan oleh pengguna]";
         } else {
-          accumulatedResponse += `\n\n\u274c **SYSTEM LOG:**\n\`\`\`\n${err.message}\n\`\`\``;
+          ErrorLogManager.add("Stream Error", err.message, chatModel);
+          accumulatedResponse = "\u26a0\ufe0f *Terjadi kendala.* Buka menu \u2630 (Tab LOGS) untuk detail kesalahan.";
         }
         sessionManager.addMessage("assistant", accumulatedResponse, serverReportedModel || chatModel);
         renderChatWindow();

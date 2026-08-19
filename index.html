@@ -104,22 +104,44 @@
 
 
       <section class="ai-qa-panel" id="aiQAPanel">
-        <!-- SIDEBAR: CHAT SESSION MANAGER -->
+        <!-- SIDEBAR: CHAT & ERROR LOG MANAGER -->
         <div id="aiSidebar">
-          <div style="padding: 10px; border-bottom: 1px solid #555;">
-             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-                <button class="btn btn-primary" id="btnNewChat" style="flex-grow: 1; margin-right: 5px;">+ New Chat</button>
-                <button class="btn" id="btnCloseSidebar" style="display: none; padding: 5px 10px; background: #550000; color: #ff5555; border-color: #ff0000;">X</button>
-             </div>
-             <input type="text" id="chatSearchInput" placeholder="Search chats..." style="width: 100%; padding: 5px; font-family: var(--font-retro); font-size: 0.6rem; background: #222; color: #fff; border: 1px solid #555;">
-             <div style="display: flex; gap: 5px; margin-top: 5px;">
-               <button class="btn btn-menu" id="btnExportChats" style="flex-grow: 1; font-size: 0.5rem; padding: 4px;">Export</button>
-               <button class="btn btn-menu" id="btnImportChats" style="flex-grow: 1; font-size: 0.5rem; padding: 4px;">Import</button>
-               <button class="btn btn-menu" id="btnClearChats" style="flex-grow: 1; font-size: 0.5rem; padding: 4px; color: #f55;">Clear</button>
-             </div>
+          <!-- Sidebar Navigation Tabs -->
+          <div class="sidebar-tab-header">
+            <button class="sidebar-tab-btn active" id="tabBtnChats">CHATS</button>
+            <button class="sidebar-tab-btn" id="tabBtnLogs">
+              LOGS <span id="errorLogsBadge" class="error-badge-count" style="display: none;">0</span>
+            </button>
           </div>
-          <div id="chatSessionList" style="flex-grow: 1; overflow-y: auto; padding: 5px;">
-             <!-- Sessions injected here -->
+
+          <!-- TAB 1: SESSIONS -->
+          <div id="sidebarChatsTab" class="sidebar-tab-content">
+            <div style="padding: 10px; border-bottom: 1px solid #333;">
+               <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                  <button class="btn btn-primary" id="btnNewChat" style="flex-grow: 1; margin-right: 5px;">+ New Chat</button>
+                  <button class="btn" id="btnCloseSidebar" style="display: none; padding: 5px 10px; background: #550000; color: #ff5555; border-color: #ff0000;">X</button>
+               </div>
+               <input type="text" id="chatSearchInput" placeholder="Search chats..." style="width: 100%; padding: 5px; font-family: var(--font-retro); font-size: 0.6rem; background: #222; color: #fff; border: 1px solid #555;">
+               <div style="display: flex; gap: 5px; margin-top: 5px;">
+                 <button class="btn btn-menu" id="btnExportChats" style="flex-grow: 1; font-size: 0.5rem; padding: 4px;">Export</button>
+                 <button class="btn btn-menu" id="btnImportChats" style="flex-grow: 1; font-size: 0.5rem; padding: 4px;">Import</button>
+                 <button class="btn btn-menu" id="btnClearChats" style="flex-grow: 1; font-size: 0.5rem; padding: 4px; color: #f55;">Clear</button>
+               </div>
+            </div>
+            <div id="chatSessionList" style="flex-grow: 1; overflow-y: auto; padding: 5px;">
+               <!-- Sessions injected here -->
+            </div>
+          </div>
+
+          <!-- TAB 2: DEDICATED ERROR LOGS -->
+          <div id="sidebarLogsTab" class="sidebar-tab-content" style="display: none;">
+            <div style="padding: 10px; border-bottom: 1px solid #333; display: flex; justify-content: space-between; align-items: center;">
+              <span style="font-family: var(--font-retro); font-size: 0.65rem; color: #ff5555;">SYSTEM ERROR LOGS</span>
+              <button class="btn btn-menu" id="btnClearErrorLogs" style="font-size: 0.5rem; padding: 3px 6px; color: #ff5555;">Clear Logs</button>
+            </div>
+            <div id="errorLogsList" class="error-logs-container">
+              <!-- Error entries injected here -->
+            </div>
           </div>
         </div>
 

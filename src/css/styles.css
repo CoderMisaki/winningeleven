@@ -724,6 +724,101 @@ body {
   display: none;
 }
 
+/* ==========================================================================
+   SIDEBAR TABS & DEDICATED ERROR LOGS
+   ========================================================================== */
+.sidebar-tab-header {
+  display: flex;
+  border-bottom: 2px solid #333;
+  background: #111;
+}
+
+.sidebar-tab-btn {
+  flex: 1;
+  padding: 10px 5px;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: #888;
+  font-family: var(--font-retro);
+  font-size: 0.65rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+}
+
+.sidebar-tab-btn.active {
+  color: #fff;
+  border-bottom: 2px solid var(--accent-cyan);
+  background: #1a1a1a;
+}
+
+.sidebar-tab-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.error-badge-count {
+  background: #ff4444;
+  color: #fff;
+  font-size: 0.55rem;
+  padding: 1px 5px;
+  border-radius: 8px;
+  font-family: var(--font-mono);
+  font-weight: bold;
+}
+
+.error-logs-container {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: #080808;
+}
+
+.error-log-card {
+  background: #160808;
+  border: 1px solid #551111;
+  border-left: 3px solid #ff4444;
+  padding: 8px;
+  font-size: 0.7rem;
+  border-radius: 3px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.error-log-header {
+  display: flex;
+  justify-content: space-between;
+  color: #ff7777;
+  font-family: var(--font-retro);
+  font-size: 0.55rem;
+}
+
+.error-log-body {
+  color: #ddd;
+  font-family: var(--font-mono);
+  word-break: break-word;
+  font-size: 0.72rem;
+  line-height: 1.3;
+}
+
+.error-log-model {
+  display: inline-block;
+  background: #330000;
+  color: #ffaaaa;
+  padding: 1px 4px;
+  border-radius: 2px;
+  font-size: 0.6rem;
+}
+
 .wrap-text {
   white-space: pre-wrap !important;
   word-break: break-word;
