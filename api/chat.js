@@ -1,6 +1,20 @@
 import fs from "fs";
 import path from "path";
 
+// Daftar seluruh model yang ada di gambar
+const PRIMARY_CHAIN = ['gpt-5.6-sol', 'gpt-5.6-terra', 'gpt-5.6-luna'];
+const POOL_MODELS = [
+  'claude-haiku-4.5',
+  'glm-5',
+  'glm-4.7',
+  'glm-4.7-flash',
+  'kimi-k2.5',
+  'minimax-m2.5',
+  'minimax-m2.1',
+  'deepseek-v3.2',
+  'deepseek-v4-pro'
+];
+
 function checkPromptInjection(text) {
   const lower = text.toLowerCase();
   const blockedPhrases = [
@@ -23,7 +37,7 @@ function scanForSecrets(text) {
   return blockedPatterns.some(pattern => pattern.test(text));
 }
 
-// Cache knowledge dengan batas aman (maks 15.000 karakter agar tidak over context)
+// Cache knowledge base
 let cachedKnowledge = "";
 try {
   const knowledgePath = path.join(process.cwd(), 'src/js/knowledge.json');
@@ -35,15 +49,26 @@ try {
   console.error("Knowledge load info:", e.message);
 }
 
+// Helper untuk shuffle array model random fallback
+function shuffleArray(arr) {
+  const array = [...arr];
+  for (let i = array.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [array[i], array[j]] = [array[j], array[i]];
+  }
+  return array;
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
+  // Menggunakan satu env tunggal
   const apiKey = process.env.luna5_6 || process.env['luna5.6'];
   if (!apiKey) {
     return res.status(500).json({
-      error: 'API Key luna5_6 belum dikonfigurasi di Environment Variables Vercel.'
+      error: 'API Key luna5_6 belum dikonfigurasi di Environment Variables.'
     });
   }
 
@@ -57,109 +82,123 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'Payload messages kosong atau tidak valid.' });
   }
 
-  // 1. Susun System Prompt
-  let systemContent = "You are an AI assistant for the WE10 Memory Research System.\n";
-  if (mode === 'coding') {
-    systemContent += "MODE CODING: Anda adalah ahli pemrograman tingkat dewa. Berikan kode LENGKAP dalam markdown code block.\n";
-  } else if (mode === 'bola') {
-    systemContent += "MODE BOLA: Anda adalah ahli sepak bola global. Berikan data akurat dan gunakan markdown rapi.\n";
-  } else {
-    systemContent += "MODE NORMAL: Jawablah dengan wajar, ringkas, dan profesional. Gunakan format Markdown standar.\n";
-  }
-
-  if (cachedKnowledge && (mode === 'normal' || !mode)) {
-    systemContent += "\n[KNOWLEDGE BASE]\n" + cachedKnowledge + "\n";
-  }
-
-  // 2. Sanitasi & Perbaiki Urutan Pesan
-  const sanitizedMessages = [{ role: 'system', content: systemContent }];
-
-  for (const msg of messages) {
-    if (!msg || typeof msg !== 'object') continue;
-    if (msg.role !== 'user' && msg.role !== 'assistant') continue;
-    if (typeof msg.content !== 'string' || !msg.content.trim()) continue;
-
-    if (msg.role === 'user' && checkPromptInjection(msg.content)) {
-      return res.status(403).json({
-        error: "Security Violation: Malicious prompt detected."
-      });
-    }
-
-    // Pastikan tidak ada role duplikat yang berurutan
-    const last = sanitizedMessages[sanitizedMessages.length - 1];
-    if (last && last.role === msg.role) {
-      last.content += "\n\n" + msg.content;
-    } else {
-      sanitizedMessages.push({
-        role: msg.role,
-        content: msg.content
-      });
-    }
-  }
-
-  if (sanitizedMessages.length <= 1) {
-    return res.status(400).json({ error: 'Tidak ada pesan yang valid untuk dikirim.' });
-  }
-
-  // Handle attachment jika ada gambar
-  if (attachment && attachment.base64 && attachment.mimeType && attachment.mimeType.startsWith('image/')) {
-    const lastMsg = sanitizedMessages[sanitizedMessages.length - 1];
-    if (lastMsg && lastMsg.role === 'user') {
-      lastMsg.content = [
-        { type: "text", text: typeof lastMsg.content === 'string' ? lastMsg.content : "" },
-        {
-          type: "image_url",
-          image_url: {
-            url: `data:${attachment.mimeType};base64,${attachment.base64}`
-          }
-        }
-      ];
-    }
-  }
+  // Bangun Urutan Fallback Model (sol -> terra -> luna -> random pool sisanya)
+  const fullModelFallbackChain = [
+    ...PRIMARY_CHAIN,
+    ...shuffleArray(POOL_MODELS)
+  ];
 
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
 
-  try {
-    const response = await fetch('https://ai.geraikita.com/v1/claude/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey.trim()}`
-      },
-      body: JSON.stringify({
-        model: 'gpt-5.6-sol',
-        messages: sanitizedMessages,
-        max_tokens: 8192,
-        temperature: 0.7,
-        stream: true
-      })
-    });
+  let activeStreamReader = null;
+  let activeModelUsed = "";
+  let lastErrorDetail = "";
 
-    if (!response.ok) {
-      const errText = await response.text();
-      console.error("Upstream Error:", response.status, errText);
+  // Iterasi pencarian model yang sukses
+  for (const modelToTry of fullModelFallbackChain) {
+    try {
+      // 1. Susun System Prompt Khusus Model & Mode
+      let systemContent = `[SYSTEM CORE RULES]\n`;
+      systemContent += `1. IDENTITAS MODEL: Anda saat ini berjalan menggunakan model arsitektur "${modelToTry}". Jika pengguna menanyakan model apa yang sedang Anda gunakan atau identitas Anda, jawablah secara jujur, lugas, dan akurat bahwa Anda adalah "${modelToTry}".\n`;
+      systemContent += `2. INTEGRITAS JAWABAN: Jawaban HARUS tuntas, komprehensif, menyeluruh, dan tidak boleh terputus di tengah jalan, tidak boleh menggantung, dan dilarang memberikan jawaban ambigu/setengah-setengah.\n`;
+      systemContent += `3. FORMAT KODE: Semua kode/script harus selalu diletakkan di dalam Markdown code block lengkap dengan penanda bahasa (e.g. \`\`\`javascript ... \`\`\`). Dilarang memotong kode dengan titik-titik komentar (...).\n\n`;
 
-      // Ekstrak pesan detail error asli dari Geraikita
-      let detailMsg = errText;
-      try {
-        const parsed = JSON.parse(errText);
-        detailMsg = parsed.error?.message || parsed.message || errText;
-      } catch (_) {}
+      if (mode === 'coding') {
+        systemContent += `[MODE: CODING EXPERT]\nAnda adalah Principal Software Engineer & Cybersecurity Specialist tingkat dewa. Berikan kode pemrograman yang lengkap, bersih, siap pakai (production-ready), optimal, dan sertakan penjelasan teknis secara mendalam.\n`;
+      } else if (mode === 'bola') {
+        systemContent += `[MODE: ANALISIS BOLA & WE10]\nAnda adalah Master Analis Sepak Bola Dunia dan Pakar Engine Winning Eleven 10 / PES Klasik. Berikan analisis taktik, metrik pemain, formasi, dan pembacaan statistik pertandingan secara tajam, akurat, dan berbasis data.\n`;
+      } else {
+        systemContent += `[MODE: NORMAL ASSISTANT]\nAnda adalah Asisten AI WE10 Memory Research System yang cerdas, adaptif, profesional, dan solutif. Jawab setiap pertanyaan dengan jelas, terstruktur rapi menggunakan format Markdown standar.\n`;
+      }
 
-      res.write(`data: ${JSON.stringify({ error: `Geraikita API (${response.status}): ${detailMsg}` })}\n\n`);
-      res.write(`data: [DONE]\n\n`);
-      return res.end();
+      if (cachedKnowledge && (mode === 'normal' || !mode)) {
+        systemContent += `\n[KNOWLEDGE BASE]\n` + cachedKnowledge + `\n`;
+      }
+
+      // 2. Sanitasi & Perbaiki Pesan
+      const sanitizedMessages = [{ role: 'system', content: systemContent }];
+
+      for (const msg of messages) {
+        if (!msg || typeof msg !== 'object') continue;
+        if (msg.role !== 'user' && msg.role !== 'assistant') continue;
+        if (typeof msg.content !== 'string' || !msg.content.trim()) continue;
+
+        if (msg.role === 'user' && checkPromptInjection(msg.content)) {
+          res.write(`data: ${JSON.stringify({ error: "Security Violation: Malicious prompt detected." })}\n\n`);
+          res.write(`data: [DONE]\n\n`);
+          return res.end();
+        }
+
+        const last = sanitizedMessages[sanitizedMessages.length - 1];
+        if (last && last.role === msg.role) {
+          last.content += "\n\n" + msg.content;
+        } else {
+          sanitizedMessages.push({ role: msg.role, content: msg.content });
+        }
+      }
+
+      // Attachment handling
+      if (attachment && attachment.base64 && attachment.mimeType && attachment.mimeType.startsWith('image/')) {
+        const lastMsg = sanitizedMessages[sanitizedMessages.length - 1];
+        if (lastMsg && lastMsg.role === 'user') {
+          lastMsg.content = [
+            { type: "text", text: typeof lastMsg.content === 'string' ? lastMsg.content : "" },
+            {
+              type: "image_url",
+              image_url: { url: `data:${attachment.mimeType};base64,${attachment.base64}` }
+            }
+          ];
+        }
+      }
+
+      const response = await fetch('https://ai.geraikita.com/v1/claude/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey.trim()}`
+        },
+        body: JSON.stringify({
+          model: modelToTry,
+          messages: sanitizedMessages,
+          max_tokens: 8192,
+          temperature: 0.7,
+          stream: true
+        })
+      });
+
+      if (!response.ok) {
+        const errText = await response.text();
+        console.warn(`Model [${modelToTry}] gagal (${response.status}):`, errText);
+        lastErrorDetail = `Model ${modelToTry} Error: ${response.status}`;
+        continue; // Fallback ke model berikutnya
+      }
+
+      activeStreamReader = response.body.getReader();
+      activeModelUsed = modelToTry;
+      break; // Berhasil mendapatkan model aktif
+    } catch (err) {
+      console.warn(`Model [${modelToTry}] Exception:`, err.message);
+      lastErrorDetail = err.message;
     }
+  }
 
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder('utf-8');
-    let buffer = '';
-    let sentContent = false;
+  // Jika semua model gagal dihubungi
+  if (!activeStreamReader) {
+    res.write(`data: ${JSON.stringify({ error: `Semua model gagal merespons. Detail: ${lastErrorDetail}` })}\n\n`);
+    res.write(`data: [DONE]\n\n`);
+    return res.end();
+  }
 
+  // Membaca stream respon dari model terpilih
+  const decoder = new TextDecoder('utf-8');
+  let buffer = '';
+  let sentContent = false;
+
+  try {
     while (true) {
-      const { done, value } = await reader.read();
+      const { done, value } = await activeStreamReader.read();
       if (done) break;
 
       buffer += decoder.decode(value, { stream: true });
@@ -183,22 +222,21 @@ export default async function handler(req, res) {
               sentContent = true;
               break;
             }
-            res.write(`data: ${JSON.stringify({ content })}\n\n`);
+            res.write(`data: ${JSON.stringify({ content, model: activeModelUsed })}\n\n`);
             sentContent = true;
           }
-        } catch (e) {}
+        } catch (_) {}
       }
     }
 
     if (!sentContent) {
-      res.write(`data: ${JSON.stringify({ error: "Server tidak mengirimkan teks jawaban. Periksa sisa kuota token harian Anda." })}\n\n`);
+      res.write(`data: ${JSON.stringify({ error: "Server tidak mengirimkan teks jawaban. Silakan coba kembali." })}\n\n`);
     }
 
     res.write(`data: [DONE]\n\n`);
     res.end();
   } catch (err) {
-    console.error("Fetch Exception:", err);
-    res.write(`data: ${JSON.stringify({ error: `Gagal terhubung ke AI: ${err.message}` })}\n\n`);
+    res.write(`data: ${JSON.stringify({ error: `Stream terputus: ${err.message}` })}\n\n`);
     res.write(`data: [DONE]\n\n`);
     res.end();
   }

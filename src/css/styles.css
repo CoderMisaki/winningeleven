@@ -651,64 +651,82 @@ body {
   text-align: center;
 }
 
-/* Chat styles */
+/* ==========================================================================
+   CHATGPT-LIKE CODE BLOCK STYLES
+   ========================================================================== */
+
 .ai-code-block {
-    background: #1e1e1e;
-    border: 1px solid #444;
-    border-radius: 4px;
-    margin: 10px 0;
-    overflow: hidden;
+  background-color: #0d1117;
+  border: 1px solid #30363d;
+  border-radius: 6px;
+  margin: 12px 0;
+  overflow: hidden;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.4);
 }
 
 .ai-code-header {
-    background: #2d2d2d;
-    padding: 5px 10px;
-    font-size: 0.75rem;
-    color: #ccc;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    border-bottom: 1px solid #444;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background-color: #161b22;
+  padding: 6px 12px;
+  border-bottom: 1px solid #30363d;
 }
 
-.ai-code-header span {
-    font-weight: bold;
-    text-transform: uppercase;
+.ai-code-lang {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  font-weight: bold;
+  color: #8b949e;
+  letter-spacing: 0.5px;
 }
 
-.ai-code-header button {
-    background: #444;
-    border: none;
-    color: #fff;
-    cursor: pointer;
-    padding: 3px 8px;
-    border-radius: 3px;
-    font-size: 0.7rem;
-    margin-left: 5px;
+.btn-copy-code {
+  background: transparent;
+  border: 1px solid #30363d;
+  color: #c9d1d9;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  transition: all 0.2s ease;
 }
 
-.ai-code-header button:hover {
-    background: #555;
+.btn-copy-code:hover {
+  background-color: #21262d;
+  border-color: #8b949e;
+  color: #ffffff;
+}
+
+.btn-copy-code.copied {
+  color: var(--accent-green);
+  border-color: var(--accent-green);
 }
 
 .ai-code-block pre {
-    margin: 0;
-    padding: 10px;
-    overflow-x: auto;
-    font-size: 0.85rem;
-    line-height: 1.4;
+  margin: 0;
+  padding: 12px;
+  overflow-x: auto;
+  background: transparent;
 }
 
 .ai-code-block pre code {
-    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+  line-height: 1.5;
+  tab-size: 2;
 }
 
 .ai-code-block.code-collapsed pre {
-    display: none;
+  display: none;
 }
+
 .wrap-text {
-    white-space: pre-wrap !important;
-    word-break: break-word;
+  white-space: pre-wrap !important;
+  word-break: break-word;
 }
 .chat-message {
   margin-bottom: 15px;
