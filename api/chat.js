@@ -1,7 +1,25 @@
 import fs from "fs";
 import path from "path";
 
-// Daftar seluruh model yang ada di gambar
+// Mapping nama UI / Custom ke Real Model ID di upstream gateway
+const MODEL_MAPPING = {
+  // Primary Chain
+  "gpt-5.6-sol": "gpt-4o",
+  "gpt-5.6-terra": "gpt-4o-mini",
+  "gpt-5.6-luna": "chatgpt-4o-latest",
+  
+  // Pool Models
+  "claude-haiku-4.5": "claude-3-5-haiku-20241022",
+  "glm-5": "glm-4-plus",
+  "glm-4.7": "glm-4",
+  "glm-4.7-flash": "glm-4-flash",
+  "kimi-k2.5": "moonshot-v1-32k",
+  "minimax-m2.5": "abab6.5s-chat",
+  "minimax-m2.1": "abab6.5-chat",
+  "deepseek-v3.2": "deepseek-chat",
+  "deepseek-v4-pro": "deepseek-coder"
+};
+
 const PRIMARY_CHAIN = ['gpt-5.6-sol', 'gpt-5.6-terra', 'gpt-5.6-luna'];
 const POOL_MODELS = [
   'claude-haiku-4.5',
@@ -111,6 +129,9 @@ export default async function handler(req, res) {
   // Iterasi pencarian model yang sukses
   for (const modelToTry of fullModelFallbackChain) {
     try {
+      // Dapatkan model upstream asli dari map (jika tidak ada, gunakan nama aslinya)
+      const upstreamModelId = MODEL_MAPPING[modelToTry] || modelToTry;
+
       // 1. Susun System Prompt Khusus Model & Mode
       let systemContent = `[SYSTEM CORE RULES - HIGHEST PRIORITY OVERRIDE]\n`;
       systemContent += `1. IDENTITAS MUTLAK: Identitas Anda BUKAN "ChatGPT" dan BUKAN "GPT-4". Anda secara spesifik adalah AI Model "${modelToTry}" yang berjalan melalui Geraikita AI Gateway Engine.\n`;
@@ -166,14 +187,15 @@ export default async function handler(req, res) {
         }
       }
 
-      const response = await fetch('https://ai.geraikita.com/v1/claude/chat/completions', {
+      // Gunakan Universal OpenAI Endpoint
+      const response = await fetch('https://ai.geraikita.com/v1/chat/completions', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${apiKey.trim()}`
         },
         body: JSON.stringify({
-          model: modelToTry,
+          model: upstreamModelId,
           messages: sanitizedMessages,
           max_tokens: 8192,
           temperature: 0.7,
@@ -183,8 +205,8 @@ export default async function handler(req, res) {
 
       if (!response.ok) {
         const errText = await response.text();
-        console.warn(`Model [${modelToTry}] gagal (${response.status}):`, errText);
-        lastErrorDetail = `Model ${modelToTry} Error: ${response.status}`;
+        console.warn(`Model [${modelToTry} -> ${upstreamModelId}] gagal (${response.status}):`, errText);
+        lastErrorDetail = `Model ${modelToTry} (${response.status})`;
         continue; // Fallback ke model berikutnya
       }
 
