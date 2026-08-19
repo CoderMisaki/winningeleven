@@ -148,6 +148,26 @@
           <!-- Input Area -->
           <div style="padding: 10px; background: #1a1a1a; border-top: 1px solid #555; display: flex; flex-direction: column; gap: 5px;">
             <div class="chat-input-wrapper">
+              <!-- Model Selector -->
+              <select id="aiChatModel" class="chat-mode-select">
+                <!-- Primary Chain -->
+                <option value="gpt-5.6-sol">gpt-5.6-sol</option>
+                <option value="gpt-5.6-terra">gpt-5.6-terra</option>
+                <option value="gpt-5.6-luna">gpt-5.6-luna</option>
+                <!-- Pool Models -->
+                <option value="claude-haiku-4.5">claude-haiku-4.5</option>
+                <option value="glm-5">glm-5</option>
+                <option value="glm-4.7">glm-4.7</option>
+                <option value="glm-4.7-flash">glm-4.7-flash</option>
+                <option value="kimi-k2.5">kimi-k2.5</option>
+                <option value="minimax-m2.5">minimax-m2.5</option>
+                <option value="minimax-m2.1">minimax-m2.1</option>
+                <option value="deepseek-v3.2">deepseek-v3.2</option>
+                <option value="deepseek-v4-pro">deepseek-v4-pro</option>
+                <!-- Auto fallback -->
+                <option value="auto" selected>\u26A1 Random / Fallback</option>
+              </select>
+              <!-- Mode Selector -->
               <select id="aiChatMode" class="chat-mode-select">
                 <option value="normal">Normal</option>
                 <option value="coding">Coding</option>
