@@ -6,6 +6,7 @@ import { MatchingEngine } from "./services/matchingEngine.js";
 import { ImportExportService } from "./services/importExport.js";
 import { Security } from "./utils/security.js";
 import { MemoryManager } from "./services/memoryManager.js";
+import { GitHubAgentUI } from "./ui/githubAgentUI.js";
 
 // ==========================================
 // CUSTOM MARKED RENDERER FOR CODE BLOCKS
@@ -852,4 +853,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   renderSidebar();
   renderChatWindow();
+
+  // Initialize GitHub Agent UI
+  GitHubAgentUI.init();
 });

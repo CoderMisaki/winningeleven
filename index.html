@@ -11,7 +11,7 @@
     font-src 'self' https://fonts.gstatic.com data:;
     style-src 'self' https://fonts.googleapis.com 'unsafe-inline' https://cdnjs.cloudflare.com;
     script-src 'self' 'unsafe-eval' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com;
-    connect-src 'self';
+    connect-src 'self' https://api.github.com;
     worker-src 'self' blob:;
     media-src 'self' blob: data:;
     object-src 'none';
@@ -99,9 +99,35 @@
 
       <section class="results-panel hidden" id="predictPanel" style="margin-top: 10px;">
         <div class="results-header">PREDICT OUTPUT</div>
-        <div class="results-body" id="predictOutput"></div>
-      </section>
+        <div class="results-body" id="predictOutput"></div>      </section>
 
+      <section class="game-screen" style="margin-top: 15px;">
+        <div class="schedule-tab">GITHUB LOCAL-AGENT & AUTONOMOUS MEMORY</div>
+        <div class="main-board">
+          <!-- Token & Connection Row -->
+          <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px;">
+            <input type="password" id="ghTokenInput" placeholder="GitHub Personal Access Token (scope: repo)" style="flex: 1; min-width: 250px; padding: 8px; background: #000; color: #fff; border: 1px solid #555; font-family: var(--font-mono);" />
+            <button class="btn btn-primary" id="btnConnectGH">CONNECT GITHUB</button>
+          </div>
+          <!-- Repo Selector -->
+          <div style="margin-bottom: 10px;">
+            <select id="ghRepoSelect" disabled style="width: 100%; padding: 8px; background: #111; color: #0ff; border: 1px solid #555; font-family: var(--font-mono);">
+              <option value="">Pilih Repositori...</option>
+            </select>
+          </div>
+          <!-- Resume Banner Slot -->
+          <div id="resumeBanner" style="display: none;"></div>
+          <!-- Prompt Area -->
+          <div style="margin-bottom: 10px;">
+            <textarea id="agentPromptInput" placeholder="Tuliskan fitur/perubahan yang diinginkan. Contoh: 'Tambahkan validasi input form dan export CSV di folder utils'..." rows="3" style="width: 100%; padding: 8px; background: #000; color: #fff; border: 1px solid #555; font-family: var(--font-mono); font-size: 0.85rem;"></textarea>
+          </div>
+          <button class="btn btn-primary" id="btnRunAgentTask" disabled style="width: 100%;">RUN AGENT & AUTO CREATE PR</button>
+          <!-- Real-time Agent Status Log -->
+          <div id="agentStatusOutput" style="margin-top: 10px; padding: 10px; background: #0a0a0a; border: 1px solid #333; font-family: var(--font-mono); font-size: 0.75rem; min-height: 40px; color: #aaa;">
+            Status: Menunggu instruksi...
+          </div>
+        </div>
+      </section>
 
       <section class="ai-qa-panel" id="aiQAPanel">
         <!-- SIDEBAR: CHAT & ERROR LOG MANAGER -->
