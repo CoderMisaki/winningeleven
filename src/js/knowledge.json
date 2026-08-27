@@ -1,0 +1,4908 @@
+{
+  "memoryNumber": "1",
+  "games": [
+    {
+      "gameNumber": 1,
+      "p1": "Czech",
+      "matches": [
+        {
+          "home": "Spain",
+          "score": "1:1",
+          "away": "Togo"
+        },
+        {
+          "home": "Iran",
+          "score": "4:1",
+          "away": "Nigeria"
+        },
+        {
+          "home": "Korea",
+          "score": "5:2",
+          "away": "Hungary"
+        },
+        {
+          "home": "Australia",
+          "score": "5:4",
+          "away": "Northern Ireland"
+        },
+        {
+          "home": "Angola",
+          "score": "3:4",
+          "away": "Ecuador"
+        },
+        {
+          "home": "Slovakia",
+          "score": "3:3",
+          "away": "South Africa"
+        },
+        {
+          "home": "Japan",
+          "score": "3:2",
+          "away": "Tunisia"
+        }
+      ],
+      "topGoals": [
+        {
+          "country": "Korea",
+          "player": "J s park",
+          "goals": "2"
+        },
+        {
+          "country": "Korea",
+          "player": "C y park ",
+          "goals": "2"
+        },
+        {
+          "country": "Northern Ireland",
+          "player": "Healy",
+          "goals": "2"
+        },
+        {
+          "country": "Australia",
+          "player": "Viduka",
+          "goals": "2"
+        },
+        {
+          "country": "Ecuador",
+          "player": "Tenorio",
+          "goals": "2"
+        },
+        {
+          "country": "Ecuador",
+          "player": "Borja",
+          "goals": "2"
+        },
+        {
+          "country": "South Africa",
+          "player": "Zuma",
+          "goals": "2"
+        }
+      ],
+      "lastUpdate": "2026-06-28T07:47:54.080Z"
+    },
+    {
+      "gameNumber": 2,
+      "p1": "Czech",
+      "matches": [
+        {
+          "home": "South Africa",
+          "score": "3:2",
+          "away": "Romania"
+        },
+        {
+          "home": "Germany",
+          "score": "2:3",
+          "away": "Spain"
+        },
+        {
+          "home": "Angola",
+          "score": "2:2",
+          "away": "Poland"
+        },
+        {
+          "home": "Korea",
+          "score": "3:3",
+          "away": "Turkey"
+        },
+        {
+          "home": "Hungary",
+          "score": "0:7",
+          "away": "Brazil"
+        },
+        {
+          "home": "Trinidad & Tobago",
+          "score": "0:1",
+          "away": "Belgium"
+        },
+        {
+          "home": "Costa Rica",
+          "score": "4:0",
+          "away": "Latvia"
+        }
+      ],
+      "topGoals": [
+        {
+          "country": "Romania",
+          "player": "Chivu",
+          "goals": "2"
+        },
+        {
+          "country": "South Africa",
+          "player": "Bartlett",
+          "goals": "2"
+        },
+        {
+          "country": "Germany",
+          "player": "Ballack",
+          "goals": "2"
+        },
+        {
+          "country": "Brazil",
+          "player": "Ronaldinho ",
+          "goals": "2"
+        },
+        {
+          "country": "South Africa",
+          "player": "Buckley",
+          "goals": "1"
+        },
+        {
+          "country": "Spain",
+          "player": "Joaquin",
+          "goals": "1"
+        },
+        {
+          "country": "Spain",
+          "player": "Vicente",
+          "goals": "1"
+        }
+      ],
+      "lastUpdate": "2026-06-28T07:52:31.809Z"
+    },
+    {
+      "gameNumber": 3,
+      "p1": "Czech",
+      "matches": [
+        {
+          "home": "South Africa",
+          "score": "5:4",
+          "away": "Ghana"
+        },
+        {
+          "home": "Switzerland",
+          "score": "1:3",
+          "away": "Holland"
+        },
+        {
+          "home": "Turkey",
+          "score": "1:4",
+          "away": "Ivory Coast"
+        },
+        {
+          "home": "Romania",
+          "score": "2:1",
+          "away": "Saudi Arabia"
+        },
+        {
+          "home": "Peru",
+          "score": "3:2",
+          "away": "Chile"
+        },
+        {
+          "home": "Wales",
+          "score": "1:2",
+          "away": "Belgium"
+        },
+        {
+          "home": "Argentina",
+          "score": "7:2",
+          "away": "Scotland"
+        }
+      ],
+      "topGoals": [
+        {
+          "country": "South Africa",
+          "player": "Zuma",
+          "goals": "2"
+        },
+        {
+          "country": "Holland",
+          "player": "Van nistelrooy",
+          "goals": "2"
+        },
+        {
+          "country": "Ivory Coast",
+          "player": "Drogba",
+          "goals": "2"
+        },
+        {
+          "country": "Ivory Coast",
+          "player": "Kalou",
+          "goals": "2"
+        },
+        {
+          "country": "Romania",
+          "player": "Mazilu",
+          "goals": "2"
+        },
+        {
+          "country": "Peru",
+          "player": "Farfan",
+          "goals": "2"
+        },
+        {
+          "country": "Argentina",
+          "player": "Riquelme",
+          "goals": "2"
+        }
+      ],
+      "lastUpdate": "2026-06-28T07:58:16.521Z"
+    },
+    {
+      "gameNumber": 4,
+      "p1": "Czech",
+      "matches": [
+        {
+          "home": "Brazil",
+          "score": "8-0",
+          "away": "Hungary"
+        },
+        {
+          "home": "Serbia & Mont.",
+          "score": "5:3",
+          "away": "Iran"
+        },
+        {
+          "home": "Ukraine",
+          "score": "4:2",
+          "away": "Ecuador"
+        },
+        {
+          "home": "Greece",
+          "score": "5:0",
+          "away": "Latvia"
+        },
+        {
+          "home": "Chile",
+          "score": "3:5",
+          "away": "Australia"
+        },
+        {
+          "home": "Holland",
+          "score": "6:2",
+          "away": "Bulgaria"
+        },
+        {
+          "home": "Korea",
+          "score": "3:1",
+          "away": "Saudi Arabia"
+        }
+      ],
+      "topGoals": [
+        {
+          "country": "Brazil",
+          "player": "Ronaldo",
+          "goals": "3"
+        },
+        {
+          "country": "Serbia & Mont.",
+          "player": "Zigic",
+          "goals": "2"
+        },
+        {
+          "country": "Serbia & Mont.",
+          "player": "Kezman",
+          "goals": "2"
+        },
+        {
+          "country": "Ecuador",
+          "player": "Borja",
+          "goals": "2"
+        },
+        {
+          "country": "Greece",
+          "player": "Charisteas",
+          "goals": "2"
+        },
+        {
+          "country": "Australia",
+          "player": "Viduka ",
+          "goals": "2"
+        },
+        {
+          "country": "Chile",
+          "player": "Luis jiminez",
+          "goals": "2"
+        }
+      ],
+      "lastUpdate": "2026-06-28T08:16:15.942Z"
+    },
+    {
+      "gameNumber": 5,
+      "p1": "Brazil",
+      "matches": [
+        {
+          "home": "Bulgaria",
+          "score": "3:4",
+          "away": "Costa Rica"
+        },
+        {
+          "home": "Chile",
+          "score": "3:1",
+          "away": "Hungary"
+        },
+        {
+          "home": "Ivory Coast",
+          "score": "2:7",
+          "away": "Holland"
+        },
+        {
+          "home": "Australia",
+          "score": "4:0",
+          "away": "Angola"
+        },
+        {
+          "home": "Czech",
+          "score": "5:2",
+          "away": "Turkey"
+        },
+        {
+          "home": "Norway",
+          "score": "2:5",
+          "away": "England"
+        },
+        {
+          "home": "Wales",
+          "score": "1:4",
+          "away": "Cameroon"
+        }
+      ],
+      "topGoals": [
+        {
+          "country": "Holland",
+          "player": "Kuyt",
+          "goals": "4"
+        },
+        {
+          "country": "Costa Rica",
+          "player": "Viquez",
+          "goals": "2"
+        },
+        {
+          "country": "Holland",
+          "player": "Van Nistelrooy ",
+          "goals": "2"
+        },
+        {
+          "country": "Ivory Coast",
+          "player": "Boka",
+          "goals": "2"
+        },
+        {
+          "country": "Austria",
+          "player": "Viduka ",
+          "goals": "2"
+        },
+        {
+          "country": "Turkey",
+          "player": "Necati",
+          "goals": "2"
+        },
+        {
+          "country": "Czech",
+          "player": "Baros",
+          "goals": "2"
+        }
+      ],
+      "lastUpdate": "2026-06-28T08:20:44.999Z"
+    },
+    {
+      "gameNumber": 6,
+      "p1": "Holland",
+      "matches": [
+        {
+          "home": "Switzerland",
+          "score": "0:7",
+          "away": "Brazil"
+        },
+        {
+          "home": "Italy",
+          "score": "4:3",
+          "away": "Czech"
+        },
+        {
+          "home": "Serbia & Mont.",
+          "score": "1:3",
+          "away": "Turkey"
+        },
+        {
+          "home": "France",
+          "score": "3:1",
+          "away": "Denmark"
+        },
+        {
+          "home": "Uruguay",
+          "score": "5:0",
+          "away": "Northern Ireland"
+        },
+        {
+          "home": "Chile",
+          "score": "0:9",
+          "away": "England"
+        },
+        {
+          "home": "Ivory Coast",
+          "score": "4:1",
+          "away": "Finland"
+        }
+      ],
+      "topGoals": [
+        {
+          "country": "England",
+          "player": "Rooney ",
+          "goals": "3"
+        },
+        {
+          "country": "Brazil",
+          "player": "Ronaldo ",
+          "goals": "2"
+        },
+        {
+          "country": "Italy",
+          "player": "Totti",
+          "goals": "2"
+        },
+        {
+          "country": "Uruguay",
+          "player": "Diogo",
+          "goals": "2"
+        },
+        {
+          "country": "England",
+          "player": "Beckham ",
+          "goals": "2"
+        },
+        {
+          "country": "England",
+          "player": "Lamapard",
+          "goals": "2"
+        },
+        {
+          "country": "England",
+          "player": "Owen",
+          "goals": "2"
+        }
+      ],
+      "lastUpdate": "2026-06-28T08:25:16.950Z"
+    },
+    {
+      "gameNumber": 7,
+      "p1": "England",
+      "matches": [
+        {
+          "home": "Belgium",
+          "score": "5:2",
+          "away": "United States"
+        },
+        {
+          "home": "Peru",
+          "score": "2:1",
+          "away": "Hungary"
+        },
+        {
+          "home": "Wales",
+          "score": "2:1",
+          "away": "Japan"
+        },
+        {
+          "home": "Spain",
+          "score": "1:4",
+          "away": "Argentina"
+        },
+        {
+          "home": "Ecuador",
+          "score": "2:4",
+          "away": "Slovakia"
+        },
+        {
+          "home": "Ukraine",
+          "score": "5:5",
+          "away": "Bulgaria"
+        },
+        {
+          "home": "Colombia",
+          "score": "1:3",
+          "away": "Sweden"
+        }
+      ],
+      "topGoals": [
+        {
+          "country": "Argentina",
+          "player": "Crespo",
+          "goals": "4"
+        },
+        {
+          "country": "Belgium",
+          "player": "Mpenza",
+          "goals": "3"
+        },
+        {
+          "country": "Bulgaria",
+          "player": "Berbatov ",
+          "goals": "2"
+        },
+        {
+          "country": "Ukraine",
+          "player": "Shishchenko",
+          "goals": "2"
+        },
+        {
+          "country": "Ukraine",
+          "player": "Shevchenko",
+          "goals": "2"
+        },
+        {
+          "country": "Sweden",
+          "player": "Edman",
+          "goals": "2"
+        },
+        {
+          "country": "United States",
+          "player": "Reyna",
+          "goals": "1"
+        }
+      ],
+      "lastUpdate": "2026-06-28T08:30:21.359Z"
+    },
+    {
+      "gameNumber": 8,
+      "p1": "Argentina",
+      "matches": [
+        {
+          "home": "Northern Ireland",
+          "score": "3:4",
+          "away": "Ghana"
+        },
+        {
+          "home": "Sweden",
+          "score": "3:2",
+          "away": "Ireland"
+        },
+        {
+          "home": "Peru",
+          "score": "1:1",
+          "away": "United States"
+        },
+        {
+          "home": "Finland",
+          "score": "1:1",
+          "away": "Greece"
+        },
+        {
+          "home": "Cameroon",
+          "score": "2:3",
+          "away": "Mexico"
+        },
+        {
+          "home": "Costa Rica",
+          "score": "3:1",
+          "away": "Ecuador"
+        },
+        {
+          "home": "Poland",
+          "score": "2:0",
+          "away": "Scotland"
+        }
+      ],
+      "topGoals": [
+        {
+          "country": "Mexico",
+          "player": "J. Borgetti",
+          "goals": "3"
+        },
+        {
+          "country": "Northern Ireland",
+          "player": "Quinn",
+          "goals": "2"
+        },
+        {
+          "country": "Ireland",
+          "player": "Holland ",
+          "goals": "2"
+        },
+        {
+          "country": "Ghana",
+          "player": "Sulley ",
+          "goals": "1"
+        },
+        {
+          "country": "Ghana",
+          "player": "Mensah",
+          "goals": "1"
+        },
+        {
+          "country": "Ghana",
+          "player": "Frimpong ",
+          "goals": "1"
+        },
+        {
+          "country": "Ghana",
+          "player": "Amoah",
+          "goals": "1"
+        }
+      ],
+      "lastUpdate": "2026-06-28T08:40:29.339Z"
+    },
+    {
+      "gameNumber": 9,
+      "p1": "Mexico",
+      "matches": [
+        {
+          "home": "Northern Ireland",
+          "score": "3:2",
+          "away": "Angola"
+        },
+        {
+          "home": "Peru",
+          "score": "2:4",
+          "away": "Sweden"
+        },
+        {
+          "home": "Slovenia",
+          "score": "2:3",
+          "away": "Togo"
+        },
+        {
+          "home": "South Africa",
+          "score": "3:1",
+          "away": "Costa Rica"
+        },
+        {
+          "home": "England",
+          "score": "6:0",
+          "away": "Finland"
+        },
+        {
+          "home": "Austria",
+          "score": "3:1",
+          "away": "Serbia & Mont."
+        },
+        {
+          "home": "United States",
+          "score": "1:3",
+          "away": "Switzerland"
+        }
+      ],
+      "topGoals": [
+        {
+          "country": "Sweden",
+          "player": "Larsson",
+          "goals": "3"
+        },
+        {
+          "country": "England",
+          "player": "Owen",
+          "goals": "3"
+        },
+        {
+          "country": "England",
+          "player": "Rooney ",
+          "goals": "3"
+        },
+        {
+          "country": "Northern Ireland",
+          "player": "S. Elliot",
+          "goals": "2"
+        },
+        {
+          "country": "Togo",
+          "player": "Salifou",
+          "goals": "2"
+        },
+        {
+          "country": "Austria",
+          "player": "Wallner",
+          "goals": "2"
+        },
+        {
+          "country": "Switzerland",
+          "player": "Barnetta",
+          "goals": "2"
+        }
+      ],
+      "lastUpdate": "2026-06-28T08:54:49.375Z"
+    },
+    {
+      "gameNumber": 10,
+      "p1": "Mexico",
+      "matches": [
+        {
+          "home": "Wales",
+          "score": "0:2",
+          "away": "Korea"
+        },
+        {
+          "home": "Chile",
+          "score": "3:3",
+          "away": "Nigeria"
+        },
+        {
+          "home": "Costa Rica",
+          "score": "4:2",
+          "away": "Trinidad & Tobago"
+        },
+        {
+          "home": "Ghana",
+          "score": "1:2",
+          "away": "Colombia"
+        },
+        {
+          "home": "Scotland",
+          "score": "1:4",
+          "away": "Finland"
+        },
+        {
+          "home": "South Africa",
+          "score": "4:3",
+          "away": "Bulgaria"
+        },
+        {
+          "home": "Poland",
+          "score": "1:3",
+          "away": "Portugal"
+        }
+      ],
+      "topGoals": [
+        {
+          "country": "Chile",
+          "player": "Pinilla",
+          "goals": "2"
+        },
+        {
+          "country": "Trinidad & Tobago",
+          "player": "Jilbohou",
+          "goals": "2"
+        },
+        {
+          "country": "Costa Rica",
+          "player": "Wanchope ",
+          "goals": "2"
+        },
+        {
+          "country": "Bulgaria",
+          "player": "Berbatov",
+          "goals": "2"
+        },
+        {
+          "country": "Korea",
+          "player": "J s park",
+          "goals": "1"
+        },
+        {
+          "country": "Korea",
+          "player": "C y park",
+          "goals": "1"
+        },
+        {
+          "country": "Nigeria",
+          "player": "Martins",
+          "goals": "1"
+        }
+      ],
+      "lastUpdate": "2026-06-28T08:59:04.516Z"
+    },
+    {
+      "gameNumber": 11,
+      "p1": "Mexico",
+      "matches": [
+        {
+          "home": "Sweden",
+          "score": "4:1",
+          "away": "Angola"
+        },
+        {
+          "home": "Switzerland",
+          "score": "5:1",
+          "away": "Slovakia"
+        },
+        {
+          "home": "Bulgaria",
+          "score": "2:4",
+          "away": "Ghana"
+        },
+        {
+          "home": "Scotland",
+          "score": "0:4",
+          "away": "Denmark"
+        },
+        {
+          "home": "Italy",
+          "score": "4:2",
+          "away": "Cameroon"
+        },
+        {
+          "home": "Norway",
+          "score": "3:2",
+          "away": "Togo"
+        },
+        {
+          "home": "Ivory Coast",
+          "score": "5:2",
+          "away": "Saudi Arabia"
+        }
+      ],
+      "topGoals": [
+        {
+          "country": "Sweden",
+          "player": "Wilhelmsson",
+          "goals": "2"
+        },
+        {
+          "country": "Switzerland",
+          "player": "Frei",
+          "goals": "2"
+        },
+        {
+          "country": "Ghana",
+          "player": "Amoah ",
+          "goals": "2"
+        },
+        {
+          "country": "Cameroon",
+          "player": "Eto&#x27;o",
+          "goals": "2"
+        },
+        {
+          "country": "Norway",
+          "player": "Iversen",
+          "goals": "2"
+        },
+        {
+          "country": "Ivory Coast",
+          "player": "Drogba ",
+          "goals": "2"
+        },
+        {
+          "country": "Angola",
+          "player": "Figueiredo",
+          "goals": "1"
+        }
+      ],
+      "lastUpdate": "2026-06-28T09:03:30.691Z"
+    },
+    {
+      "gameNumber": 12,
+      "p1": "Mexico",
+      "matches": [
+        {
+          "home": "Greece",
+          "score": "2:3",
+          "away": "Costa Rica"
+        },
+        {
+          "home": "Ecuador",
+          "score": "1:4",
+          "away": "Spain"
+        },
+        {
+          "home": "Colombia",
+          "score": "2:4",
+          "away": "Italy"
+        },
+        {
+          "home": "Chile",
+          "score": "0:1",
+          "away": "Slovenia"
+        },
+        {
+          "home": "Argentina",
+          "score": "3:5",
+          "away": "England"
+        },
+        {
+          "home": "Portugal",
+          "score": "6:5",
+          "away": "Sweden"
+        },
+        {
+          "home": "Austria",
+          "score": "0:7",
+          "away": "Brazil"
+        }
+      ],
+      "topGoals": [
+        {
+          "country": "Portugal",
+          "player": "Pauleta",
+          "goals": "3"
+        },
+        {
+          "country": "Brazil",
+          "player": "Emerson",
+          "goals": "3"
+        },
+        {
+          "country": "Spain",
+          "player": "Raul",
+          "goals": "2"
+        },
+        {
+          "country": "Italy",
+          "player": "Toni",
+          "goals": "2"
+        },
+        {
+          "country": "England",
+          "player": "Rooney ",
+          "goals": "2"
+        },
+        {
+          "country": "Argentina",
+          "player": "J. Zanetti",
+          "goals": "2"
+        },
+        {
+          "country": "Sweden",
+          "player": "Edman",
+          "goals": "2"
+        }
+      ],
+      "lastUpdate": "2026-06-28T09:07:58.623Z"
+    },
+    {
+      "gameNumber": 13,
+      "p1": "Mexico",
+      "matches": [
+        {
+          "home": "Paraguay",
+          "score": "1:1",
+          "away": "Northern Ireland"
+        },
+        {
+          "home": "United States",
+          "score": "0:2",
+          "away": "Germany"
+        },
+        {
+          "home": "Slovenia",
+          "score": "1:2",
+          "away": "Costa Rica"
+        },
+        {
+          "home": "Argentina",
+          "score": "1:0",
+          "away": "Cameroon"
+        },
+        {
+          "home": "England",
+          "score": "4:0",
+          "away": "Togo"
+        },
+        {
+          "home": "Croatia",
+          "score": "0:1",
+          "away": "Portugal"
+        },
+        {
+          "home": "Ivory Coast",
+          "score": "1:1",
+          "away": "Greece"
+        }
+      ],
+      "topGoals": [
+        {
+          "country": "Germany",
+          "player": "Kuranyi",
+          "goals": "2"
+        },
+        {
+          "country": "Costa Rica",
+          "player": "Wanchope ",
+          "goals": "2"
+        },
+        {
+          "country": "England",
+          "player": "Rooney ",
+          "goals": "2"
+        },
+        {
+          "country": "Northern Ireland",
+          "player": "Baird",
+          "goals": "1"
+        },
+        {
+          "country": "Paraguay",
+          "player": "Toro Acuna ",
+          "goals": "1"
+        },
+        {
+          "country": "Slovenia",
+          "player": "Koren",
+          "goals": "1"
+        },
+        {
+          "country": "Argentina",
+          "player": "Crespo",
+          "goals": "1"
+        }
+      ],
+      "lastUpdate": "2026-06-28T09:12:01.876Z"
+    },
+    {
+      "gameNumber": 14,
+      "p1": "Mexico",
+      "matches": [
+        {
+          "home": "Slovakia",
+          "score": "1:2",
+          "away": "Iran"
+        },
+        {
+          "home": "Ivory Coast",
+          "score": "1:1",
+          "away": "Japan"
+        },
+        {
+          "home": "Holland",
+          "score": "6:2",
+          "away": "Turkey"
+        },
+        {
+          "home": "Togo",
+          "score": "2:2",
+          "away": "Paraguay"
+        },
+        {
+          "home": "Australia",
+          "score": "2:1",
+          "away": "Denmark"
+        },
+        {
+          "home": "Austria",
+          "score": "2:5",
+          "away": "South Africa"
+        },
+        {
+          "home": "Ukraine",
+          "score": "3:1",
+          "away": "Costa Rica"
+        }
+      ],
+      "topGoals": [
+        {
+          "country": "Turkey",
+          "player": "Hakan sukur",
+          "goals": "2"
+        },
+        {
+          "country": "Holland",
+          "player": "Van bronckhorst",
+          "goals": "2"
+        },
+        {
+          "country": "Australia",
+          "player": "Thompson",
+          "goals": "2"
+        },
+        {
+          "country": "South Africa",
+          "player": "Zuma",
+          "goals": "2"
+        },
+        {
+          "country": "South Africa",
+          "player": "Bartlett",
+          "goals": "2"
+        },
+        {
+          "country": "Ukraine",
+          "player": "Shevchenko",
+          "goals": "2"
+        },
+        {
+          "country": "Iran",
+          "player": "Hashemian",
+          "goals": "1"
+        }
+      ],
+      "lastUpdate": "2026-06-28T09:16:51.035Z"
+    },
+    {
+      "gameNumber": 15,
+      "p1": "Mexico",
+      "matches": [
+        {
+          "home": "Greece",
+          "score": "2:3",
+          "away": "Australia"
+        },
+        {
+          "home": "Iran",
+          "score": "5:3",
+          "away": "Bulgaria"
+        },
+        {
+          "home": "Northern Ireland",
+          "score": "2:2",
+          "away": "Nigeria"
+        },
+        {
+          "home": "United States",
+          "score": "3:2",
+          "away": "Croatia"
+        },
+        {
+          "home": "Togo",
+          "score": "1:3",
+          "away": "Trinidad & Tobago"
+        },
+        {
+          "home": "Paraguay",
+          "score": "3:4",
+          "away": "Ukraine"
+        },
+        {
+          "home": "Germany",
+          "score": "2:0",
+          "away": "Turkey"
+        }
+      ],
+      "topGoals": [
+        {
+          "country": "Australia",
+          "player": "Viduka ",
+          "goals": "2"
+        },
+        {
+          "country": "Ukraine",
+          "player": "Voronin",
+          "goals": "2"
+        },
+        {
+          "country": "Paraguay",
+          "player": "N. Valdez",
+          "goals": "2"
+        },
+        {
+          "country": "Australia",
+          "player": "Emerton",
+          "goals": "1"
+        },
+        {
+          "country": "Greece",
+          "player": "Karagounis",
+          "goals": "1"
+        },
+        {
+          "country": "Greece",
+          "player": "Vryzas",
+          "goals": "1"
+        },
+        {
+          "country": "Bulgaria",
+          "player": "Berbatov ",
+          "goals": "1"
+        }
+      ],
+      "lastUpdate": "2026-06-28T09:21:27.353Z"
+    },
+    {
+      "gameNumber": 16,
+      "p1": "Mexico",
+      "matches": [
+        {
+          "home": "Saudi Arabia",
+          "score": "2:4",
+          "away": "Turkey"
+        },
+        {
+          "home": "Chile",
+          "score": "3:2",
+          "away": "Romania"
+        },
+        {
+          "home": "Greece",
+          "score": "0:2",
+          "away": "Australia"
+        },
+        {
+          "home": "Ghana",
+          "score": "3:1",
+          "away": "Finland"
+        },
+        {
+          "home": "Togo",
+          "score": "1:2",
+          "away": "England"
+        },
+        {
+          "home": "Switzerland",
+          "score": "2:0",
+          "away": "Tunisia"
+        },
+        {
+          "home": "Costa Rica",
+          "score": "3:0",
+          "away": "Norway"
+        }
+      ],
+      "topGoals": [
+        {
+          "country": "Turkey",
+          "player": "Hakan sukur",
+          "goals": "2"
+        },
+        {
+          "country": "Ghana",
+          "player": "Amoah ",
+          "goals": "2"
+        },
+        {
+          "country": "Turkey",
+          "player": "Emre",
+          "goals": "1"
+        },
+        {
+          "country": "Turkey",
+          "player": "Necati",
+          "goals": "1"
+        },
+        {
+          "country": "Saudi Arabia",
+          "player": "Al-jaler",
+          "goals": "1"
+        },
+        {
+          "country": "Saudi Arabia",
+          "player": "Alinohadeer",
+          "goals": "1"
+        },
+        {
+          "country": "Romania",
+          "player": "Mazilu",
+          "goals": "1"
+        }
+      ],
+      "lastUpdate": "2026-06-28T09:34:36.207Z"
+    },
+    {
+      "gameNumber": 17,
+      "p1": "Mexico",
+      "matches": [
+        {
+          "home": "Bulgaria",
+          "score": "2:1",
+          "away": "Cameroon"
+        },
+        {
+          "home": "Finland",
+          "score": "2:1",
+          "away": "Slovakia"
+        },
+        {
+          "home": "Ghana",
+          "score": "1:5",
+          "away": "Australia"
+        },
+        {
+          "home": "Austria",
+          "score": "1:2",
+          "away": "Tunisia"
+        },
+        {
+          "home": "Croatia",
+          "score": "5:1",
+          "away": "Ecuador"
+        },
+        {
+          "home": "Korea",
+          "score": "3:4",
+          "away": "Belgium"
+        },
+        {
+          "home": "Holland",
+          "score": "3:2",
+          "away": "United States"
+        }
+      ],
+      "topGoals": [
+        {
+          "country": "Croatia",
+          "player": "Prso",
+          "goals": "3"
+        },
+        {
+          "country": "Finland",
+          "player": "Eremenko",
+          "goals": "2"
+        },
+        {
+          "country": "Australia",
+          "player": "Viduka ",
+          "goals": "2"
+        },
+        {
+          "country": "Australia",
+          "player": "Thompson ",
+          "goals": "2"
+        },
+        {
+          "country": "Korea",
+          "player": "D g lee",
+          "goals": "2"
+        },
+        {
+          "country": "Cameroon",
+          "player": "Atouba",
+          "goals": "1"
+        },
+        {
+          "country": "Bulgaria",
+          "player": "Lazarov",
+          "goals": "1"
+        }
+      ],
+      "lastUpdate": "2026-06-28T09:38:53.244Z"
+    },
+    {
+      "gameNumber": 18,
+      "p1": "Croatia",
+      "matches": [
+        {
+          "home": "Cameroon",
+          "score": "3:2",
+          "away": "Ghana"
+        },
+        {
+          "home": "Mexico",
+          "score": "4:2",
+          "away": "Uruguay"
+        },
+        {
+          "home": "Norway",
+          "score": "2:3",
+          "away": "Scotland"
+        },
+        {
+          "home": "Serbia & Mont.",
+          "score": "4:1",
+          "away": "Slovenia"
+        },
+        {
+          "home": "Wales",
+          "score": "2:4",
+          "away": "Germany"
+        },
+        {
+          "home": "Finland",
+          "score": "1:3",
+          "away": "Ukraine"
+        },
+        {
+          "home": "Togo",
+          "score": "1:4",
+          "away": "Portugal"
+        }
+      ],
+      "topGoals": [
+        {
+          "country": "Mexico",
+          "player": "J. Borgetti",
+          "goals": "2"
+        },
+        {
+          "country": "Scotland",
+          "player": "K. Miller",
+          "goals": "2"
+        },
+        {
+          "country": "Norway",
+          "player": "Iversen",
+          "goals": "2"
+        },
+        {
+          "country": "Germany",
+          "player": "Ballack",
+          "goals": "2"
+        },
+        {
+          "country": "Wales",
+          "player": "C. Robinson",
+          "goals": "2"
+        },
+        {
+          "country": "Ukraine",
+          "player": "Voronin ",
+          "goals": "2"
+        },
+        {
+          "country": "Ghana",
+          "player": "Frimpong ",
+          "goals": "1"
+        }
+      ],
+      "lastUpdate": "2026-06-28T09:43:07.440Z"
+    },
+    {
+      "gameNumber": 19,
+      "p1": "Croatia",
+      "matches": [
+        {
+          "home": "Paraguay",
+          "score": "1:0",
+          "away": "Switzerland"
+        },
+        {
+          "home": "Nigeria",
+          "score": "2:1",
+          "away": "Norway"
+        },
+        {
+          "home": "Austria",
+          "score": "2:3",
+          "away": "Korea"
+        },
+        {
+          "home": "Ireland",
+          "score": "1:2",
+          "away": "Romania"
+        },
+        {
+          "home": "Turkey",
+          "score": "3:7",
+          "away": "Cameroon"
+        },
+        {
+          "home": "United States",
+          "score": "0:3",
+          "away": "Australia"
+        },
+        {
+          "home": "Slovenia",
+          "score": "1:2",
+          "away": "Slovakia"
+        }
+      ],
+      "topGoals": [
+        {
+          "country": "Cameroon",
+          "player": "Webo",
+          "goals": "3"
+        },
+        {
+          "country": "Romania",
+          "player": "Mutu",
+          "goals": "2"
+        },
+        {
+          "country": "Cameroon",
+          "player": "Eto&#x27;o ",
+          "goals": "2"
+        },
+        {
+          "country": "Paraguay",
+          "player": "Caniza",
+          "goals": "1"
+        },
+        {
+          "country": "Norway",
+          "player": "Carew",
+          "goals": "1"
+        },
+        {
+          "country": "Nigeria",
+          "player": "Obi mikel",
+          "goals": "1"
+        },
+        {
+          "country": "Nigeria",
+          "player": "Martins ",
+          "goals": "1"
+        }
+      ],
+      "lastUpdate": "2026-06-28T09:47:35.053Z"
+    },
+    {
+      "gameNumber": 20,
+      "p1": "Cameroon",
+      "matches": [
+        {
+          "home": "Saudi Arabia",
+          "score": "0:5",
+          "away": "England"
+        },
+        {
+          "home": "Latvia",
+          "score": "1:3",
+          "away": "Paraguay"
+        },
+        {
+          "home": "Norway",
+          "score": "5:0",
+          "away": "Japan"
+        },
+        {
+          "home": "Italy",
+          "score": "3;3",
+          "away": "Denmark"
+        },
+        {
+          "home": "Korea",
+          "score": "2:0",
+          "away": "Poland"
+        },
+        {
+          "home": "Angola",
+          "score": "0:2",
+          "away": "Ghana"
+        },
+        {
+          "home": "Bulgaria",
+          "score": "4:2",
+          "away": "Iran"
+        }
+      ],
+      "topGoals": [
+        {
+          "country": "England",
+          "player": "Rooney ",
+          "goals": "3"
+        },
+        {
+          "country": "Norway",
+          "player": "Hangeland",
+          "goals": "2"
+        },
+        {
+          "country": "Norway",
+          "player": "Iversen",
+          "goals": "2"
+        },
+        {
+          "country": "Italy",
+          "player": "Totti",
+          "goals": "2"
+        },
+        {
+          "country": "Iran",
+          "player": "Karimi",
+          "goals": "2"
+        },
+        {
+          "country": "England",
+          "player": "Beckham",
+          "goals": "1"
+        },
+        {
+          "country": "England",
+          "player": "Joe cole",
+          "goals": "1"
+        }
+      ],
+      "lastUpdate": "2026-06-28T09:51:52.537Z"
+    },
+    {
+      "gameNumber": 21,
+      "p1": "England",
+      "matches": [
+        {
+          "home": "Korea",
+          "score": "2:2",
+          "away": "Ukraine"
+        },
+        {
+          "home": "Togo",
+          "score": "2:3",
+          "away": "Colombia"
+        },
+        {
+          "home": "Spain",
+          "score": "5:1",
+          "away": "Hungary"
+        },
+        {
+          "home": "Scotland",
+          "score": "1:1",
+          "away": "Latvia"
+        },
+        {
+          "home": "Finland",
+          "score": "1:2",
+          "away": "Turkey"
+        },
+        {
+          "home": "Uruguay",
+          "score": "3:4",
+          "away": "Northern Ireland"
+        },
+        {
+          "home": "Ecuador",
+          "score": "0:4",
+          "away": "Ireland"
+        }
+      ],
+      "topGoals": [
+        {
+          "country": "Ukraine",
+          "player": "Shevchenko ",
+          "goals": "2"
+        },
+        {
+          "country": "Korea",
+          "player": "D h kim",
+          "goals": "2"
+        },
+        {
+          "country": "Spain",
+          "player": "A. Lopez",
+          "goals": "2"
+        },
+        {
+          "country": "Turkey",
+          "player": "Hamit altintop",
+          "goals": "2"
+        },
+        {
+          "country": "Ireland",
+          "player": "Morrison ",
+          "goals": "2"
+        },
+        {
+          "country": "Colombia",
+          "player": "Angel",
+          "goals": "1"
+        },
+        {
+          "country": "Colombia",
+          "player": "Passo",
+          "goals": "1"
+        }
+      ],
+      "lastUpdate": "2026-06-28T09:55:52.477Z"
+    },
+    {
+      "gameNumber": 22,
+      "p1": "England",
+      "matches": [
+        {
+          "home": "Slovakia ",
+          "score": "1:4",
+          "away": "Greece"
+        },
+        {
+          "home": "Chile",
+          "score": "1:3",
+          "away": "Japan"
+        },
+        {
+          "home": "Colombia",
+          "score": "3:0",
+          "away": "Latvia"
+        },
+        {
+          "home": "Norway",
+          "score": "2:1",
+          "away": "Iran"
+        },
+        {
+          "home": "Argentina",
+          "score": "1:2",
+          "away": "France"
+        },
+        {
+          "home": "Poland",
+          "score": "1:4",
+          "away": "Croatia"
+        },
+        {
+          "home": "Portugal",
+          "score": "4:2",
+          "away": "Costa Rica"
+        }
+      ],
+      "topGoals": [
+        {
+          "country": "Greece",
+          "player": "Stellios",
+          "goals": "3"
+        },
+        {
+          "country": "Greece",
+          "player": "Katsouranis",
+          "goals": "1"
+        },
+        {
+          "country": "Slovakia",
+          "player": "Vittek",
+          "goals": "1"
+        },
+        {
+          "country": "Japan",
+          "player": "Yanagisawa",
+          "goals": "1"
+        },
+        {
+          "country": "Japan",
+          "player": "Nakamura ",
+          "goals": "1"
+        },
+        {
+          "country": "Japan",
+          "player": "Takahara",
+          "goals": "1"
+        },
+        {
+          "country": "Chile",
+          "player": "Pinilla",
+          "goals": "1"
+        }
+      ],
+      "lastUpdate": "2026-06-28T09:59:55.622Z"
+    },
+    {
+      "gameNumber": 23,
+      "p1": "Greece",
+      "matches": [
+        {
+          "home": "Italy",
+          "score": "3:2",
+          "away": "France"
+        },
+        {
+          "home": "Sweden",
+          "score": "4:6",
+          "away": "Czech"
+        },
+        {
+          "home": "Ecuador",
+          "score": "2:5",
+          "away": "Japan"
+        },
+        {
+          "home": "Korea",
+          "score": "1:2",
+          "away": "Uruguay"
+        },
+        {
+          "home": "Saudi Arabia",
+          "score": "1:3",
+          "away": "Ireland"
+        },
+        {
+          "home": "Romania",
+          "score": "3:1",
+          "away": "Chile"
+        },
+        {
+          "home": "Norway",
+          "score": "3:3",
+          "away": "Australia"
+        }
+      ],
+      "topGoals": [
+        {
+          "country": "Czech",
+          "player": "Baros",
+          "goals": "3"
+        },
+        {
+          "country": "Japan",
+          "player": "Alex santos",
+          "goals": "2"
+        },
+        {
+          "country": "France",
+          "player": "Dhorasoo",
+          "goals": "1"
+        },
+        {
+          "country": "France",
+          "player": "Wiltord",
+          "goals": "1"
+        },
+        {
+          "country": "Italy",
+          "player": "Grosso",
+          "goals": "1"
+        },
+        {
+          "country": "Italy",
+          "player": "Gattuso",
+          "goals": "1"
+        },
+        {
+          "country": "Italy",
+          "player": "Gilardino",
+          "goals": "1"
+        }
+      ],
+      "lastUpdate": "2026-06-28T10:04:16.402Z"
+    },
+    {
+      "gameNumber": 24,
+      "p1": "Czech",
+      "matches": [
+        {
+          "home": "Saudi Arabia",
+          "score": "1:2",
+          "away": "Portugal"
+        },
+        {
+          "home": "Germany",
+          "score": "2:2",
+          "away": "Nigeria"
+        },
+        {
+          "home": "Serbia & Mont.",
+          "score": "5:2",
+          "away": "Trinidad & Tobago"
+        },
+        {
+          "home": "Hungary",
+          "score": "1:3",
+          "away": "Russia"
+        },
+        {
+          "home": "Chile",
+          "score": "1:1",
+          "away": "Northern Ireland"
+        },
+        {
+          "home": "Sweden",
+          "score": "3:0",
+          "away": "Poland"
+        },
+        {
+          "home": "Ukraine",
+          "score": "3:0",
+          "away": "Angola"
+        }
+      ],
+      "topGoals": [
+        {
+          "country": "Portugal",
+          "player": "Pauleta",
+          "goals": "2"
+        },
+        {
+          "country": "Serbia & Mont.",
+          "player": "Kezman",
+          "goals": "2"
+        },
+        {
+          "country": "Russia",
+          "player": "Kerzhakov",
+          "goals": "2"
+        },
+        {
+          "country": "Saudi Arabia",
+          "player": "Agi pakarani",
+          "goals": "1"
+        },
+        {
+          "country": "Nigeria",
+          "player": "Martins ",
+          "goals": "1"
+        },
+        {
+          "country": "Nigeria",
+          "player": "Aghahowa",
+          "goals": "1"
+        },
+        {
+          "country": "Germany",
+          "player": "Podolski",
+          "goals": "1"
+        }
+      ],
+      "lastUpdate": "2026-06-28T10:08:42.362Z"
+    },
+    {
+      "gameNumber": 25,
+      "p1": "Czech",
+      "matches": [
+        {
+          "home": "Croatia",
+          "score": "4:3",
+          "away": "Bulgaria"
+        },
+        {
+          "home": "Norway",
+          "score": "1:3",
+          "away": "Paraguay"
+        },
+        {
+          "home": "Ecuador",
+          "score": "1:4",
+          "away": "Togo"
+        },
+        {
+          "home": "Slovenia",
+          "score": "1:5",
+          "away": "Iran"
+        },
+        {
+          "home": "Wales",
+          "score": "2:2",
+          "away": "Colombia"
+        },
+        {
+          "home": "France",
+          "score": "3:3",
+          "away": "Cameroon"
+        },
+        {
+          "home": "Mexico",
+          "score": "2:0",
+          "away": "Northern Ireland"
+        }
+      ],
+      "topGoals": [
+        {
+          "country": "Iran",
+          "player": "Hashemian",
+          "goals": "2"
+        },
+        {
+          "country": "Cameroon",
+          "player": "Eto&#x27;o ",
+          "goals": "2"
+        },
+        {
+          "country": "Bulgaria",
+          "player": "I. Petkov",
+          "goals": "1"
+        },
+        {
+          "country": "Bulgaria",
+          "player": "Kishishev",
+          "goals": "1"
+        },
+        {
+          "country": "Bulgaria",
+          "player": "S. Petrov",
+          "goals": "1"
+        },
+        {
+          "country": "Croatia",
+          "player": "Prso",
+          "goals": "1"
+        },
+        {
+          "country": "Croatia",
+          "player": "Kranjcar",
+          "goals": "1"
+        }
+      ],
+      "lastUpdate": "2026-06-28T10:13:10.674Z"
+    },
+    {
+      "gameNumber": 26,
+      "p1": "Czech",
+      "matches": [
+        {
+          "home": "Tunisia",
+          "score": "2:5",
+          "away": "Mexico"
+        },
+        {
+          "home": "Slovakia",
+          "score": "0:3",
+          "away": "Northern Ireland"
+        },
+        {
+          "home": "Hungary",
+          "score": "0:2",
+          "away": "Chile"
+        },
+        {
+          "home": "Argentina",
+          "score": "3:1",
+          "away": "Togo"
+        },
+        {
+          "home": "Norway",
+          "score": "3:1",
+          "away": "Ivory Coast"
+        },
+        {
+          "home": "Nigeria",
+          "score": "2:0",
+          "away": "Croatia"
+        },
+        {
+          "home": "England",
+          "score": "6:1",
+          "away": "South Africa"
+        }
+      ],
+      "topGoals": [
+        {
+          "country": "Chile",
+          "player": "Luis jiminez",
+          "goals": "2"
+        },
+        {
+          "country": "Argentina",
+          "player": "Crespo",
+          "goals": "2"
+        },
+        {
+          "country": "Norway",
+          "player": "Bergdolmo",
+          "goals": "2"
+        },
+        {
+          "country": "England",
+          "player": "Owen",
+          "goals": "2"
+        },
+        {
+          "country": "England",
+          "player": "G. Neville",
+          "goals": "2"
+        },
+        {
+          "country": "Mexico",
+          "player": "A. Naelson",
+          "goals": "1"
+        },
+        {
+          "country": "Mexico",
+          "player": "F. Fonseca",
+          "goals": "1"
+        }
+      ],
+      "lastUpdate": "2026-06-28T10:17:34.050Z"
+    },
+    {
+      "gameNumber": 27,
+      "p1": "Czech",
+      "matches": [
+        {
+          "home": "Cameroon",
+          "score": "4:2",
+          "away": "Slovakia"
+        },
+        {
+          "home": "Peru",
+          "score": "0:2",
+          "away": "Holland"
+        },
+        {
+          "home": "South Africa",
+          "score": "3:3",
+          "away": "Angola"
+        },
+        {
+          "home": "Serbia & Mont.",
+          "score": "4:3",
+          "away": "Scotland"
+        },
+        {
+          "home": "Northern Ireland",
+          "score": "2:1",
+          "away": "Ukraine"
+        },
+        {
+          "home": "Norway",
+          "score": "6:1",
+          "away": "Togo"
+        },
+        {
+          "home": "Italy",
+          "score": "10:1",
+          "away": "Chile"
+        }
+      ],
+      "topGoals": [
+        {
+          "country": "Italy",
+          "player": "Gilardino ",
+          "goals": "4"
+        },
+        {
+          "country": "Norway",
+          "player": "Carew",
+          "goals": "3"
+        },
+        {
+          "country": "Slovakia",
+          "player": "Vittek",
+          "goals": "2"
+        },
+        {
+          "country": "Cameroon",
+          "player": "Eto&#x27;o ",
+          "goals": "2"
+        },
+        {
+          "country": "Holland",
+          "player": "Van Nistelrooy ",
+          "goals": "2"
+        },
+        {
+          "country": "South Africa",
+          "player": "Bartlett ",
+          "goals": "2"
+        },
+        {
+          "country": "Northern Ireland",
+          "player": "Healy",
+          "goals": "2"
+        }
+      ],
+      "lastUpdate": "2026-06-28T10:21:35.859Z"
+    },
+    {
+      "gameNumber": 28,
+      "p1": "Italy",
+      "matches": [
+        {
+          "home": "Romania",
+          "score": "3:0",
+          "away": "Tunisia"
+        },
+        {
+          "home": "Latvia",
+          "score": "1:3",
+          "away": "Portugal"
+        },
+        {
+          "home": "Nigeria",
+          "score": "3:1",
+          "away": "Russia"
+        },
+        {
+          "home": "Mexico",
+          "score": "1:2",
+          "away": "Ireland"
+        },
+        {
+          "home": "Belgium",
+          "score": "3:1",
+          "away": "Colombia"
+        },
+        {
+          "home": "Saudi Arabia",
+          "score": "0:5",
+          "away": "Brazil"
+        },
+        {
+          "home": "Angola",
+          "score": "0:6",
+          "away": "Holland"
+        }
+      ],
+      "topGoals": [
+        {
+          "country": "Portugal",
+          "player": "Nuno valente",
+          "goals": "2"
+        },
+        {
+          "country": "Nigeria",
+          "player": "Martins ",
+          "goals": "2"
+        },
+        {
+          "country": "Brazil",
+          "player": "Ronaldo ",
+          "goals": "2"
+        },
+        {
+          "country": "Holland",
+          "player": "Van Nistelrooy ",
+          "goals": "2"
+        },
+        {
+          "country": "Holland",
+          "player": "Robben",
+          "goals": "2"
+        },
+        {
+          "country": "Romania",
+          "player": "Chivu",
+          "goals": "1"
+        },
+        {
+          "country": "Romania",
+          "player": "Cocis",
+          "goals": "1"
+        }
+      ],
+      "lastUpdate": "2026-06-28T10:26:06.156Z"
+    },
+    {
+      "gameNumber": 29,
+      "p1": "Italy",
+      "matches": [
+        {
+          "home": "Uruguay",
+          "score": "6:0",
+          "away": "Angola"
+        },
+        {
+          "home": "Slovakia",
+          "score": "2:3",
+          "away": "Tunisia"
+        },
+        {
+          "home": "Iran",
+          "score": "0:3",
+          "away": "Nigeria"
+        },
+        {
+          "home": "Trinidad & Tobago",
+          "score": "1:3",
+          "away": "Wales"
+        },
+        {
+          "home": "Saudi Arabia",
+          "score": "0:5",
+          "away": "Ukraine"
+        },
+        {
+          "home": "Australia",
+          "score": "4:2",
+          "away": "Mexico"
+        },
+        {
+          "home": "Switzerland",
+          "score": "2:1",
+          "away": "Scotland"
+        }
+      ],
+      "topGoals": [
+        {
+          "country": "Uruguay",
+          "player": "Morales",
+          "goals": "3"
+        },
+        {
+          "country": "Nigeria",
+          "player": "Martins",
+          "goals": "2"
+        },
+        {
+          "country": "Wales",
+          "player": "Giggs",
+          "goals": "2"
+        },
+        {
+          "country": "Ukraine",
+          "player": "Nesmachny",
+          "goals": "2"
+        },
+        {
+          "country": "Ukraine",
+          "player": "Shevchenko ",
+          "goals": "2"
+        },
+        {
+          "country": "Australia",
+          "player": "Emerton ",
+          "goals": "2"
+        },
+        {
+          "country": "Uruguay",
+          "player": "Forlan ",
+          "goals": "1"
+        }
+      ],
+      "lastUpdate": "2026-06-28T10:30:29.016Z"
+    },
+    {
+      "gameNumber": 30,
+      "p1": "Uruguay",
+      "matches": [
+        {
+          "home": "South Africa",
+          "score": "3:2",
+          "away": "Mexico"
+        },
+        {
+          "home": "Paraguay",
+          "score": "4:1",
+          "away": "Austria"
+        },
+        {
+          "home": "Hungary",
+          "score": "2:2",
+          "away": "Finland"
+        },
+        {
+          "home": "Norway",
+          "score": "3:1",
+          "away": "Costa Rica"
+        },
+        {
+          "home": "Togo",
+          "score": "1:3",
+          "away": "Belgium"
+        },
+        {
+          "home": "Spain",
+          "score": "6:0",
+          "away": "Trinidad & Tobago"
+        },
+        {
+          "home": "Colombia",
+          "score": "2:1",
+          "away": "Cameroon"
+        }
+      ],
+      "topGoals": [
+        {
+          "country": "South Africa",
+          "player": "Bartlett ",
+          "goals": "2"
+        },
+        {
+          "country": "Spain",
+          "player": "Raul",
+          "goals": "2"
+        },
+        {
+          "country": "Spain",
+          "player": "Joaquin ",
+          "goals": "2"
+        },
+        {
+          "country": "Spain",
+          "player": "F. Torres ",
+          "goals": "2"
+        },
+        {
+          "country": "Mexico",
+          "player": "M. Mendez",
+          "goals": "1"
+        },
+        {
+          "country": "Mexico",
+          "player": "J. Lozano",
+          "goals": "1"
+        },
+        {
+          "country": "South Africa",
+          "player": "Mabizela",
+          "goals": "1"
+        }
+      ],
+      "lastUpdate": "2026-06-28T10:35:05.761Z"
+    },
+    {
+      "gameNumber": 31,
+      "p1": "Uruguay",
+      "matches": [
+        {
+          "home": "Nigeria",
+          "score": "1:3",
+          "away": "Northern Ireland"
+        },
+        {
+          "home": "Austria",
+          "score": "2:3",
+          "away": "Iran"
+        },
+        {
+          "home": "Italy",
+          "score": "6:4",
+          "away": "Portugal"
+        },
+        {
+          "home": "Angola",
+          "score": "1:3",
+          "away": "Tunisia"
+        },
+        {
+          "home": "Slovakia",
+          "score": "1:1",
+          "away": "Saudi Arabia"
+        },
+        {
+          "home": "Ghana",
+          "score": "1:2",
+          "away": "Japan"
+        },
+        {
+          "home": "Brazil",
+          "score": "6:1",
+          "away": "Russia"
+        }
+      ],
+      "topGoals": [
+        {
+          "country": "Italy",
+          "player": "Gilardino ",
+          "goals": "3"
+        },
+        {
+          "country": "Northern Ireland",
+          "player": "Baird",
+          "goals": "2"
+        },
+        {
+          "country": "Iran",
+          "player": "Hashemian",
+          "goals": "2"
+        },
+        {
+          "country": "Italy",
+          "player": "Toni",
+          "goals": "2"
+        },
+        {
+          "country": "Brazil",
+          "player": "Ronaldo ",
+          "goals": "2"
+        },
+        {
+          "country": "Northern Ireland",
+          "player": "Capaldi",
+          "goals": "1"
+        },
+        {
+          "country": "Nigeria",
+          "player": "Martins",
+          "goals": "1"
+        }
+      ],
+      "lastUpdate": "2026-06-28T10:39:21.974Z"
+    },
+    {
+      "gameNumber": 32,
+      "p1": "Italy",
+      "matches": [
+        {
+          "home": "Turkey",
+          "score": "6:3",
+          "away": "Peru"
+        },
+        {
+          "home": "Germany",
+          "score": "4:2",
+          "away": "Latvia"
+        },
+        {
+          "home": "Trinidad & Tobago",
+          "score": "3:5",
+          "away": "Iran"
+        },
+        {
+          "home": "Northern Ireland",
+          "score": "1:2",
+          "away": "Australia"
+        },
+        {
+          "home": "Czech",
+          "score": "4:0",
+          "away": "Norway"
+        },
+        {
+          "home": "France",
+          "score": "2:0",
+          "away": "Wales"
+        },
+        {
+          "home": "Bulgaria",
+          "score": "2:3",
+          "away": "Russia"
+        }
+      ],
+      "topGoals": [
+        {
+          "country": "Iran",
+          "player": "Hashemian ",
+          "goals": "3"
+        },
+        {
+          "country": "Turkey",
+          "player": "Hakan sukur",
+          "goals": "2"
+        },
+        {
+          "country": "Turkey",
+          "player": "Necati ",
+          "goals": "2"
+        },
+        {
+          "country": "Germany",
+          "player": "Podolski",
+          "goals": "2"
+        },
+        {
+          "country": "Trinidad & Tobago",
+          "player": "Yorke ",
+          "goals": "2"
+        },
+        {
+          "country": "Australia ",
+          "player": "Kewell",
+          "goals": "2"
+        },
+        {
+          "country": "Peru",
+          "player": "Cominges",
+          "goals": "1"
+        }
+      ],
+      "lastUpdate": "2026-06-28T10:44:39.486Z"
+    },
+    {
+      "gameNumber": 33,
+      "p1": "Iran",
+      "matches": [
+        {
+          "home": "England",
+          "score": "5:2",
+          "away": "Serbia & Mont."
+        },
+        {
+          "home": "Romania",
+          "score": "6:2",
+          "away": "Finland"
+        },
+        {
+          "home": "Turkey",
+          "score": "6:3",
+          "away": "Poland"
+        },
+        {
+          "home": "Scotland",
+          "score": "1:3",
+          "away": "Holland"
+        },
+        {
+          "home": "Northern Ireland",
+          "score": "1:4",
+          "away": "Argentina"
+        },
+        {
+          "home": "Russia",
+          "score": "5:1",
+          "away": "Norway"
+        },
+        {
+          "home": "Tunisia",
+          "score": "3:2",
+          "away": "Trinidad & Tobago"
+        }
+      ],
+      "topGoals": [
+        {
+          "country": "Argentina",
+          "player": "Tevez",
+          "goals": "3"
+        },
+        {
+          "country": "Romania",
+          "player": "D. Munteanu",
+          "goals": "2"
+        },
+        {
+          "country": "Romania",
+          "player": "Mazilu",
+          "goals": "2"
+        },
+        {
+          "country": "Russia",
+          "player": "Arshavin",
+          "goals": "2"
+        },
+        {
+          "country": "Tunisia",
+          "player": "Chedli",
+          "goals": "2"
+        },
+        {
+          "country": "Serbia & Mont.",
+          "player": "Koroman",
+          "goals": "1"
+        },
+        {
+          "country": "Serbia & Mont.",
+          "player": "Kezman",
+          "goals": "1"
+        }
+      ],
+      "lastUpdate": "2026-06-28T10:48:36.752Z"
+    },
+    {
+      "gameNumber": 34,
+      "p1": "Argentina",
+      "matches": [
+        {
+          "home": "Finland",
+          "score": "2:4",
+          "away": "Costa Rica"
+        },
+        {
+          "home": "Poland",
+          "score": "1:4",
+          "away": "Italy"
+        },
+        {
+          "home": "Saudi Arabia",
+          "score": "3:3",
+          "away": "Peru"
+        },
+        {
+          "home": "Slovakia",
+          "score": "1:5",
+          "away": "Croatia"
+        },
+        {
+          "home": "Chile",
+          "score": "2:2",
+          "away": "Northern Ireland"
+        },
+        {
+          "home": "Paraguay",
+          "score": "2:4",
+          "away": "Denmark"
+        },
+        {
+          "home": "Australia",
+          "score": "2:1",
+          "away": "Mexico"
+        }
+      ],
+      "topGoals": [
+        {
+          "country": "Costa Rica",
+          "player": "Wanchope ",
+          "goals": "2"
+        },
+        {
+          "country": "Costa Rica",
+          "player": "Saborio",
+          "goals": "2"
+        },
+        {
+          "country": "Italy",
+          "player": "Gilardino ",
+          "goals": "2"
+        },
+        {
+          "country": "Peru",
+          "player": "Guerrero",
+          "goals": "2"
+        },
+        {
+          "country": "Chile",
+          "player": "Acuna",
+          "goals": "2"
+        },
+        {
+          "country": "Denmark",
+          "player": "Wurtz",
+          "goals": "2"
+        },
+        {
+          "country": "Finland",
+          "player": "Nyman",
+          "goals": "1"
+        }
+      ],
+      "lastUpdate": "2026-06-28T10:52:26.873Z"
+    },
+    {
+      "gameNumber": 35,
+      "p1": "Argentina",
+      "matches": [
+        {
+          "home": "Switzerland",
+          "score": "5:1",
+          "away": "Saudi Arabia"
+        },
+        {
+          "home": "Australia",
+          "score": "1:3",
+          "away": "Sweden"
+        },
+        {
+          "home": "Latvia",
+          "score": "2:5",
+          "away": "Colombia"
+        },
+        {
+          "home": "Slovenia",
+          "score": "0:3",
+          "away": "Iran"
+        },
+        {
+          "home": "Trinidad & Tobago",
+          "score": "2:5",
+          "away": "Paraguay"
+        },
+        {
+          "home": "United States",
+          "score": "2:1",
+          "away": "Poland"
+        },
+        {
+          "home": "Ivory Coast",
+          "score": "1:2",
+          "away": "Russia"
+        }
+      ],
+      "topGoals": [
+        {
+          "country": "Switzerland",
+          "player": "Cabanas",
+          "goals": "2"
+        },
+        {
+          "country": "Colombia",
+          "player": "Moreno",
+          "goals": "2"
+        },
+        {
+          "country": "Iran",
+          "player": "Hashemian ",
+          "goals": "2"
+        },
+        {
+          "country": "Paraguay",
+          "player": "Caniza",
+          "goals": "2"
+        },
+        {
+          "country": "United States",
+          "player": "Donovan",
+          "goals": "2"
+        },
+        {
+          "country": "Saudi Arabia",
+          "player": "Agi pakarani ",
+          "goals": "1"
+        },
+        {
+          "country": "Switzerland",
+          "player": "Frei",
+          "goals": "1"
+        }
+      ],
+      "lastUpdate": "2026-06-28T11:29:41.935Z"
+    },
+    {
+      "gameNumber": 36,
+      "p1": "Argentina",
+      "matches": [
+        {
+          "home": "Saudi Arabia",
+          "score": "0:3",
+          "away": "Denmark"
+        },
+        {
+          "home": "Australia",
+          "score": "2:3",
+          "away": "Portugal"
+        },
+        {
+          "home": "Ireland",
+          "score": "1:1",
+          "away": "Belgium"
+        },
+        {
+          "home": "Trinidad & Tobago",
+          "score": "0:3",
+          "away": "France"
+        },
+        {
+          "home": "Tunisia",
+          "score": "1:3",
+          "away": "Germany"
+        },
+        {
+          "home": "Togo",
+          "score": "0:1",
+          "away": "Mexico"
+        },
+        {
+          "home": "Bulgaria",
+          "score": "3:0",
+          "away": "Hungary"
+        }
+      ],
+      "topGoals": [
+        {
+          "country": "Portugal",
+          "player": "C. Ronaldo ",
+          "goals": "2"
+        },
+        {
+          "country": "Denmark",
+          "player": "Jorgensen",
+          "goals": "1"
+        },
+        {
+          "country": "Denmark",
+          "player": "Tomasson",
+          "goals": "1"
+        },
+        {
+          "country": "Denmark",
+          "player": "Jensen",
+          "goals": "1"
+        },
+        {
+          "country": "Portugal",
+          "player": "Pauleta",
+          "goals": "1"
+        },
+        {
+          "country": "Australia",
+          "player": "Chipperfield",
+          "goals": "1"
+        },
+        {
+          "country": "Australia",
+          "player": "Kewell",
+          "goals": "1"
+        }
+      ],
+      "lastUpdate": "2026-06-28T11:33:40.984Z"
+    },
+    {
+      "gameNumber": 37,
+      "p1": "Portugal",
+      "matches": [
+        {
+          "home": "Slovenia",
+          "score": "0:5",
+          "away": "Ireland"
+        },
+        {
+          "home": "Belgium",
+          "score": "4:2",
+          "away": "Wales"
+        },
+        {
+          "home": "Germany",
+          "score": "2:3",
+          "away": "Uruguay"
+        },
+        {
+          "home": "Czech",
+          "score": "6:4",
+          "away": "Angola"
+        },
+        {
+          "home": "Ivory Coast",
+          "score": "1:2",
+          "away": "Mexico"
+        },
+        {
+          "home": "Spain",
+          "score": "3:0",
+          "away": "Korea"
+        },
+        {
+          "home": "Latvia",
+          "score": "0:1",
+          "away": "Austria"
+        }
+      ],
+      "topGoals": [
+        {
+          "country": "Ireland",
+          "player": "Morrison ",
+          "goals": "3"
+        },
+        {
+          "country": "Czech",
+          "player": "Smicer",
+          "goals": "3"
+        },
+        {
+          "country": "Uruguay",
+          "player": "Forlan",
+          "goals": "2"
+        },
+        {
+          "country": "Angola",
+          "player": "Akwa",
+          "goals": "2"
+        },
+        {
+          "country": "Czech",
+          "player": "Poborsky",
+          "goals": "2"
+        },
+        {
+          "country": "Ireland",
+          "player": "R. Keane",
+          "goals": "1"
+        },
+        {
+          "country": "Ireland",
+          "player": "O&#x27; shea",
+          "goals": "1"
+        }
+      ],
+      "lastUpdate": "2026-06-28T11:37:21.627Z"
+    },
+    {
+      "gameNumber": 38,
+      "p1": "Portugal",
+      "matches": [
+        {
+          "home": "Brazil",
+          "score": "6:1",
+          "away": "Sweden"
+        },
+        {
+          "home": "Italy",
+          "score": "5:0",
+          "away": "Costa Rica"
+        },
+        {
+          "home": "Mexico",
+          "score": "1:2",
+          "away": "Nigeria"
+        },
+        {
+          "home": "Peru",
+          "score": "0:4",
+          "away": "Germany"
+        },
+        {
+          "home": "Ghana",
+          "score": "1:0",
+          "away": "Chile"
+        },
+        {
+          "home": "Ukraine",
+          "score": "6:0",
+          "away": "Cameroon"
+        },
+        {
+          "home": "Colombia",
+          "score": "4:2",
+          "away": "Saudi Arabia"
+        }
+      ],
+      "topGoals": [
+        {
+          "country": "Ukraine",
+          "player": "Shevchenko ",
+          "goals": "3"
+        },
+        {
+          "country": "Brazil",
+          "player": "Ronaldo ",
+          "goals": "2"
+        },
+        {
+          "country": "Italy",
+          "player": "Grosso",
+          "goals": "2"
+        },
+        {
+          "country": "Germany",
+          "player": "Ballack ",
+          "goals": "2"
+        },
+        {
+          "country": "Ukraine",
+          "player": "Voronin",
+          "goals": "2"
+        },
+        {
+          "country": "Colombia",
+          "player": "Luis rey",
+          "goals": "2"
+        },
+        {
+          "country": "Sweden",
+          "player": "Svensson",
+          "goals": "1"
+        }
+      ],
+      "lastUpdate": "2026-06-28T11:40:47.208Z"
+    },
+    {
+      "gameNumber": 39,
+      "p1": "Ukraine",
+      "matches": [
+        {
+          "home": "Portugal",
+          "score": "3:1",
+          "away": "Sweden"
+        },
+        {
+          "home": "Norway",
+          "score": "0;2",
+          "away": "Uruguay"
+        },
+        {
+          "home": "Mexico",
+          "score": "2:2",
+          "away": "Costa Rica"
+        },
+        {
+          "home": "Saudi Arabia",
+          "score": "2:3",
+          "away": "Denmark"
+        },
+        {
+          "home": "Ivory Coast",
+          "score": "3:2",
+          "away": "Angola"
+        },
+        {
+          "home": "Brazil",
+          "score": "4:2",
+          "away": "England"
+        },
+        {
+          "home": "Russia",
+          "score": "1:4",
+          "away": "Ghana"
+        }
+      ],
+      "topGoals": [
+        {
+          "country": "Mexico",
+          "player": "F. Fonseca",
+          "goals": "2"
+        },
+        {
+          "country": "Denmark",
+          "player": "Tomasson ",
+          "goals": "2"
+        },
+        {
+          "country": "Brazil",
+          "player": "Ze roberto",
+          "goals": "2"
+        },
+        {
+          "country": "Ghana",
+          "player": "Frimpong ",
+          "goals": "2"
+        },
+        {
+          "country": "Sweden",
+          "player": "Ibrahimovic ",
+          "goals": "1"
+        },
+        {
+          "country": "Portugal",
+          "player": "Maniche",
+          "goals": "1"
+        },
+        {
+          "country": "Portugal",
+          "player": "C. Ronaldo ",
+          "goals": "1"
+        }
+      ],
+      "lastUpdate": "2026-06-28T11:44:52.270Z"
+    },
+    {
+      "gameNumber": 40,
+      "p1": "Ukraine",
+      "matches": [
+        {
+          "home": "United States",
+          "score": "3:0",
+          "away": "Serbia & Mont."
+        },
+        {
+          "home": "Portugal",
+          "score": "6:1",
+          "away": "Russia"
+        },
+        {
+          "home": "Cameroon",
+          "score": "3:2",
+          "away": "Latvia"
+        },
+        {
+          "home": "Tunisia",
+          "score": "4:4",
+          "away": "Ecuador"
+        },
+        {
+          "home": "Ghana",
+          "score": "2:0",
+          "away": "Slovenia"
+        },
+        {
+          "home": "Saudi Arabia",
+          "score": "3:2",
+          "away": "Austria"
+        },
+        {
+          "home": "Mexico",
+          "score": "4:3",
+          "away": "Chile"
+        }
+      ],
+      "topGoals": [
+        {
+          "country": "Portugal",
+          "player": "C. Ronaldo ",
+          "goals": "2"
+        },
+        {
+          "country": "Cameroon",
+          "player": "Webo",
+          "goals": "2"
+        },
+        {
+          "country": "Tunisia",
+          "player": "Jaziri",
+          "goals": "2"
+        },
+        {
+          "country": "Austria",
+          "player": "Linz",
+          "goals": "2"
+        },
+        {
+          "country": "Chile",
+          "player": "Maldonado",
+          "goals": "2"
+        },
+        {
+          "country": "Mexico",
+          "player": "L. Perez",
+          "goals": "2"
+        },
+        {
+          "country": "United States",
+          "player": "Berhalter",
+          "goals": "1"
+        }
+      ],
+      "lastUpdate": "2026-06-28T11:49:14.229Z"
+    },
+    {
+      "gameNumber": 41,
+      "p1": "Ukraine",
+      "matches": [
+        {
+          "home": "Portugal",
+          "score": "2:2",
+          "away": "Saudi Arabia"
+        },
+        {
+          "home": "Slovenia",
+          "score": "3:4",
+          "away": "Iran"
+        },
+        {
+          "home": "Uruguay",
+          "score": "2:4",
+          "away": "Paraguay"
+        },
+        {
+          "home": "Scotland",
+          "score": "1:4",
+          "away": "South Africa"
+        },
+        {
+          "home": "Wales",
+          "score": "1:2",
+          "away": "Czech"
+        },
+        {
+          "home": "Holland",
+          "score": "3:2",
+          "away": "Ireland"
+        },
+        {
+          "home": "Belgium",
+          "score": "3:0",
+          "away": "Hungary"
+        }
+      ],
+      "topGoals": [
+        {
+          "country": "Paraguay",
+          "player": "Paredes",
+          "goals": "3"
+        },
+        {
+          "country": "Iran",
+          "player": "Hashemian ",
+          "goals": "2"
+        },
+        {
+          "country": "Uruguay",
+          "player": "Zalayeta",
+          "goals": "2"
+        },
+        {
+          "country": "Holland",
+          "player": "Van  Nistelrooy ",
+          "goals": "2"
+        },
+        {
+          "country": "Belgium",
+          "player": "Mbo mpenza",
+          "goals": "2"
+        },
+        {
+          "country": "Saudi Arabia",
+          "player": "Alinohadeer",
+          "goals": "1"
+        },
+        {
+          "country": "Saudi Arabia",
+          "player": "Al-jaler",
+          "goals": "1"
+        }
+      ],
+      "lastUpdate": "2026-06-28T11:53:57.280Z"
+    },
+    {
+      "gameNumber": 42,
+      "p1": "Paraguay",
+      "matches": [
+        {
+          "home": "Spain",
+          "score": "1:3",
+          "away": "United States"
+        },
+        {
+          "home": "Angola",
+          "score": "0:5",
+          "away": "South Africa"
+        },
+        {
+          "home": "Switzerland",
+          "score": "2:2",
+          "away": "Iran"
+        },
+        {
+          "home": "Argentina",
+          "score": "5:1",
+          "away": "Slovakia"
+        },
+        {
+          "home": "Costa Rica",
+          "score": "2:2",
+          "away": "Austria"
+        },
+        {
+          "home": "Holland",
+          "score": "5:1",
+          "away": "Peru"
+        },
+        {
+          "home": "Bulgaria",
+          "score": "4:0",
+          "away": "Russia"
+        }
+      ],
+      "topGoals": [
+        {
+          "country": "Holland",
+          "player": "Robben ",
+          "goals": "3"
+        },
+        {
+          "country": "United States",
+          "player": "Reyna ",
+          "goals": "2"
+        },
+        {
+          "country": "South Africa",
+          "player": "Zuma ",
+          "goals": "2"
+        },
+        {
+          "country": "Argentina",
+          "player": "Messi",
+          "goals": "2"
+        },
+        {
+          "country": "Argentina",
+          "player": "Crespo ",
+          "goals": "2"
+        },
+        {
+          "country": "Bulgaria",
+          "player": "S. Petrov",
+          "goals": "2"
+        },
+        {
+          "country": "United States",
+          "player": "Mcbride",
+          "goals": "1"
+        }
+      ],
+      "lastUpdate": "2026-06-28T11:59:09.299Z"
+    },
+    {
+      "gameNumber": 43,
+      "p1": "Holland",
+      "matches": [
+        {
+          "home": "Saudi Arabia",
+          "score": "1:3",
+          "away": "Poland"
+        },
+        {
+          "home": "Slovakia",
+          "score": "2:2",
+          "away": "South Africa"
+        },
+        {
+          "home": "Italy",
+          "score": "4:4",
+          "away": "Czech"
+        },
+        {
+          "home": "Denmark",
+          "score": "6:0",
+          "away": "Turkey"
+        },
+        {
+          "home": "United States",
+          "score": "0:2",
+          "away": "Latvia"
+        },
+        {
+          "home": "Uruguay",
+          "score": "2:2",
+          "away": "Paraguay"
+        },
+        {
+          "home": "Brazil",
+          "score": "5:2",
+          "away": "Argentina"
+        }
+      ],
+      "topGoals": [
+        {
+          "country": "Czech",
+          "player": "Baros ",
+          "goals": "2"
+        },
+        {
+          "country": "Denmark",
+          "player": "Tomasson ",
+          "goals": "2"
+        },
+        {
+          "country": "Denmark",
+          "player": "Gravesen",
+          "goals": "2"
+        },
+        {
+          "country": "Brazil",
+          "player": "Adriano",
+          "goals": "2"
+        },
+        {
+          "country": "Poland",
+          "player": "Kosowski",
+          "goals": "1"
+        },
+        {
+          "country": "Poland",
+          "player": "Szymkowiak",
+          "goals": "1"
+        },
+        {
+          "country": "Poland",
+          "player": "Zurawski",
+          "goals": "1"
+        }
+      ],
+      "lastUpdate": "2026-06-28T12:03:14.802Z"
+    },
+    {
+      "gameNumber": 44,
+      "p1": "Holland",
+      "matches": [
+        {
+          "home": "Korea",
+          "score": "3:1",
+          "away": "Austria"
+        },
+        {
+          "home": "Poland",
+          "score": "2:3",
+          "away": "Tunisia"
+        },
+        {
+          "home": "Belgium",
+          "score": "2:1",
+          "away": "Slovenia"
+        },
+        {
+          "home": "Croatia",
+          "score": "5:5",
+          "away": "Cameroon"
+        },
+        {
+          "home": "Wales",
+          "score": "1:4",
+          "away": "Italy"
+        },
+        {
+          "home": "Australia",
+          "score": "1:7",
+          "away": "Czech"
+        },
+        {
+          "home": "Nigeria",
+          "score": "4:2",
+          "away": "Colombia"
+        }
+      ],
+      "topGoals": [
+        {
+          "country": "Cameroon",
+          "player": "Eto&#x27;o ",
+          "goals": "3"
+        },
+        {
+          "country": "Korea",
+          "player": "C y park ",
+          "goals": "2"
+        },
+        {
+          "country": "Tunisia",
+          "player": "Benachour",
+          "goals": "2"
+        },
+        {
+          "country": "Belgium",
+          "player": "Buffel",
+          "goals": "2"
+        },
+        {
+          "country": "Cameroon",
+          "player": "Kone",
+          "goals": "2"
+        },
+        {
+          "country": "Croatia",
+          "player": "Prso",
+          "goals": "2"
+        },
+        {
+          "country": "Italy",
+          "player": "Totti",
+          "goals": "2"
+        }
+      ],
+      "lastUpdate": "2026-06-28T12:07:16.740Z"
+    },
+    {
+      "gameNumber": 45,
+      "p1": "Cameroon",
+      "matches": [
+        {
+          "home": "Paraguay",
+          "score": "3:2",
+          "away": "Mexico"
+        },
+        {
+          "home": "Iran",
+          "score": "1:2",
+          "away": "Uruguay"
+        },
+        {
+          "home": "Finland",
+          "score": "1:1",
+          "away": "Turkey"
+        },
+        {
+          "home": "Brazil",
+          "score": "5:2",
+          "away": "Ivory Coast"
+        },
+        {
+          "home": "Belgium",
+          "score": "2:1",
+          "away": "Greece"
+        },
+        {
+          "home": "Ireland",
+          "score": "4:0",
+          "away": "Chile"
+        },
+        {
+          "home": "Slovakia",
+          "score": "1:2",
+          "away": "Argentina"
+        }
+      ],
+      "topGoals": [
+        {
+          "country": "Brazil",
+          "player": "Ronaldo ",
+          "goals": "3"
+        },
+        {
+          "country": "Paraguay",
+          "player": "Santa cruz",
+          "goals": "2"
+        },
+        {
+          "country": "Mexico",
+          "player": "M. Mendez",
+          "goals": "1"
+        },
+        {
+          "country": "Mexico",
+          "player": "J. Borgetti",
+          "goals": "1"
+        },
+        {
+          "country": "Paraguay",
+          "player": "N. Valdez",
+          "goals": "1"
+        },
+        {
+          "country": "Uruguay",
+          "player": "Morales",
+          "goals": "1"
+        },
+        {
+          "country": "Uruguay",
+          "player": "Forlan ",
+          "goals": "1"
+        }
+      ],
+      "lastUpdate": "2026-06-28T12:11:45.829Z"
+    },
+    {
+      "gameNumber": 46,
+      "p1": "Brazil",
+      "matches": [
+        {
+          "home": "Czech",
+          "score": "8:1",
+          "away": "Bulgaria"
+        },
+        {
+          "home": "Angola",
+          "score": "1:3",
+          "away": "Sweden"
+        },
+        {
+          "home": "United States",
+          "score": "1:7",
+          "away": "Italy"
+        },
+        {
+          "home": "Belgium",
+          "score": "3:2",
+          "away": "Costa Rica"
+        },
+        {
+          "home": "Cameroon",
+          "score": "2:6",
+          "away": "Portugal"
+        },
+        {
+          "home": "Saudi Arabia",
+          "score": "1:2",
+          "away": "Austria"
+        },
+        {
+          "home": "Romania",
+          "score": "2:3",
+          "away": "Paraguay"
+        }
+      ],
+      "topGoals": [
+        {
+          "country": "Portugal",
+          "player": "Pauleta ",
+          "goals": "3"
+        },
+        {
+          "country": "Czech",
+          "player": "Rosicky",
+          "goals": "2"
+        },
+        {
+          "country": "Czech",
+          "player": "Smicer ",
+          "goals": "2"
+        },
+        {
+          "country": "Sweden",
+          "player": "Ibrahimovic ",
+          "goals": "2"
+        },
+        {
+          "country": "Italy",
+          "player": "Totti",
+          "goals": "2"
+        },
+        {
+          "country": "Italy",
+          "player": "Toni",
+          "goals": "2"
+        },
+        {
+          "country": "Italy",
+          "player": "Gilardino ",
+          "goals": "2"
+        }
+      ],
+      "lastUpdate": "2026-06-28T12:16:15.405Z"
+    },
+    {
+      "gameNumber": 47,
+      "p1": "Portugal",
+      "matches": [
+        {
+          "home": "Ukraine",
+          "score": "2:2",
+          "away": "Ecuador"
+        },
+        {
+          "home": "Slovakia",
+          "score": "1:2",
+          "away": "Ghana"
+        },
+        {
+          "home": "Scotland",
+          "score": "2:4",
+          "away": "Tunisia"
+        },
+        {
+          "home": "Brazil",
+          "score": "5:3",
+          "away": "Belgium"
+        },
+        {
+          "home": "Uruguay",
+          "score": "1:3",
+          "away": "Italy"
+        },
+        {
+          "home": "Bulgaria",
+          "score": "3:2",
+          "away": "Switzerland"
+        },
+        {
+          "home": "Nigeria",
+          "score": "2:1",
+          "away": "Japan"
+        }
+      ],
+      "topGoals": [
+        {
+          "country": "Ecuador",
+          "player": "De la cruz",
+          "goals": "2"
+        },
+        {
+          "country": "Tunisia",
+          "player": "Dos santos",
+          "goals": "2"
+        },
+        {
+          "country": "Brazil",
+          "player": "Adriano ",
+          "goals": "2"
+        },
+        {
+          "country": "Italy",
+          "player": "Gilardino ",
+          "goals": "2"
+        },
+        {
+          "country": "Ukraine",
+          "player": "Tymoshchyuk",
+          "goals": "1"
+        },
+        {
+          "country": "Ukraine",
+          "player": "Voronin",
+          "goals": "1"
+        },
+        {
+          "country": "Ghana",
+          "player": "Kingston ",
+          "goals": "1"
+        }
+      ],
+      "lastUpdate": "2026-06-28T12:22:35.426Z"
+    },
+    {
+      "gameNumber": 48,
+      "p1": "Portugal",
+      "matches": [
+        {
+          "home": "Colombia",
+          "score": "1:0",
+          "away": "Wales"
+        },
+        {
+          "home": "Trinidad & Tobago",
+          "score": "4:2",
+          "away": "Slovenia"
+        },
+        {
+          "home": "Ghana",
+          "score": "2:3",
+          "away": "Germany"
+        },
+        {
+          "home": "Paraguay",
+          "score": "2:1",
+          "away": "Ukraine"
+        },
+        {
+          "home": "England",
+          "score": "8:1",
+          "away": "Bulgaria"
+        },
+        {
+          "home": "Finland",
+          "score": "2:0",
+          "away": "Norway"
+        },
+        {
+          "home": "Czech",
+          "score": "3:2",
+          "away": "Ecuador"
+        }
+      ],
+      "topGoals": [
+        {
+          "country": "England",
+          "player": "Owen",
+          "goals": "3"
+        },
+        {
+          "country": "Trinidad & Tobago",
+          "player": "Stern john",
+          "goals": "2"
+        },
+        {
+          "country": "England",
+          "player": "Rooney ",
+          "goals": "2"
+        },
+        {
+          "country": "Czech",
+          "player": "Nedved",
+          "goals": "2"
+        },
+        {
+          "country": "Colombia",
+          "player": "Luis rey",
+          "goals": "1"
+        },
+        {
+          "country": "Slovenia",
+          "player": "Rodic",
+          "goals": "1"
+        },
+        {
+          "country": "Slovenia",
+          "player": "Koren",
+          "goals": "1"
+        }
+      ],
+      "lastUpdate": "2026-06-28T12:27:27.053Z"
+    },
+    {
+      "gameNumber": 49,
+      "p1": "England",
+      "matches": [
+        {
+          "home": "Ivory Coast",
+          "score": "4:0",
+          "away": "Hungary"
+        },
+        {
+          "home": "Australia",
+          "score": "1:4",
+          "away": "Holland"
+        },
+        {
+          "home": "Serbia & Mont.",
+          "score": "4:3",
+          "away": "Iran"
+        },
+        {
+          "home": "Romania",
+          "score": "2:4",
+          "away": "Korea"
+        },
+        {
+          "home": "Peru",
+          "score": "0:3",
+          "away": "Colombia"
+        },
+        {
+          "home": "Poland",
+          "score": "2:4",
+          "away": "Greece"
+        },
+        {
+          "home": "Argentina",
+          "score": "1:2",
+          "away": "Ukraine"
+        }
+      ],
+      "topGoals": [
+        {
+          "country": "Ivory Coast",
+          "player": "Dindane",
+          "goals": "2"
+        },
+        {
+          "country": "Serbia & Mont.",
+          "player": "Kezman ",
+          "goals": "2"
+        },
+        {
+          "country": "Korea",
+          "player": "D g lee",
+          "goals": "2"
+        },
+        {
+          "country": "Greece",
+          "player": "Stellios ",
+          "goals": "2"
+        },
+        {
+          "country": "Greece",
+          "player": "Vryzas",
+          "goals": "2"
+        },
+        {
+          "country": "Ivory Coast",
+          "player": "Zokora",
+          "goals": "1"
+        },
+        {
+          "country": "Ivory Coast",
+          "player": "Tiene",
+          "goals": "1"
+        }
+      ],
+      "lastUpdate": "2026-06-28T12:31:32.268Z"
+    },
+    {
+      "gameNumber": 50,
+      "p1": "England",
+      "matches": [
+        {
+          "home": "Cameroon",
+          "score": "0:2",
+          "away": "Ireland"
+        },
+        {
+          "home": "Italy",
+          "score": "3:0",
+          "away": "Finland"
+        },
+        {
+          "home": "United States",
+          "score": "2:4",
+          "away": "Bulgaria"
+        },
+        {
+          "home": "Paraguay",
+          "score": "3:5",
+          "away": "Brazil"
+        },
+        {
+          "home": "Norway",
+          "score": "2:4",
+          "away": "Nigeria"
+        },
+        {
+          "home": "Latvia",
+          "score": "0:6",
+          "away": "Spain"
+        },
+        {
+          "home": "Belgium",
+          "score": "3:2",
+          "away": "Slovakia"
+        }
+      ],
+      "topGoals": [
+        {
+          "country": "Spain",
+          "player": "Vicente ",
+          "goals": "3"
+        },
+        {
+          "country": "Italy",
+          "player": "Totti",
+          "goals": "2"
+        },
+        {
+          "country": "Bulgaria",
+          "player": "Martin petrov",
+          "goals": "2"
+        },
+        {
+          "country": "Brazil",
+          "player": "Adriano ",
+          "goals": "2"
+        },
+        {
+          "country": "Brazil",
+          "player": "Ronaldo ",
+          "goals": "2"
+        },
+        {
+          "country": "Nigeria",
+          "player": "Aghahowa ",
+          "goals": "2"
+        },
+        {
+          "country": "Spain",
+          "player": "Xavi",
+          "goals": "2"
+        }
+      ],
+      "lastUpdate": "2026-06-28T12:36:50.916Z"
+    },
+    {
+      "gameNumber": 51,
+      "p1": "Spain",
+      "matches": [
+        {
+          "home": "Cameroon",
+          "score": "2:7",
+          "away": "England"
+        },
+        {
+          "home": "Slovakia",
+          "score": "0:6",
+          "away": "France"
+        },
+        {
+          "home": "Latvia",
+          "score": "1:3",
+          "away": "Ghana"
+        },
+        {
+          "home": "Brazil",
+          "score": "5:0",
+          "away": "Finland"
+        },
+        {
+          "home": "Romania",
+          "score": "4:1",
+          "away": "Austria"
+        },
+        {
+          "home": "Ecuador",
+          "score": "0:4",
+          "away": "Ukraine"
+        },
+        {
+          "home": "Czech",
+          "score": "4:0",
+          "away": "Croatia"
+        }
+      ],
+      "topGoals": [
+        {
+          "country": "England",
+          "player": "Owen",
+          "goals": "3"
+        },
+        {
+          "country": "England",
+          "player": "Rooney ",
+          "goals": "2"
+        },
+        {
+          "country": "Cameroon",
+          "player": "Eto&#x27;o ",
+          "goals": "2"
+        },
+        {
+          "country": "France",
+          "player": "Gallas",
+          "goals": "2"
+        },
+        {
+          "country": "France",
+          "player": "Reveillere",
+          "goals": "2"
+        },
+        {
+          "country": "Brazil",
+          "player": "Ronaldo ",
+          "goals": "2"
+        },
+        {
+          "country": "Brazil",
+          "player": "Adriano ",
+          "goals": "2"
+        }
+      ],
+      "lastUpdate": "2026-06-28T13:28:29.966Z"
+    },
+    {
+      "gameNumber": 52,
+      "p1": "England",
+      "matches": [
+        {
+          "home": "Ivory Coast",
+          "score": "1:3",
+          "away": "Austria"
+        },
+        {
+          "home": "Spain",
+          "score": "6:1",
+          "away": "France"
+        },
+        {
+          "home": "Peru",
+          "score": "2:1",
+          "away": "Costa Rica"
+        },
+        {
+          "home": "Belgium",
+          "score": "2:2",
+          "away": "Croatia"
+        },
+        {
+          "home": "Argentina",
+          "score": "3:0",
+          "away": "Korea"
+        },
+        {
+          "home": "Paraguay",
+          "score": "1:1",
+          "away": "Uruguay"
+        },
+        {
+          "home": "Japan",
+          "score": "6:4",
+          "away": "Serbia & Mont."
+        }
+      ],
+      "topGoals": [
+        {
+          "country": "Argentina",
+          "player": "Crespo",
+          "goals": "3"
+        },
+        {
+          "country": "Japan",
+          "player": "Alex santos",
+          "goals": "3"
+        },
+        {
+          "country": "Spain",
+          "player": "Raul",
+          "goals": "2"
+        },
+        {
+          "country": "Serbia & Mont.",
+          "player": "Zigic",
+          "goals": "2"
+        },
+        {
+          "country": "Austria",
+          "player": "Schopp",
+          "goals": "1"
+        },
+        {
+          "country": "Austria",
+          "player": "Ivanschitz",
+          "goals": "1"
+        },
+        {
+          "country": "Austria",
+          "player": "Wallner",
+          "goals": "1"
+        }
+      ],
+      "lastUpdate": "2026-06-28T13:32:10.907Z"
+    },
+    {
+      "gameNumber": 53,
+      "p1": "England",
+      "matches": [
+        {
+          "home": "Argentina",
+          "score": "4:1",
+          "away": "Cameroon"
+        },
+        {
+          "home": "Uruguay",
+          "score": "2:5",
+          "away": "Portugal"
+        },
+        {
+          "home": "Togo",
+          "score": "4:2",
+          "away": "Ghana"
+        },
+        {
+          "home": "Turkey",
+          "score": "2:4",
+          "away": "Switzerland"
+        },
+        {
+          "home": "South Africa",
+          "score": "3:1",
+          "away": "United States"
+        },
+        {
+          "home": "Angola",
+          "score": "0:3",
+          "away": "Wales"
+        },
+        {
+          "home": "Norway",
+          "score": "5:2",
+          "away": "Bulgaria"
+        }
+      ],
+      "topGoals": [
+        {
+          "country": "Portugal",
+          "player": "Deco",
+          "goals": "2"
+        },
+        {
+          "country": "Togo",
+          "player": "Adebayor ",
+          "goals": "2"
+        },
+        {
+          "country": "Switzerland",
+          "player": "Frei",
+          "goals": "2"
+        },
+        {
+          "country": "South Africa",
+          "player": "Katza",
+          "goals": "2"
+        },
+        {
+          "country": "Wales",
+          "player": "Partridge ",
+          "goals": "2"
+        },
+        {
+          "country": "Norway",
+          "player": "M.g. pedersen",
+          "goals": "2"
+        },
+        {
+          "country": "Norway",
+          "player": "Iversen",
+          "goals": "2"
+        }
+      ],
+      "lastUpdate": "2026-06-28T13:36:50.229Z"
+    },
+    {
+      "gameNumber": 54,
+      "p1": "England",
+      "matches": [
+        {
+          "home": "South Africa",
+          "score": "1:2",
+          "away": "Mexico"
+        },
+        {
+          "home": "Italy",
+          "score": "4:1",
+          "away": "France"
+        },
+        {
+          "home": "Scotland",
+          "score": "3:3",
+          "away": "Denmark"
+        },
+        {
+          "home": "Norway",
+          "score": "1:2",
+          "away": "Ivory Coast"
+        },
+        {
+          "home": "Romania",
+          "score": "1:3",
+          "away": "Japan"
+        },
+        {
+          "home": "Sweden",
+          "score": "6:1",
+          "away": "Iran"
+        },
+        {
+          "home": "United States",
+          "score": "4:3",
+          "away": "Greece"
+        }
+      ],
+      "topGoals": [
+        {
+          "country": "Sweden",
+          "player": "Svensson",
+          "goals": "2"
+        },
+        {
+          "country": "Sweden",
+          "player": "Larsson ",
+          "goals": "2"
+        },
+        {
+          "country": "United States",
+          "player": "Donovan",
+          "goals": "2"
+        },
+        {
+          "country": "Mexico",
+          "player": "J. Borgetti",
+          "goals": "1"
+        },
+        {
+          "country": "Mexico",
+          "player": "C. Salcido",
+          "goals": "1"
+        },
+        {
+          "country": "South Africa",
+          "player": "Zuma",
+          "goals": "1"
+        },
+        {
+          "country": "France",
+          "player": "Dhorasoo",
+          "goals": "1"
+        }
+      ],
+      "lastUpdate": "2026-06-28T13:41:16.083Z"
+    },
+    {
+      "gameNumber": 55,
+      "p1": "England",
+      "matches": [
+        {
+          "home": "Norway",
+          "score": "2:2",
+          "away": "Ivory Coast"
+        },
+        {
+          "home": "Colombia",
+          "score": "3:4",
+          "away": "Brazil"
+        },
+        {
+          "home": "Spain",
+          "score": "5:4",
+          "away": "United States"
+        },
+        {
+          "home": "Austria",
+          "score": "2:4",
+          "away": "Serbia & Mont."
+        },
+        {
+          "home": "South Africa",
+          "score": "1:1",
+          "away": "Croatia"
+        },
+        {
+          "home": "Greece",
+          "score": "2:1",
+          "away": "Korea"
+        },
+        {
+          "home": "Czech",
+          "score": "2:0",
+          "away": "Ghana"
+        }
+      ],
+      "topGoals": [
+        {
+          "country": "Spain",
+          "player": "F. Torres",
+          "goals": "3"
+        },
+        {
+          "country": "United States",
+          "player": "Donovan ",
+          "goals": "2"
+        },
+        {
+          "country": "Serbia & Mont.",
+          "player": "Kezman",
+          "goals": "2"
+        },
+        {
+          "country": "Ivory Coast",
+          "player": "Boka",
+          "goals": "1"
+        },
+        {
+          "country": "Ivory Coast",
+          "player": "Dindane",
+          "goals": "1"
+        },
+        {
+          "country": "Norway",
+          "player": "Carew",
+          "goals": "1"
+        },
+        {
+          "country": "Norway",
+          "player": "Iversen",
+          "goals": "1"
+        }
+      ],
+      "lastUpdate": "2026-06-28T13:44:57.733Z"
+    },
+    {
+      "gameNumber": 56,
+      "p1": "Spain",
+      "matches": [
+        {
+          "home": "Ireland",
+          "score": "3:3",
+          "away": "Ukraine"
+        },
+        {
+          "home": "Greece",
+          "score": "0:8",
+          "away": "Italy"
+        },
+        {
+          "home": "Bulgaria",
+          "score": "4:4",
+          "away": "Finland"
+        },
+        {
+          "home": "Switzerland",
+          "score": "1:2",
+          "away": "Colombia"
+        },
+        {
+          "home": "Portugal",
+          "score": "2:0",
+          "away": "Norway"
+        },
+        {
+          "home": "Ghana",
+          "score": "5:1",
+          "away": "Japan"
+        },
+        {
+          "home": "Hungary",
+          "score": "2:3",
+          "away": "Saudi Arabia"
+        }
+      ],
+      "topGoals": [
+        {
+          "country": "Italy",
+          "player": "Gilardino ",
+          "goals": "4"
+        },
+        {
+          "country": "Ukraine",
+          "player": "Voronin",
+          "goals": "2"
+        },
+        {
+          "country": "Ireland",
+          "player": "R. Keane ",
+          "goals": "2"
+        },
+        {
+          "country": "Finland",
+          "player": "Eremenko",
+          "goals": "2"
+        },
+        {
+          "country": "Bulgaria",
+          "player": "Berbatov ",
+          "goals": "2"
+        },
+        {
+          "country": "Portugal",
+          "player": "C. Ronaldo ",
+          "goals": "2"
+        },
+        {
+          "country": "Ghana",
+          "player": "Amoah",
+          "goals": "2"
+        }
+      ],
+      "lastUpdate": "2026-06-28T13:48:41.592Z"
+    },
+    {
+      "gameNumber": 57,
+      "p1": "Italy",
+      "matches": [
+        {
+          "home": "Peru",
+          "score": "4:2",
+          "away": "Nigeria"
+        },
+        {
+          "home": "Wales",
+          "score": "0:5",
+          "away": "Spain"
+        },
+        {
+          "home": "Czech",
+          "score": "2:1",
+          "away": "Holland"
+        },
+        {
+          "home": "Germany",
+          "score": "2:1",
+          "away": "Ireland"
+        },
+        {
+          "home": "Austria",
+          "score": "1:2",
+          "away": "Greece"
+        },
+        {
+          "home": "Korea",
+          "score": "1:3",
+          "away": "Denmark"
+        },
+        {
+          "home": "Costa Rica",
+          "score": "6:4",
+          "away": "Ivory Coast"
+        }
+      ],
+      "topGoals": [
+        {
+          "country": "Peru",
+          "player": "Guerrero",
+          "goals": "3"
+        },
+        {
+          "country": "Spain",
+          "player": "F. Torres",
+          "goals": "2"
+        },
+        {
+          "country": "Czech",
+          "player": "Baros",
+          "goals": "2"
+        },
+        {
+          "country": "Ivory Coast",
+          "player": "Dindane ",
+          "goals": "2"
+        },
+        {
+          "country": "Costa Rica",
+          "player": "Centeno",
+          "goals": "2"
+        },
+        {
+          "country": "Nigeria",
+          "player": "Taiwo",
+          "goals": "1"
+        },
+        {
+          "country": "Nigeria",
+          "player": "Aghahowa ",
+          "goals": "1"
+        }
+      ],
+      "lastUpdate": "2026-06-28T13:52:16.669Z"
+    },
+    {
+      "gameNumber": 58,
+      "p1": "Peru",
+      "matches": [
+        {
+          "home": "Czech",
+          "score": "6:2",
+          "away": "Togo"
+        },
+        {
+          "home": "Ireland",
+          "score": "3:3",
+          "away": "Angola"
+        },
+        {
+          "home": "Turkey",
+          "score": "3:1",
+          "away": "Ghana"
+        },
+        {
+          "home": "Mexico",
+          "score": "5:4",
+          "away": "Japan"
+        },
+        {
+          "home": "Nigeria",
+          "score": "1:4",
+          "away": "Italy"
+        },
+        {
+          "home": "Belgium",
+          "score": "1:2",
+          "away": "United States"
+        },
+        {
+          "home": "Serbia & Mont.",
+          "score": "3:0",
+          "away": "Slovakia"
+        }
+      ],
+      "topGoals": [
+        {
+          "country": "Czech",
+          "player": "Baros",
+          "goals": "3"
+        },
+        {
+          "country": "Ireland",
+          "player": "Andy reid",
+          "goals": "2"
+        },
+        {
+          "country": "Japan",
+          "player": "Takahara ",
+          "goals": "2"
+        },
+        {
+          "country": "Mexico",
+          "player": "L. Perez",
+          "goals": "2"
+        },
+        {
+          "country": "Serbia & Mont.",
+          "player": "P. Djordjevic",
+          "goals": "2"
+        },
+        {
+          "country": "Togo",
+          "player": "Adebayor ",
+          "goals": "1"
+        },
+        {
+          "country": "Togo",
+          "player": "Salifou ",
+          "goals": "1"
+        }
+      ],
+      "lastUpdate": "2026-06-28T13:56:34.625Z"
+    },
+    {
+      "gameNumber": 59,
+      "p1": "Czech",
+      "matches": [
+        {
+          "home": "Germany",
+          "score": "4:1",
+          "away": "Turkey"
+        },
+        {
+          "home": "Latvia",
+          "score": "1:6",
+          "away": "England"
+        },
+        {
+          "home": "Ecuador",
+          "score": "1:2",
+          "away": "Korea"
+        },
+        {
+          "home": "Angola",
+          "score": "0:2",
+          "away": "Uruguay"
+        },
+        {
+          "home": "Scotland",
+          "score": "2:1",
+          "away": "Iran"
+        },
+        {
+          "home": "Denmark",
+          "score": "5:0",
+          "away": "Austria"
+        },
+        {
+          "home": "Spain",
+          "score": "5:0",
+          "away": "Hungary"
+        }
+      ],
+      "topGoals": [
+        {
+          "country": "Germany",
+          "player": "Ballack ",
+          "goals": "2"
+        },
+        {
+          "country": "Spain",
+          "player": "Michel salgadq",
+          "goals": "2"
+        },
+        {
+          "country": "Turkey",
+          "player": "Engun",
+          "goals": "1"
+        },
+        {
+          "country": "Germany",
+          "player": "Jansen",
+          "goals": "1"
+        },
+        {
+          "country": "Germany",
+          "player": "Podolski ",
+          "goals": "1"
+        },
+        {
+          "country": "England",
+          "player": "Rooney ",
+          "goals": "1"
+        },
+        {
+          "country": "England",
+          "player": "Joe cole",
+          "goals": "1"
+        }
+      ],
+      "lastUpdate": "2026-06-28T14:00:40.024Z"
+    },
+    {
+      "gameNumber": 60,
+      "p1": "Czech",
+      "matches": [
+        {
+          "home": "Turkey",
+          "score": "2:4",
+          "away": "Sweden"
+        },
+        {
+          "home": "Italy",
+          "score": "5:1",
+          "away": "Germany"
+        },
+        {
+          "home": "Ecuador",
+          "score": "1:4",
+          "away": "Portugal"
+        },
+        {
+          "home": "Trinidad & Tobago",
+          "score": "1:1",
+          "away": "Slovenia"
+        },
+        {
+          "home": "Brazil",
+          "score": "6:1",
+          "away": "Serbia & Mont."
+        },
+        {
+          "home": "Ireland",
+          "score": "0:4",
+          "away": "Switzerland"
+        },
+        {
+          "home": "Austria",
+          "score": "2:2",
+          "away": "Slovakia"
+        }
+      ],
+      "topGoals": [
+        {
+          "country": "Portugal",
+          "player": "Pauleta ",
+          "goals": "3"
+        },
+        {
+          "country": "Sweden",
+          "player": "Larsson ",
+          "goals": "2"
+        },
+        {
+          "country": "Italy",
+          "player": "Toni ",
+          "goals": "2"
+        },
+        {
+          "country": "Italy",
+          "player": "Pirlo",
+          "goals": "2"
+        },
+        {
+          "country": "Brazil",
+          "player": "Ronaldo ",
+          "goals": "2"
+        },
+        {
+          "country": "Sweden",
+          "player": "Svensson",
+          "goals": "1"
+        },
+        {
+          "country": "Sweden",
+          "player": "Ibrahimovic ",
+          "goals": "1"
+        }
+      ],
+      "lastUpdate": "2026-06-28T14:04:08.503Z"
+    },
+    {
+      "gameNumber": 61,
+      "p1": "Portugal",
+      "matches": [
+        {
+          "home": "Finland",
+          "score": "1:3",
+          "away": "Croatia"
+        },
+        {
+          "home": "Belgium",
+          "score": "4:2",
+          "away": "Russia"
+        },
+        {
+          "home": "Northern Ireland",
+          "score": "1:3",
+          "away": "Denmark"
+        },
+        {
+          "home": "Uruguay",
+          "score": "2:3",
+          "away": "Japan"
+        },
+        {
+          "home": "Ivory Coast",
+          "score": "1:2",
+          "away": "Chile"
+        },
+        {
+          "home": "Ireland",
+          "score": "3:1",
+          "away": "Nigeria"
+        },
+        {
+          "home": "Tunisia",
+          "score": "3:2",
+          "away": "South Africa"
+        }
+      ],
+      "topGoals": [
+        {
+          "country": "Tunisia",
+          "player": "Benachour",
+          "goals": "3"
+        },
+        {
+          "country": "Denmark",
+          "player": "Tomasson ",
+          "goals": "2"
+        },
+        {
+          "country": "Croatia",
+          "player": "Srna",
+          "goals": "1"
+        },
+        {
+          "country": "Croatia",
+          "player": "N. Kovac",
+          "goals": "1"
+        },
+        {
+          "country": "Croatia",
+          "player": "Babic",
+          "goals": "1"
+        },
+        {
+          "country": "Finland",
+          "player": "Eremenko",
+          "goals": "1"
+        },
+        {
+          "country": "Russia",
+          "player": "Bilyaletdinov",
+          "goals": "1"
+        }
+      ],
+      "lastUpdate": "2026-06-28T14:23:35.445Z"
+    },
+    {
+      "gameNumber": 62,
+      "p1": "Tuni",
+      "matches": [
+        {
+          "home": "",
+          "score": "",
+          "away": ""
+        },
+        {
+          "home": "",
+          "score": "",
+          "away": ""
+        },
+        {
+          "home": "",
+          "score": "",
+          "away": ""
+        },
+        {
+          "home": "",
+          "score": "",
+          "away": ""
+        },
+        {
+          "home": "",
+          "score": "",
+          "away": ""
+        },
+        {
+          "home": "",
+          "score": "",
+          "away": ""
+        },
+        {
+          "home": "",
+          "score": "",
+          "away": ""
+        }
+      ],
+      "topGoals": [
+        {
+          "country": "",
+          "player": "",
+          "goals": ""
+        },
+        {
+          "country": "",
+          "player": "",
+          "goals": ""
+        },
+        {
+          "country": "",
+          "player": "",
+          "goals": ""
+        },
+        {
+          "country": "",
+          "player": "",
+          "goals": ""
+        },
+        {
+          "country": "",
+          "player": "",
+          "goals": ""
+        },
+        {
+          "country": "",
+          "player": "",
+          "goals": ""
+        },
+        {
+          "country": "",
+          "player": "",
+          "goals": ""
+        }
+      ],
+      "lastUpdate": "2026-06-29T19:18:36.903Z"
+    }
+  ],
+  "lastUpdate": "2026-06-29T19:18:36.903Z",
+  "version": 3,
+  "memoryName": "Memory 1",
+  "createdAt": "2026-06-29T18:45:12.889Z",
+  "totalGames": 62
+}

@@ -1,0 +1,316 @@
+import { StateManager } from "../state/appState.js";
+import { Security } from "../utils/security.js";
+import { teamsDB } from "../data/teams.js";
+import { normalizeCountry } from "./similarity.js";
+
+function canonicalStringify(obj) {
+  if (Array.isArray(obj)) {
+    return '[' + obj.map(canonicalStringify).join(',') + ']';
+  }
+  if (obj !== null && typeof obj === 'object') {
+    const sortedKeys = Object.keys(obj).sort();
+    return '{' + sortedKeys.map(k => '"' + k + '":' + canonicalStringify(obj[k])).join(',') + '}';
+  }
+  return JSON.stringify(obj);
+}
+
+function isMemoryIdentical(importedGames) {
+  const importedHash = canonicalStringify(importedGames);
+  for (const [memId, memory] of Object.entries(StateManager.db.memories)) {
+    if (memory && memory.games) {
+      const existingHash = canonicalStringify(memory.games);
+      if (importedHash === existingHash) {
+        return memId;
+      }
+    }
+  }
+  return null;
+}
+
+function normalizeScore(score) {
+  if (typeof score !== "string") return "";
+
+  return score
+    .trim()
+    .replace(/[-–—;]+/g, ":")
+    .replace(/\s+/g, "");
+}
+
+export const ImportExportService = {
+  exportMemoryToJSON(memoryId) {
+    // Membaca ulang state terbaru, bukan cache
+    // Clone secara mendalam menggunakan JSON untuk memastikan tidak ada referensi
+    const targetMemory = JSON.parse(JSON.stringify(StateManager.db.memories[memoryId]));
+    if (!targetMemory) {
+       if(typeof window !== 'undefined' && window.UIRenderer) {
+           window.UIRenderer.showAlert("Tidak dapat mengekspor memori kosong!");
+       } else {
+           alert("Tidak dapat mengekspor memori kosong!");
+       }
+       return;
+    }
+
+    const exportData = { ...targetMemory, version: 3 };
+
+    // JSON Validation - Export check
+    const dbDataStr = canonicalStringify({ ...StateManager.db.memories[memoryId], version: 3 });
+    const exportDataStr = canonicalStringify(exportData);
+    if (dbDataStr !== exportDataStr) {
+        throw new Error("Export validation failed: Generated object differs from StateManager DB.");
+    }
+
+    // Parse back check
+    const parsedData = JSON.parse(JSON.stringify(exportData));
+    if (canonicalStringify(parsedData) !== dbDataStr) {
+        throw new Error("Export validation failed: Parsed JSON differs from StateManager DB.");
+    }
+
+    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: "application/json" });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = `memo${memoryId}.json`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    setTimeout(() => URL.revokeObjectURL(link.href), 100);
+  },
+
+  downloadTemplate(memoryId) {
+    const template = {
+      version: 3,
+      memoryNumber: parseInt(memoryId, 10),
+      games: [
+        {
+          gameNumber: 1,
+          p1: "",
+          matches: Array.from({ length: 7 }, () => ({ home: "", score: "", away: "" })),
+          topGoals: Array.from({ length: 7 }, () => ({ country: "", player: "", goals: "" })),
+          lastUpdate: new Date().toISOString()
+        }
+      ],
+      lastUpdate: new Date().toISOString()
+    };
+    const blob = new Blob([JSON.stringify(template, null, 2)], { type: "application/json" });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = `memo${memoryId}_template.json`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    setTimeout(() => URL.revokeObjectURL(link.href), 100);
+  },
+
+  processImportFile(file, targetMemoryId, onComplete) {
+    const showAlert = (msg) => {
+        if(typeof window !== 'undefined' && window.UIRenderer) {
+            window.UIRenderer.showAlert(msg);
+        } else {
+            alert(msg);
+        }
+    };
+
+    if (!file.name.toLowerCase().endsWith('.json')) {
+      showAlert("Format berkas ditolak! Harap unggah file .json");
+      return;
+    }
+
+    const reader = new FileReader();
+
+    reader.onload = (event) => {
+      let originalMemoryData = null;
+      if (StateManager.db.memories[targetMemoryId]) {
+        originalMemoryData = JSON.parse(JSON.stringify(StateManager.db.memories[targetMemoryId]));
+      }
+
+      try {
+        let importedData = JSON.parse(event.target.result);
+        
+        if (!importedData.games || !Array.isArray(importedData.games)) {
+          throw new Error("Struktur data Game paket didalam JSON tidak valid.");
+        }
+
+        if (importedData.games.length === 0) {
+            throw new Error("Dataset Game kosong.");
+        }
+
+        // Validasi JSON Ekstensif
+        const gameNumbers = new Set();
+        importedData.games.forEach((game, index) => {
+          if (gameNumbers.has(game.gameNumber)) {
+            throw new Error(`Duplikasi gameNumber terdeteksi: ${game.gameNumber}`);
+          }
+          gameNumbers.add(game.gameNumber);
+
+          if (!game.matches || game.matches.length !== 7) {
+            throw new Error(`Game ${game.gameNumber} harus memiliki tepat 7 matches.`);
+          }
+          game.matches.forEach(m => {
+            if (m.score && m.score.trim() !== "") {
+  const normalizedScore = normalizeScore(m.score);
+
+  if (!/^\d+:\d+$/.test(normalizedScore)) {
+    throw new Error(
+      `Format score tidak valid pada Game ${game.gameNumber}: ${m.score}. Score harus berformat x:y.`
+    );
+  }
+
+  m.score = normalizedScore;
+}
+            if (m.home && m.home.trim() !== "") {
+              const normHome = normalizeCountry(m.home);
+              if (!teamsDB[normHome]) throw new Error(`Negara Home tidak dikenal pada Game ${game.gameNumber}: ${m.home}`);
+            }
+            if (m.away && m.away.trim() !== "") {
+              const normAway = normalizeCountry(m.away);
+              if (!teamsDB[normAway]) throw new Error(`Negara Away tidak dikenal pada Game ${game.gameNumber}: ${m.away}`);
+            }
+          });
+
+          if (!game.topGoals || game.topGoals.length !== 7) {
+            throw new Error(`Game ${game.gameNumber} harus memiliki tepat 7 topGoals.`);
+          }
+          game.topGoals.forEach(g => {
+  const goalsRaw = typeof g.goals === "string"
+    ? g.goals.trim()
+    : String(g.goals ?? "").trim();
+
+  if (goalsRaw !== "") {
+    const goalsNum = Number(goalsRaw);
+
+    if (!Number.isInteger(goalsNum) || goalsNum < 0) {
+      throw new Error(
+        `Goals harus berupa bilangan bulat positif pada Game ${game.gameNumber}`
+      );
+    }
+  }
+
+  g.goals = goalsRaw;
+
+  if (g.country && g.country.trim() !== "") {
+    const normCountry = normalizeCountry(g.country);
+    if (!teamsDB[normCountry]) {
+      throw new Error(
+        `Negara pencetak gol tidak dikenal pada Game ${game.gameNumber}: ${g.country}`
+      );
+    }
+  }
+});
+        });
+
+        // Duplicate Game Detection
+        const importedGameHashes = new Set();
+        const normalizeData = (g) => {
+            return canonicalStringify({ p1: g.p1, matches: g.matches, topGoals: g.topGoals });
+        };
+
+        importedData.games.forEach(importedGame => {
+          const importedHash = normalizeData(importedGame);
+
+          if (importedGameHashes.has(importedHash)) {
+            throw new Error(`Dataset Game duplikat terdeteksi di dalam file yang diimpor.`);
+          }
+          importedGameHashes.add(importedHash);
+
+          for (const [memId, memory] of Object.entries(StateManager.db.memories)) {
+            if (String(memId) === String(targetMemoryId)) continue;
+            if (memory && memory.games) {
+              for (const existingGame of memory.games) {
+                if (normalizeData(existingGame) === importedHash) {
+                  throw new Error(`Game identik sudah ada pada Memory ${memId} Game ${existingGame.gameNumber}`);
+                }
+              }
+            }
+          }
+        });
+
+        const performImport = () => {
+            // Terapkan paksa ID nomor memori mengikuti aturan nama file
+            importedData.memoryNumber = targetMemoryId;
+            importedData.version = 3;
+            if (!importedData.memoryName) importedData.memoryName = "Memory " + targetMemoryId;
+            if (!importedData.createdAt) importedData.createdAt = new Date().toISOString();
+            importedData.lastUpdate = new Date().toISOString();
+            importedData.totalGames = importedData.games.length;
+
+            StateManager.db.memories[targetMemoryId] = importedData;
+            StateManager.save();
+
+            // JSON Validation - Import check
+            const importedDataStr = canonicalStringify(importedData);
+            const dbDataStr = canonicalStringify(StateManager.db.memories[targetMemoryId]);
+            if (importedDataStr !== dbDataStr) {
+                // Rollback
+                if (originalMemoryData) {
+                  StateManager.db.memories[targetMemoryId] = originalMemoryData;
+                } else {
+                  StateManager.db.memories[targetMemoryId] = null;
+                }
+                StateManager.save();
+                throw new Error("Import validation failed: StateManager DB differs from imported JSON object.");
+            }
+
+            showAlert(`Berhasil mengimpor berkas ke Memory ${targetMemoryId}!`);
+            onComplete(targetMemoryId);
+        };
+
+
+        // Duplicate Memory Detection
+        const identicalMemId = isMemoryIdentical(importedData.games);
+        
+        const confirmOverwrite = () => {
+            if (StateManager.db.memories[targetMemoryId]) {
+                if(window.UIRenderer && window.UIRenderer.showConfirm) {
+                    window.UIRenderer.showConfirm(`Peringatan: Slot Memory ${targetMemoryId} sudah berisi dataset. Timpa (Overwrite) seluruh data?`, () => {
+                        showAlert("Sistem akan mendownload backup otomatis (backup_memo" + targetMemoryId + ".json) sebelum menimpa data.");
+                        const backupData = { ...StateManager.db.memories[targetMemoryId], version: 3 };
+                        const backupBlob = new Blob([JSON.stringify(backupData, null, 2)], { type: "application/json" });
+                        const backupLink = document.createElement("a");
+                        backupLink.href = URL.createObjectURL(backupBlob);
+                        backupLink.download = `backup_memo${targetMemoryId}.json`;
+                        document.body.appendChild(backupLink);
+                        backupLink.click();
+                        document.body.removeChild(backupLink);
+                        setTimeout(() => URL.revokeObjectURL(backupLink.href), 100);
+
+                        performImport();
+                    });
+                } else {
+                   const ok = confirm(`Peringatan: Slot Memory ${targetMemoryId} sudah berisi dataset. Timpa (Overwrite) seluruh data?`);
+                   if(ok) {
+                       performImport();
+                   }
+                }
+            } else {
+                performImport();
+            }
+        };
+
+        if (identicalMemId && identicalMemId !== String(targetMemoryId)) {
+            if(window.UIRenderer && window.UIRenderer.showConfirm) {
+                window.UIRenderer.showConfirm(`Memory ini identik dengan Memory ${identicalMemId}. Tetap import?`, () => {
+                    confirmOverwrite();
+                });
+            } else {
+                if(confirm(`Memory ini identik dengan Memory ${identicalMemId}. Tetap import?`)) {
+                    confirmOverwrite();
+                }
+            }
+        } else {
+            confirmOverwrite();
+        }
+
+      } catch (err) {
+        // Rollback / Restore on fail
+        if (originalMemoryData) {
+          StateManager.db.memories[targetMemoryId] = originalMemoryData;
+        } else {
+          StateManager.db.memories[targetMemoryId] = null;
+        }
+        StateManager.save();
+        showAlert("Gagal membaca atau mem-parsing berkas JSON: " + err.message);
+      }
+    };
+
+    reader.readAsText(file);
+  }
+};
