@@ -50,10 +50,10 @@ export const ImportExportService = {
        return;
     }
 
-    const exportData = { ...targetMemory, version: 3 };
+    const exportData = { ...targetMemory, version: 4 };
 
     // JSON Validation - Export check
-    const dbDataStr = canonicalStringify({ ...StateManager.db.memories[memoryId], version: 3 });
+    const dbDataStr = canonicalStringify({ ...StateManager.db.memories[memoryId], version: 4 });
     const exportDataStr = canonicalStringify(exportData);
     if (dbDataStr !== exportDataStr) {
         throw new Error("Export validation failed: Generated object differs from StateManager DB.");
@@ -77,14 +77,16 @@ export const ImportExportService = {
 
   downloadTemplate(memoryId) {
     const template = {
-      version: 3,
+      version: 4,
       memoryNumber: parseInt(memoryId, 10),
       games: [
         {
           gameNumber: 1,
           p1: "",
-          matches: Array.from({ length: 7 }, () => ({ home: "", score: "", away: "" })),
+          matches: Array.from({ length: 8 }, (_, i) => ({ home: "", score: "", away: "", enabled: i < 7 })),
           topGoals: Array.from({ length: 7 }, () => ({ country: "", player: "", goals: "" })),
+          b8Enabled: false,
+          b8Migrated: true,
           lastUpdate: new Date().toISOString()
         }
       ],
@@ -141,8 +143,23 @@ export const ImportExportService = {
           }
           gameNumbers.add(game.gameNumber);
 
-          if (!game.matches || game.matches.length !== 7) {
-            throw new Error(`Game ${game.gameNumber} harus memiliki tepat 7 matches.`);
+          if (!game.matches || (game.matches.length !== 7 && game.matches.length !== 8)) {
+            throw new Error(`Game ${game.gameNumber} harus memiliki 7 atau 8 matches (B8 collapsible).`);
+          }
+          // Migration: normalize to 8 with enabled flag
+          if (game.matches.length === 7) {
+            game.matches.push({ home: "", score: "", away: "", enabled: false });
+            game.b8Enabled = false;
+            game.b8Migrated = true;
+          } else {
+            // Ensure 8th has enabled flag
+            game.matches = game.matches.map((m, idx) => ({
+              home: m.home || "",
+              score: m.score || "",
+              away: m.away || "",
+              enabled: typeof m.enabled === "boolean" ? m.enabled : idx < 7 || !!(m.home || m.away || m.score)
+            }));
+            if (typeof game.b8Enabled !== "boolean") game.b8Enabled = !!game.matches[7].enabled;
           }
           game.matches.forEach(m => {
             if (m.score && m.score.trim() !== "") {
@@ -226,7 +243,15 @@ export const ImportExportService = {
         const performImport = () => {
             // Terapkan paksa ID nomor memori mengikuti aturan nama file
             importedData.memoryNumber = targetMemoryId;
-            importedData.version = 3;
+            importedData.version = 4;
+            // Ensure all games have B8
+            importedData.games.forEach(g => {
+              if (!Array.isArray(g.matches) || g.matches.length !== 8) {
+                const old = g.matches || [];
+                g.matches = Array.from({ length: 8 }, (_, i) => old[i] || { home: "", score: "", away: "", enabled: i < 7 });
+              }
+              if (typeof g.b8Enabled !== "boolean") g.b8Enabled = !!g.matches[7]?.enabled;
+            });
             if (!importedData.memoryName) importedData.memoryName = "Memory " + targetMemoryId;
             if (!importedData.createdAt) importedData.createdAt = new Date().toISOString();
             importedData.lastUpdate = new Date().toISOString();
@@ -262,7 +287,7 @@ export const ImportExportService = {
                 if(window.UIRenderer && window.UIRenderer.showConfirm) {
                     window.UIRenderer.showConfirm(`Peringatan: Slot Memory ${targetMemoryId} sudah berisi dataset. Timpa (Overwrite) seluruh data?`, () => {
                         showAlert("Sistem akan mendownload backup otomatis (backup_memo" + targetMemoryId + ".json) sebelum menimpa data.");
-                        const backupData = { ...StateManager.db.memories[targetMemoryId], version: 3 };
+                        const backupData = { ...StateManager.db.memories[targetMemoryId], version: 4 };
                         const backupBlob = new Blob([JSON.stringify(backupData, null, 2)], { type: "application/json" });
                         const backupLink = document.createElement("a");
                         backupLink.href = URL.createObjectURL(backupBlob);

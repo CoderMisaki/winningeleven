@@ -1,8 +1,11 @@
 import fs from "fs";
 import path from "path";
 
-const NVIDIA_API_KEY = process.env.NVIDIA_API_KEY || "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";
+const NVIDIA_API_KEY = process.env.NVIDIA_API_KEY;
 const DEFAULT_MODEL = "nvidia/nemotron-3.5-lightning-30b-a3b";
+if (!NVIDIA_API_KEY) {
+  console.warn("[SECURITY] NVIDIA_API_KEY not set — /api/chat will return 500. Set env var and rotate exposed key.");
+}
 
 function checkPromptInjection(text) {
   const lower = text.toLowerCase();
@@ -29,6 +32,9 @@ function scanForSecrets(text) {
 export default async function handler(req, res) {
   if (req.method !== "POST") {
     return res.status(405).json({ error: "[HTTP 405] Method Not Allowed" });
+  }
+  if (!NVIDIA_API_KEY) {
+    return res.status(500).json({ error: "[CONFIG] NVIDIA_API_KEY not configured. Set env var." });
   }
 
   const { messages, mode, model = DEFAULT_MODEL } = req.body || {};

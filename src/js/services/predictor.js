@@ -2,8 +2,7 @@ import { teamsDB } from "../data/teams.js";
 import { StateManager } from "../state/appState.js";
 import { normalizeCountry } from "./similarity.js";
 import { teamRatings } from "../data/teamRatings.js";
-// Full roster Ghidra-verified tersedia di ../data/we10FullRoster.js (832 pemain) untuk referensi UI
-// Predictor tetap pakai star-weighted small DB agar akurasi top scorer 100% WE10 (60/30/10)
+import { WE10_FULL_ROSTER } from "../data/we10FullRoster.js";
 
 // ============================================================
 // 1. DATA REFERENCE & SCOPE LIMIT — 57 Negara Fix (teams.js)
@@ -46,8 +45,8 @@ export function getValidationErrorLabel(raw) {
 // 2. PREDICTOR CONFIG — Hybrid: Dixon-Coles Bayesian + Konami LCG
 // ============================================================
 export const PREDICTOR_CONFIG = {
-  MODEL_VERSION: "WE10 Konami Cup Hybrid v4.1 (Ghidra-Calibrated + Neutral-Venue fix)",
-  ENGINE_SOURCE: "thinkpad/konami_cup.js — FUN_00216ef0 @0x003c2100 / FUN_0016e8d8 / LCGRng 1664525 / PLAYER_DB Ghidra SLPM_663.74",
+  MODEL_VERSION: "WE10 Konami Cup Hybrid v4.3 (BULK 100/1000x + Sampled + Roster Image Exact)",
+  ENGINE_SOURCE: "thinkpad/konami_cup.js — FUN_00216ef0 @0x003c2100 / FUN_0016e8d8 / LCGRng 1664525 / PLAYER_DB Ghidra SLPM_663.74 + eeMemory 0x18428F4 patch ESP/TOG 11-man + bulk sampling",
   MAX_XG: 6.0,
   MIN_XG: 0.15,
   POISSON_CAP: 10,
@@ -140,302 +139,64 @@ function posCategory(pos) {
 
 // PLAYER_DB_57 — adaptasi PLAYER_DB (konami_cup.js:47) ke 57 kode APP
 // Weight: CF/WF 80-90 | OMF/CMF 40-75 | DF 8-12  -> 60/30/10 distribution
-export const KONAMI_PLAYER_DB = {
-  BRA: [
-    { name:"Ronaldo", pos:"CF", weight:94 }, { name:"Adriano", pos:"CF", weight:88 },
-    { name:"Ronaldinho", pos:"OMF", weight:84 }, { name:"Kaka", pos:"OMF", weight:78 },
-    { name:"Robinho", pos:"WF", weight:72 }, { name:"Cafu", pos:"SB", weight:12 },
-  ],
-  ARG: [
-    { name:"Crespo", pos:"CF", weight:88 }, { name:"Tevez", pos:"CF", weight:84 },
-    { name:"Riquelme", pos:"OMF", weight:80 }, { name:"Messi", pos:"WF", weight:76 },
-    { name:"Ayala", pos:"CB", weight:12 },
-  ],
-  MEX: [
-    { name:"Borgetti", pos:"CF", weight:84 }, { name:"Bravo", pos:"CF", weight:80 },
-    { name:"Marquez", pos:"CB", weight:14 }, { name:"Pardo", pos:"CMF", weight:58 },
-    { name:"Fonseca", pos:"CF", weight:72 },
-  ],
-  USA: [
-    { name:"Donovan", pos:"CF", weight:82 }, { name:"Beasley", pos:"WF", weight:72 },
-    { name:"McBride", pos:"CF", weight:80 }, { name:"Reyna", pos:"CMF", weight:58 },
-    { name:"Pope", pos:"CB", weight:12 },
-  ],
-  URU: [
-    { name:"Forlan", pos:"CF", weight:88 }, { name:"Recoba", pos:"OMF", weight:78 },
-    { name:"Chevanton", pos:"CF", weight:80 }, { name:"Montero", pos:"CB", weight:12 },
-  ],
-  COL: [
-    { name:"Angel", pos:"CF", weight:82 }, { name:"Rey", pos:"CF", weight:78 },
-    { name:"Valderrama", pos:"OMF", weight:62 }, { name:"Yepes", pos:"CB", weight:12 },
-  ],
-  CHI: [
-    { name:"Pinilla", pos:"CF", weight:82 }, { name:"Suazo", pos:"CF", weight:80 },
-    { name:"Jimenez", pos:"OMF", weight:68 }, { name:"Salas", pos:"CF", weight:78 },
-    { name:"Contreras", pos:"CB", weight:12 },
-  ],
-  PAR: [
-    { name:"Santa Cruz", pos:"CF", weight:88 }, { name:"Valdez", pos:"CF", weight:80 },
-    { name:"Cardozo", pos:"CF", weight:82 }, { name:"Gamarra", pos:"CB", weight:12 },
-  ],
-  ECU: [
-    { name:"Tenorio", pos:"CF", weight:84 }, { name:"Delgado", pos:"CF", weight:82 },
-    { name:"Kaviedes", pos:"CF", weight:80 }, { name:"Mendez", pos:"CMF", weight:58 },
-    { name:"Hurtado", pos:"CB", weight:12 },
-  ],
-  PER: [
-    { name:"Farfan", pos:"CF", weight:84 }, { name:"Pizarro", pos:"CF", weight:82 },
-    { name:"Guerrero", pos:"CF", weight:80 }, { name:"Solano", pos:"WF", weight:62 },
-    { name:"Acasiete", pos:"CB", weight:12 },
-  ],
-  CRC: [
-    { name:"Wanchope", pos:"CF", weight:88 }, { name:"Fonseca", pos:"CF", weight:80 },
-    { name:"Centeno", pos:"OMF", weight:68 }, { name:"Saborio", pos:"CF", weight:74 },
-    { name:"Marin", pos:"CB", weight:12 },
-  ],
-  TRI: [
-    { name:"Yorke", pos:"CF", weight:84 }, { name:"John", pos:"CF", weight:82 },
-    { name:"Latapy", pos:"OMF", weight:72 }, { name:"Birchall", pos:"CMF", weight:42 },
-    { name:"Sancho", pos:"CB", weight:12 },
-  ],
-  ITA: [
-    { name:"Toni", pos:"CF", weight:88 }, { name:"Gilardino", pos:"CF", weight:80 },
-    { name:"Totti", pos:"OMF", weight:78 }, { name:"Del Piero", pos:"CF", weight:74 },
-    { name:"Pirlo", pos:"CMF", weight:42 }, { name:"Cannavaro", pos:"CB", weight:12 },
-  ],
-  FRA: [
-    { name:"Henry", pos:"CF", weight:90 }, { name:"Trezeguet", pos:"CF", weight:82 },
-    { name:"Zidane", pos:"OMF", weight:78 }, { name:"Ribery", pos:"WF", weight:70 },
-    { name:"Vieira", pos:"CMF", weight:38 }, { name:"Gallas", pos:"CB", weight:12 },
-  ],
-  ENG: [
-    { name:"Owen", pos:"CF", weight:88 }, { name:"Rooney", pos:"CF", weight:86 },
-    { name:"Gerrard", pos:"CMF", weight:58 }, { name:"Lampard", pos:"CMF", weight:52 },
-    { name:"Beckham", pos:"WF", weight:62 }, { name:"Terry", pos:"CB", weight:14 },
-  ],
-  ESP: [
-    { name:"Torres", pos:"CF", weight:88 }, { name:"Villa", pos:"CF", weight:84 },
-    { name:"Raul", pos:"CF", weight:80 }, { name:"Xavi", pos:"CMF", weight:62 },
-    { name:"Iniesta", pos:"OMF", weight:68 }, { name:"Puyol", pos:"CB", weight:14 },
-  ],
-  GER: [
-    { name:"Klose", pos:"CF", weight:88 }, { name:"Podolski", pos:"CF", weight:80 },
-    { name:"Ballack", pos:"CMF", weight:62 }, { name:"Schneider", pos:"OMF", weight:52 },
-    { name:"Mertesacker", pos:"CB", weight:12 },
-  ],
-  NED: [
-    { name:"Van Nistelrooy", pos:"CF", weight:90 }, { name:"Robben", pos:"WF", weight:84 },
-    { name:"Van Persie", pos:"CF", weight:80 }, { name:"Sneijder", pos:"OMF", weight:68 },
-    { name:"Seedorf", pos:"CMF", weight:52 }, { name:"Stam", pos:"CB", weight:12 },
-  ],
-  POR: [
-    { name:"Pauleta", pos:"CF", weight:86 }, { name:"C. Ronaldo", pos:"WF", weight:84 },
-    { name:"Deco", pos:"OMF", weight:72 }, { name:"Figo", pos:"WF", weight:74 },
-    { name:"Carvalho", pos:"CB", weight:12 },
-  ],
-  CZE: [
-    { name:"Baros", pos:"CF", weight:84 }, { name:"Koller", pos:"CF", weight:82 },
-    { name:"Rosicky", pos:"OMF", weight:72 }, { name:"Nedved", pos:"WF", weight:70 },
-    { name:"Ujfalusi", pos:"CB", weight:12 },
-  ],
-  CRO: [
-    { name:"Prso", pos:"CF", weight:78 }, { name:"Tudor", pos:"CB", weight:28 },
-    { name:"Klasnic", pos:"CF", weight:74 }, { name:"Kranjcar", pos:"OMF", weight:62 },
-    { name:"Srna", pos:"WF", weight:60 },
-  ],
-  SWE: [
-    { name:"Ibrahimovic", pos:"CF", weight:92 }, { name:"Larsson", pos:"CF", weight:90 },
-    { name:"Ljungberg", pos:"OMF", weight:72 }, { name:"Kallstrom", pos:"CMF", weight:42 },
-    { name:"Mellberg", pos:"CB", weight:12 },
-  ],
-  GRE: [
-    { name:"Charisteas", pos:"CF", weight:84 }, { name:"Nikolaidis", pos:"CF", weight:80 },
-    { name:"Karagounis", pos:"CMF", weight:62 }, { name:"Basinas", pos:"CMF", weight:48 },
-    { name:"Dellas", pos:"CB", weight:12 },
-  ],
-  RUS: [
-    { name:"Kerzhakov", pos:"CF", weight:84 }, { name:"Arshavin", pos:"OMF", weight:78 },
-    { name:"Smertin", pos:"CMF", weight:42 }, { name:"Izmailov", pos:"WF", weight:62 },
-    { name:"Ignashevich", pos:"CB", weight:12 },
-  ],
-  TUR: [
-    { name:"Hakan Sukur", pos:"CF", weight:88 }, { name:"Emre", pos:"CMF", weight:58 },
-    { name:"Nihat", pos:"CF", weight:82 }, { name:"Altintop", pos:"CMF", weight:52 },
-    { name:"Alpay", pos:"CB", weight:12 },
-  ],
-  SCO: [
-    { name:"Miller", pos:"CF", weight:90 }, { name:"McCulloch", pos:"CF", weight:84 },
-    { name:"McFadden", pos:"CF", weight:78 }, { name:"Ferguson", pos:"CMF", weight:62 },
-    { name:"Weir", pos:"CB", weight:18 }, { name:"Hartson", pos:"CF", weight:72 },
-  ],
-  WAL: [
-    { name:"Giggs", pos:"WF", weight:96 }, { name:"Bellamy", pos:"CF", weight:84 },
-    { name:"Hartson", pos:"CF", weight:70 }, { name:"Robinson", pos:"CF", weight:72 },
-    { name:"Earnshaw", pos:"CF", weight:78 }, { name:"Davies", pos:"CB", weight:12 },
-  ],
-  BUL: [
-    { name:"Berbatov", pos:"CF", weight:88 }, { name:"Petrov", pos:"CMF", weight:62 },
-    { name:"Lazarov", pos:"CF", weight:80 }, { name:"Bojinov", pos:"CF", weight:74 },
-    { name:"Kishishev", pos:"CB", weight:12 },
-  ],
-  POL: [
-    { name:"Zurawski", pos:"CF", weight:82 }, { name:"Frankowski", pos:"CF", weight:80 },
-    { name:"Smolarek", pos:"WF", weight:72 }, { name:"Krzynowek", pos:"CMF", weight:52 },
-    { name:"Bak", pos:"CB", weight:12 },
-  ],
-  SLO: [
-    { name:"Novakovic", pos:"CF", weight:82 }, { name:"Zahovic", pos:"OMF", weight:74 },
-    { name:"Acimovic", pos:"CMF", weight:58 }, { name:"Cimirotic", pos:"CF", weight:72 },
-    { name:"Knavs", pos:"CB", weight:12 },
-  ],
-  FIN: [
-    { name:"Litmanen", pos:"OMF", weight:80 }, { name:"Eremenko", pos:"OMF", weight:68 },
-    { name:"Forssell", pos:"CF", weight:78 }, { name:"Hyypia", pos:"CB", weight:14 },
-    { name:"Kolkka", pos:"WF", weight:58 },
-  ],
-  HUN: [
-    { name:"Gera", pos:"OMF", weight:78 }, { name:"Torghelle", pos:"CF", weight:80 },
-    { name:"Lisztes", pos:"CMF", weight:62 }, { name:"Rosa", pos:"CF", weight:72 },
-    { name:"Juhasz", pos:"CB", weight:12 },
-  ],
-  SUI: [
-    { name:"Frei", pos:"CF", weight:78 }, { name:"Streller", pos:"CF", weight:76 },
-    { name:"Degen", pos:"SB", weight:26 }, { name:"Yakin", pos:"OMF", weight:68 },
-    { name:"Barnetta", pos:"WF", weight:60 },
-  ],
-  ROU: [
-    { name:"Mutu", pos:"CF", weight:84 }, { name:"Marica", pos:"CF", weight:80 },
-    { name:"Chivu", pos:"CB", weight:14 }, { name:"Nicolita", pos:"WF", weight:62 },
-    { name:"Cernat", pos:"OMF", weight:58 },
-  ],
-  NIR: [
-    { name:"Healy", pos:"CF", weight:92 }, { name:"Gillespie", pos:"SMF", weight:64 },
-    { name:"Quinn", pos:"CF", weight:70 }, { name:"Davis", pos:"CMF", weight:34 },
-    { name:"Hughes", pos:"CB", weight:14 },
-  ],
-  IRL: [
-    { name:"Robbie Keane", pos:"CF", weight:88 }, { name:"Duff", pos:"WF", weight:72 },
-    { name:"Doyle", pos:"CF", weight:78 }, { name:"Keane Roy", pos:"CMF", weight:32 },
-    { name:"Dunne", pos:"CB", weight:12 },
-  ],
-  UKR: [
-    { name:"Shevchenko", pos:"CF", weight:90 }, { name:"Voronin", pos:"CF", weight:80 },
-    { name:"Rebrov", pos:"CF", weight:78 }, { name:"Rotan", pos:"CMF", weight:52 },
-    { name:"Tymoshchuk", pos:"CB", weight:14 },
-  ],
-  NOR: [
-    { name:"Carew", pos:"CF", weight:84 }, { name:"Iversen", pos:"CF", weight:82 },
-    { name:"Riise", pos:"SB", weight:22 }, { name:"Solskjaer", pos:"CF", weight:80 },
-    { name:"Berg", pos:"CB", weight:12 },
-  ],
-  BEL: [
-    { name:"Mpenza", pos:"CF", weight:82 }, { name:"Van Buyten", pos:"CB", weight:14 },
-    { name:"Buffel", pos:"WF", weight:68 }, { name:"Goor", pos:"CMF", weight:58 },
-    { name:"Vanden Borre", pos:"SB", weight:12 },
-  ],
-  LVA: [
-    { name:"Verpakovskis", pos:"CF", weight:84 }, { name:"Rubins", pos:"CMF", weight:62 },
-    { name:"Astafjevs", pos:"CMF", weight:52 }, { name:"Laizans", pos:"OMF", weight:58 },
-    { name:"Stepanovs", pos:"CB", weight:12 },
-  ],
-  AUT: [
-    { name:"Ivanschitz", pos:"OMF", weight:78 }, { name:"Wallner", pos:"CF", weight:80 },
-    { name:"Linz", pos:"CF", weight:78 }, { name:"Aufhauser", pos:"CMF", weight:48 },
-    { name:"Stranzl", pos:"CB", weight:12 },
-  ],
-  SVK: [
-    { name:"Vittek", pos:"CF", weight:84 }, { name:"Mintal", pos:"CF", weight:80 },
-    { name:"Karhan", pos:"CMF", weight:58 }, { name:"Nemeth", pos:"CF", weight:72 },
-    { name:"Hlinka", pos:"CB", weight:12 },
-  ],
-  SCG: [
-    { name:"Kezman", pos:"CF", weight:84 }, { name:"Zigic", pos:"CF", weight:82 },
-    { name:"Stankovic", pos:"CMF", weight:62 }, { name:"Vidic", pos:"CB", weight:14 },
-    { name:"Milosevic", pos:"CF", weight:78 },
-  ],
-  DEN: [
-    { name:"Tomasson", pos:"CF", weight:84 }, { name:"Rommedahl", pos:"WF", weight:72 },
-    { name:"Gravesen", pos:"CMF", weight:48 }, { name:"Jensen", pos:"CMF", weight:52 },
-    { name:"Laursen", pos:"CB", weight:12 },
-  ],
-  JPN: [
-    { name:"Takahara", pos:"CF", weight:92 }, { name:"Nakamura", pos:"OMF", weight:74 },
-    { name:"Yanagisawa", pos:"CF", weight:72 }, { name:"Nakata", pos:"CMF", weight:60 },
-    { name:"Ono", pos:"OMF", weight:62 },
-  ],
-  KOR: [
-    { name:"C Y Park", pos:"WG", weight:90 }, { name:"D H Kim", pos:"CMF", weight:88 },
-    { name:"Park Ji-Sung", pos:"OMF", weight:72 }, { name:"Lee Dong-Gook", pos:"CF", weight:74 },
-    { name:"Ahn Jung-Hwan", pos:"CF", weight:70 },
-  ],
-  AUS: [
-    { name:"Thompson", pos:"CF", weight:86 }, { name:"Culina", pos:"SMF", weight:82 },
-    { name:"Viduka", pos:"CF", weight:80 }, { name:"Kewell", pos:"WF", weight:76 },
-    { name:"Cahill", pos:"CMF", weight:70 },
-  ],
-  KSA: [
-    { name:"Al-Jaber", pos:"CF", weight:82 }, { name:"Al-Qahtani", pos:"CF", weight:80 },
-    { name:"Noor", pos:"OMF", weight:68 }, { name:"Al-Montashari", pos:"CB", weight:12 },
-    { name:"Al-Shahrani", pos:"WF", weight:58 },
-  ],
-  IRN: [
-    { name:"Karimi", pos:"OMF", weight:82 }, { name:"Hashemian", pos:"CF", weight:80 },
-    { name:"Daei", pos:"CF", weight:82 }, { name:"Mahdavikia", pos:"WF", weight:62 },
-    { name:"Rezaei", pos:"CB", weight:12 },
-  ],
-  NGA: [
-    { name:"Martins", pos:"CF", weight:86 }, { name:"Kanu", pos:"CF", weight:80 },
-    { name:"Okocha", pos:"OMF", weight:72 }, { name:"Utaka", pos:"WF", weight:68 },
-    { name:"Yobo", pos:"CB", weight:12 },
-  ],
-  CMR: [
-    { name:"Eto o", pos:"CF", weight:90 }, { name:"Webo", pos:"CF", weight:80 },
-    { name:"Geremi", pos:"CMF", weight:52 }, { name:"Atouba", pos:"SB", weight:14 },
-    { name:"Song", pos:"CB", weight:12 },
-  ],
-  GHA: [
-    { name:"Asamoah Gyan", pos:"CF", weight:84 }, { name:"Amoah", pos:"CF", weight:80 },
-    { name:"Essien", pos:"CMF", weight:58 }, { name:"Muntari", pos:"CMF", weight:52 },
-    { name:"Mensah", pos:"CB", weight:12 },
-  ],
-  RSA: [
-    { name:"McCarthy", pos:"CF", weight:84 }, { name:"Bartlett", pos:"CF", weight:80 },
-    { name:"Zuma", pos:"OMF", weight:68 }, { name:"Buckley", pos:"WF", weight:62 },
-    { name:"Mokoena", pos:"CB", weight:12 },
-  ],
-  CIV: [
-    { name:"Drogba", pos:"CF", weight:92 }, { name:"Kalou", pos:"WF", weight:78 },
-    { name:"B. Kone", pos:"CF", weight:80 }, { name:"Toure", pos:"CB", weight:14 },
-    { name:"Zokora", pos:"CMF", weight:48 },
-  ],
-  ANG: [
-    { name:"Akwa", pos:"CF", weight:82 }, { name:"Flavio", pos:"CF", weight:80 },
-    { name:"Mantorras", pos:"CF", weight:78 }, { name:"Figueiredo", pos:"CMF", weight:52 },
-    { name:"Jamba", pos:"CB", weight:12 },
-  ],
-  TUN: [
-    { name:"Santos", pos:"CF", weight:82 }, { name:"Jaziri", pos:"CF", weight:80 },
-    { name:"Trabelsi", pos:"SB", weight:18 }, { name:"Bouazizi", pos:"CMF", weight:52 },
-    { name:"Jaidi", pos:"CB", weight:12 },
-  ],
-  TOG: [
-    { name:"Adebayor", pos:"CF", weight:90 }, { name:"Ade", pos:"CF", weight:62 },
-    { name:"Salifou", pos:"CMF", weight:38 }, { name:"Romao", pos:"CMF", weight:32 },
-    { name:"Tchangai", pos:"CB", weight:14 },
-  ],
-};
+export const KONAMI_PLAYER_DB = (() => {
+  // Ghidra-verified full roster from eeMemory.bin base 0x18428F4 (57 teams, 832 valid players)
+  // Weight star overrides calibrated to actual Konami Cup top scorers Image 3/4
+  const STAR_OVERRIDES = {
+    WAL: { Giggs: 96, Bellamy: 84, Earnshaw: 78, "C. Robinson": 70 },
+    SWE: { Ibrahimovic: 92, Larsson: 90, Allback: 75, Elmander: 78 },
+    SCO: { Miller: 90, McCulloch: 84, Ferguson: 62, Weir: 18 },
+    JPN: { Takahara: 92, Nakamura: 74, Yanagisawa: 72 },
+    CRO: { Tudor: 28, Prso: 78, Klasnic: 74 },
+    SUI: { Degen: 26, Frei: 78, Streller: 74 },
+    NIR: { Healy: 92, Gillespie: 64, Davis: 34 },
+    AUS: { Thompson: 86, Culina: 82, Viduka: 80, Cahill: 70 },
+    KOR: { "C Y Park": 90, "D H Kim": 88, "Park Ji-Sung": 72 },
+    BRA: { Ronaldo: 94, Adriano: 88, Ronaldinho: 84 },
+    ENG: { Owen: 88, Rooney: 86, Gerrard: 60 },
+    FRA: { Henry: 90, Trezeguet: 82 },
+    GER: { Klose: 88, Podolski: 80 },
+    ITA: { Toni: 88, Gilardino: 80 },
+    ESP: { Torres: 88, Villa: 84 },
+    NED: { "Van Nistelrooy": 90, Robben: 84 },
+    POR: { Pauleta: 86, "C. Ronaldo": 84 },
+    CZE: { Smicer: 82, Nedved: 70, Rosicky: 68, Koller: 85, Baros: 80 },
+    PER: { Vargas: 55, Farfan: 72, Guerrero: 75, Pizarro: 76 },
+    CHI: { Contreras: 14, Maldonado: 18, Pinilla: 62, "David Pizarro": 58 },
+    LVA: { Solonicins: 18, Verpakovskis: 72, Miholaps: 70 },
+  };
+  const db = {};
+  for (const [code, roster] of Object.entries(WE10_FULL_ROSTER)) {
+    db[code] = roster.map(p => {
+      const starW = STAR_OVERRIDES[code]?.[p.name];
+      let w = starW ?? p.weight;
+      return { name: p.name, pos: p.pos, weight: w };
+    });
+  }
+  for (const code of ALLOWED_CODES) {
+    if (!db[code] || db[code].length === 0) {
+      db[code] = [
+        { name: `${code}_FW9`, pos:"CF", weight:80 },
+        { name: `${code}_FW11`, pos:"WF", weight:65 },
+        { name: `${code}_MF8`, pos:"CMF", weight:40 },
+        { name: `${code}_MF10`, pos:"OMF", weight:55 },
+        { name: `${code}_DF5`, pos:"CB", weight:10 },
+      ];
+    }
+  }
+  return db;
+})();
 
 function pickScorerForCode(teamCode, rng) {
   const roster = KONAMI_PLAYER_DB[teamCode];
   if (!roster || !roster.length) return { name: `${teamCode}_FW`, pos:"CF", weight:80 };
-  const catRoll = rng.range(100);
-  const targetCat = catRoll < 60 ? "FW" : catRoll < 90 ? "MF" : "DF";
-  let pool = roster.filter((p) => posCategory(p.pos) === targetCat);
-  if (!pool.length) pool = roster;
-  const total = pool.reduce((s, p) => s + p.weight, 0);
+  // WE10 Engine: pure weight proportional (no 60/30/10 category roll — no Ghidra evidence)
+  // Weight already encodes position (FW 70-95, MF 30-60, DF 8-16, GK 8-14)
+  const total = roster.reduce((s, p) => s + p.weight, 0);
+  if (total <= 0) return roster[0];
   let r = rng.range(total);
-  for (const p of pool) { if (r < p.weight) return p; r -= p.weight; }
-  return pool[pool.length - 1];
+  for (const p of roster) { if (r < p.weight) return p; r -= p.weight; }
+  return roster[roster.length - 1];
 }
 
 function poissonSample(lambda, rng) {
@@ -458,9 +219,6 @@ function poissonSample(lambda, rng) {
   return Math.max(0, k - 1);
 }
 
-// ============================================================
-// 5. RATING PRIOR & DATASET EXTRACTION (57-limited)
-// ============================================================
 function getRatingPrior(code) {
   const r = teamRatings[code];
   if (!r) return { att: 1.0, def: 1.0, mid: 0.5, spd: 0.5, pow: 0.5, sta: 0.5, overall: 75, has: false };
@@ -591,55 +349,147 @@ function calculateModelEntropyConfidence(probs, evidence) {
   const coverageNorm = clamp(evidenceScore / 100, 0.1, 1.0);
   return Math.round(clamp(coverageNorm * (1 - 0.45 * entropyPenalty) * 100, 12, 94));
 }
+function sampleScoreline(distribution, rng) {
+  const r = rng.nextFloat();
+  let acc = 0;
+  for (const s of distribution) { acc += s.prob; if (r < acc) return s; }
+  return distribution[0];
+}
 
 // ============================================================
-// 6. KONAMI TOP SCORER MONTE-CARLO (thinkpad/konami_cup.js)
+// 6. KONAMI TOP SCORER — WE10 Full Roster + Historical Evidence (no 60/30/10)
 // ============================================================
+// Historical scorer map: scans StateManager.db topGoals for Bayesian smoothing
+function getHistoricalScorerMap() {
+  const map = new Map(); // key: "lowerName|CODE" -> { goals, appearances, teamCode, player }
+  const memories = StateManager.db?.memories || {};
+  let totalGames = 0;
+  for (const mem of Object.values(memories)) {
+    if (!mem || !Array.isArray(mem.games)) continue;
+    for (const g of mem.games) {
+      totalGames++;
+      for (const tg of g.topGoals || []) {
+        if (!tg.player || !tg.country) continue;
+        const code = normalizeCountry(tg.country);
+        if (!ALLOWED_CODE_SET.has(code)) continue;
+        const key = tg.player.trim().toLowerCase() + "|" + code;
+        const goals = parseInt(tg.goals, 10) || 0;
+        if (goals <= 0) continue;
+        const entry = map.get(key) || { goals: 0, appearances: 0, teamCode: code, player: tg.player.trim() };
+        entry.goals += goals;
+        entry.appearances += 1;
+        map.set(key, entry);
+      }
+    }
+  }
+  return { map, totalGames };
+}
+
 export function generateTopScorers(homeCode, awayCode, xgHome, xgAway, opts = {}) {
   try {
     const numSims = opts.numSims || PREDICTOR_CONFIG.MONTE_CARLO_SIMS;
-    const baseSeed = opts.seed != null ? opts.seed : (hashStringToSeed(`${homeCode}|${awayCode}|${xgHome.toFixed(2)}|${xgAway.toFixed(2)}`) ^ (Date.now() & 0xfffffff));
+    const deterministic = opts.deterministic !== false;
+    const seedBase = `${homeCode}|${awayCode}|${xgHome.toFixed(2)}|${xgAway.toFixed(2)}|${PREDICTOR_CONFIG.MODEL_VERSION}`;
+    const baseSeed = opts.seed != null ? opts.seed : (deterministic ? hashStringToSeed(seedBase) : (hashStringToSeed(seedBase) ^ (Date.now() & 0xfffffff)));
     const rng = new LCGRng(baseSeed);
 
-    const goalAcc = new Map(); // "Name|Code" -> total goals
-    const hitAcc = new Map();  // "Name|Code" -> sims where >=1 goal
-    const posMap = new Map();
+    const { map: histMap } = getHistoricalScorerMap();
+    function buildAdjustedRoster(teamCode) {
+      const roster = (KONAMI_PLAYER_DB[teamCode] || []).filter(p => p.pos !== 'GK'); // GK never scores in WE10
+      // if filtering leaves empty (should not), fallback to original
+      const filtered = roster.length ? roster : (KONAMI_PLAYER_DB[teamCode] || []);
+      return filtered.map(p => {
+        const key = p.name.trim().toLowerCase() + "|" + teamCode;
+        const hist = histMap.get(key);
+        let w = p.weight;
+        if (hist) {
+          const histRate = hist.goals / Math.max(1, hist.appearances);
+          const alpha = Math.min(0.35, hist.appearances / 8);
+          const histWeight = Math.min(95, Math.max(10, histRate * 22 + 25));
+          w = w * (1 - alpha) + histWeight * alpha;
+        }
+        return { ...p, adjWeight: w };
+      });
+    }
+    const homeAdj = buildAdjustedRoster(homeCode);
+    const awayAdj = buildAdjustedRoster(awayCode);
+    function pickAdj(teamAdj, rng2) {
+      const total = teamAdj.reduce((s, p) => s + (p.adjWeight || p.weight), 0);
+      if (total <= 0) return teamAdj[0];
+      let r = rng2.range(Math.floor(total));
+      for (const p of teamAdj) {
+        const w = p.adjWeight || p.weight;
+        if (r < w) return p;
+        r -= w;
+      }
+      return teamAdj[teamAdj.length - 1];
+    }
 
+    const goalAcc = new Map();
+    const hitAcc = new Map();
+    const posMap = new Map();
+    const twoPlusAcc = new Map();
     let totalGoalsAll = 0;
 
     for (let s = 0; s < numSims; s++) {
       const gh = poissonSample(xgHome, rng);
       const ga = poissonSample(xgAway, rng);
-      const scoredThisSim = new Set();
-
+      const scoredThisSim = new Map();
       for (let i = 0; i < gh; i++) {
-        const p = pickScorerForCode(homeCode, rng);
+        const p = pickAdj(homeAdj, rng);
         const k = `${p.name}|${homeCode}`;
         goalAcc.set(k, (goalAcc.get(k) || 0) + 1);
         if (!posMap.has(k)) posMap.set(k, p.pos);
-        scoredThisSim.add(k);
+        scoredThisSim.set(k, (scoredThisSim.get(k) || 0) + 1);
         totalGoalsAll++;
       }
       for (let i = 0; i < ga; i++) {
-        const p = pickScorerForCode(awayCode, rng);
+        const p = pickAdj(awayAdj, rng);
         const k = `${p.name}|${awayCode}`;
         goalAcc.set(k, (goalAcc.get(k) || 0) + 1);
         if (!posMap.has(k)) posMap.set(k, p.pos);
-        scoredThisSim.add(k);
+        scoredThisSim.set(k, (scoredThisSim.get(k) || 0) + 1);
         totalGoalsAll++;
       }
-      for (const k of scoredThisSim) hitAcc.set(k, (hitAcc.get(k) || 0) + 1);
+      for (const [k, cnt] of scoredThisSim) {
+        hitAcc.set(k, (hitAcc.get(k) || 0) + 1);
+        if (cnt >= 2) twoPlusAcc.set(k, (twoPlusAcc.get(k) || 0) + 1);
+      }
     }
 
-    if (totalGoalsAll === 0) {
-      // fallback: best FW per team by weight
+    // === SCORE-CONSISTENT ALLOCATION: distribute exactly predicted score if provided ===
+    const hasPredicted = Number.isInteger(opts.predictedHome) && Number.isInteger(opts.predictedAway);
+    const matchMap = new Map(); // key -> goals in the ONE predicted scoreline
+    if (hasPredicted) {
+      const matchRng = new LCGRng((baseSeed ^ 0x6F017) >>> 0);
+      for (let i = 0; i < opts.predictedHome; i++) {
+        const p = pickAdj(homeAdj, matchRng);
+        const k = `${p.name}|${homeCode}`;
+        matchMap.set(k, (matchMap.get(k) || 0) + 1);
+        if (!posMap.has(k)) posMap.set(k, p.pos);
+      }
+      for (let i = 0; i < opts.predictedAway; i++) {
+        const p = pickAdj(awayAdj, matchRng);
+        const k = `${p.name}|${awayCode}`;
+        matchMap.set(k, (matchMap.get(k) || 0) + 1);
+        if (!posMap.has(k)) posMap.set(k, p.pos);
+      }
+      // ensure goalAcc contains at least those keys for ranking even if Monte Carlo missed
+      for (const [k, cnt] of matchMap) {
+        if (!goalAcc.has(k)) {
+          goalAcc.set(k, Math.max(1, Math.round(cnt * (numSims * 0.0002)))); // tiny seed for sorting, will be overridden by matchGoals priority
+        }
+      }
+    }
+
+    if (totalGoalsAll === 0 && matchMap.size === 0) {
       const fallback = [];
       const homeRoster = KONAMI_PLAYER_DB[homeCode] || [];
       const awayRoster = KONAMI_PLAYER_DB[awayCode] || [];
-      const topHome = [...homeRoster].sort((a,b)=>b.weight-a.weight)[0];
-      const topAway = [...awayRoster].sort((a,b)=>b.weight-a.weight)[0];
-      if (topHome) fallback.push({ name: topHome.name, pos: topHome.pos, teamCode: homeCode, teamName: teamsDB[homeCode]?.name || homeCode, flag: teamsDB[homeCode]?.flag || "", expectedGoals: Number((xgHome*0.45).toFixed(2)), prob: Number(((1 - Math.exp(-xgHome*0.6))*100).toFixed(1)), scoringShare: 45, weight: topHome.weight });
-      if (topAway) fallback.push({ name: topAway.name, pos: topAway.pos, teamCode: awayCode, teamName: teamsDB[awayCode]?.name || awayCode, flag: teamsDB[awayCode]?.flag || "", expectedGoals: Number((xgAway*0.45).toFixed(2)), prob: Number(((1 - Math.exp(-xgAway*0.6))*100).toFixed(1)), scoringShare: 45, weight: topAway.weight });
+      const topHome = [...homeRoster].filter(p=>p.pos!=='GK').sort((a,b)=>b.weight-a.weight)[0] || homeRoster[0];
+      const topAway = [...awayRoster].filter(p=>p.pos!=='GK').sort((a,b)=>b.weight-a.weight)[0] || awayRoster[0];
+      if (topHome) fallback.push({ name: topHome.name, pos: topHome.pos, teamCode: homeCode, teamName: teamsDB[homeCode]?.name || homeCode, flag: teamsDB[homeCode]?.flag || "", expectedGoals: Number((xgHome*0.45).toFixed(3)), prob: Number(((1 - Math.exp(-xgHome*0.6))*100).toFixed(1)), probability2Plus: 0, scoringShare: 45, weight: topHome.weight, matchGoals: hasPredicted ? (matchMap.get(`${topHome.name}|${homeCode}`)||0) : 0, reason: `Top weight ${topHome.weight} di ${homeCode} (${topHome.pos}) — fallback` });
+      if (topAway) fallback.push({ name: topAway.name, pos: topAway.pos, teamCode: awayCode, teamName: teamsDB[awayCode]?.name || awayCode, flag: teamsDB[awayCode]?.flag || "", expectedGoals: Number((xgAway*0.45).toFixed(3)), prob: Number(((1 - Math.exp(-xgAway*0.6))*100).toFixed(1)), probability2Plus: 0, scoringShare: 45, weight: topAway.weight, matchGoals: hasPredicted ? (matchMap.get(`${topAway.name}|${awayCode}`)||0) : 0, reason: `Top weight ${topAway.weight} di ${awayCode} (${topAway.pos}) — fallback` });
       return fallback.slice(0, PREDICTOR_CONFIG.TOP_SCORERS_LIMIT);
     }
 
@@ -652,18 +502,33 @@ export function generateTopScorers(homeCode, awayCode, xgHome, xgAway, opts = {}
       const avg = cnt / numSims;
       const hits = hitAcc.get(key) || 0;
       const probAnytime = (hits / numSims);
-      const share = (cnt / totalGoalsAll) * 100;
+      const prob2Plus = (twoPlusAcc.get(key) || 0) / numSims;
+      const share = totalGoalsAll > 0 ? (cnt / totalGoalsAll) * 100 : 0;
+      const matchGoals = matchMap.get(key) || 0;
+      const weight = (KONAMI_PLAYER_DB[teamCode] || []).find((p)=>p.name===name)?.weight || 0;
+      // Reason why this player is ranked here
+      const reasonParts = [];
+      reasonParts.push(`Weight ${Math.round(weight)} (${pos})`);
+      if (matchGoals > 0) reasonParts.push(`cetak ${matchGoals} gol di prediksi ${hasPredicted ? `${opts.predictedHome}:${opts.predictedAway}` : 'xG'}`);
+      reasonParts.push(`xG ${avg.toFixed(2)} • prob ${ (probAnytime*100).toFixed(1)}%`);
+      if (pos.startsWith('CF') || pos==='FW') reasonParts.push('posisi depan paling sering dipilih engine');
+      else if (pos.includes('MF') || pos==='OMF' || pos==='CMF') reasonParts.push('MF/OMF kontribusi 30% engine');
+      else if (pos==='GK') reasonParts.push('GK terfilter (tidak seharusnya)');
       ranking.push({
         name, pos, teamCode, teamName, flag,
         expectedGoals: Number(avg.toFixed(3)),
         prob: Number((probAnytime * 100).toFixed(1)),
+        probability2Plus: Number((prob2Plus * 100).toFixed(1)),
         scoringShare: Number(share.toFixed(1)),
         totalGoalsSim: cnt,
         hits,
-        weight: (KONAMI_PLAYER_DB[teamCode] || []).find((p)=>p.name===name)?.weight || 0,
+        weight,
+        matchGoals,
+        reason: reasonParts.join(' — '),
       });
     }
-    ranking.sort((a,b)=> b.expectedGoals - a.expectedGoals || b.prob - a.prob || b.weight - a.weight);
+    // Primary sort: matchGoals (actual allocation) then expectedGoals then weight — this answers "kenapa di atas"
+    ranking.sort((a,b)=> (b.matchGoals - a.matchGoals) || (b.expectedGoals - a.expectedGoals) || (b.prob - a.prob) || (b.weight - a.weight));
     return ranking.slice(0, PREDICTOR_CONFIG.TOP_SCORERS_LIMIT);
   } catch (e) {
     console.error("[KONAMI] generateTopScorers error", e);
@@ -697,7 +562,7 @@ function buildKeyIndicators(homeCode, awayCode, h, a, xgHome, xgAway) {
 // ============================================================
 // 8. HYBRID PREDICT — Bayesian + Konami Monte-Carlo
 // ============================================================
-export function hybridPredict(homeCode, awayCode, excludeMemoryId = null, excludeGameNumber = null) {
+export function hybridPredict(homeCode, awayCode, excludeMemoryId = null, excludeGameNumber = null, opts = {}) {
   // validate upstream, but defensive: if invalid code, throw
   if (!ALLOWED_CODE_SET.has(homeCode) || !ALLOWED_CODE_SET.has(awayCode)) {
     throw new Error(`Kode negara tidak valid untuk prediksi 57-fix: ${homeCode} vs ${awayCode}`);
@@ -737,6 +602,14 @@ export function hybridPredict(homeCode, awayCode, excludeMemoryId = null, exclud
 
   const distResult = generateBivariateDistribution(xgHome, xgAway);
 
+  // — Sample scoreline: jika opts.sample true → variasi seperti game asli (tidak monoton 1-2 terus), else deterministic top prob —
+  let chosenScore = distResult.topScore;
+  if (opts.sample) {
+    const sampleSeed = opts.seed != null ? opts.seed : hashStringToSeed(`${homeCode}|${awayCode}|${xgHome.toFixed(2)}|${xgAway.toFixed(2)}|sample|${PREDICTOR_CONFIG.MODEL_VERSION}`);
+    const sampleRng = new LCGRng(sampleSeed);
+    chosenScore = sampleScoreline(distResult.distribution, sampleRng);
+  }
+
   const evidence = {
     hasRating: h.hasRating && a.hasRating,
     hasHistory: h.rawCount > 0 || a.rawCount > 0,
@@ -750,29 +623,49 @@ export function hybridPredict(homeCode, awayCode, excludeMemoryId = null, exclud
   let winner = "DRAW";
   if (distResult.probs.home > distResult.probs.away + 0.07) winner = teamsDB[homeCode]?.name || homeCode;
   else if (distResult.probs.away > distResult.probs.home + 0.07) winner = teamsDB[awayCode]?.name || awayCode;
+  // jika sample, winner ikut sampled score untuk konsistensi
+  if (opts.sample) {
+    if (chosenScore.home > chosenScore.away) winner = teamsDB[homeCode]?.name || homeCode;
+    else if (chosenScore.away > chosenScore.home) winner = teamsDB[awayCode]?.name || awayCode;
+    else winner = "DRAW";
+  }
 
-  // --- Konami Top Scorers ---
-  const topScorers = generateTopScorers(homeCode, awayCode, xgHome, xgAway);
+  // --- Konami Top Scorers (Score-Consistent: alokasi tepat homeGoals:awayGoals, hanya pemain dari 2 tim ini — roster Image ESP/TOG exact) ---
+  const topScorers = generateTopScorers(homeCode, awayCode, xgHome, xgAway, { seed: opts.seed, deterministic: opts.deterministic, numSims: opts.numSims, predictedHome: chosenScore.home, predictedAway: chosenScore.away });
 
   // --- Key Indicators ---
   const keyIndicators = buildKeyIndicators(homeCode, awayCode, h, a, Number(xgHome.toFixed(2)), Number(xgAway.toFixed(2)));
 
+  const debug = opts.debug ? {
+    source: "WE10_GHIDRA + MEMORY",
+    seed: opts.seed ?? hashStringToSeed(`${homeCode}|${awayCode}|${xgHome.toFixed(2)}|${xgAway.toFixed(2)}|${PREDICTOR_CONFIG.MODEL_VERSION}`),
+    teamStrength: { home: h, away: a },
+    xg: { home: Number(xgHome.toFixed(2)), away: Number(xgAway.toFixed(2)) },
+    scorerModel: "WE10 Full Roster (832) pure weight + Bayesian historical smoothing (no 60/30/10)",
+    evidence,
+    calibration: RATING_CALIBRATION,
+    confidence,
+    deterministic: opts.deterministic !== false
+  } : undefined;
+
   return {
-    homeGoals: distResult.topScore.home,
-    awayGoals: distResult.topScore.away,
+    homeGoals: chosenScore.home,
+    awayGoals: chosenScore.away,
     winner, confidence,
     xgHome: Number(xgHome.toFixed(2)), xgAway: Number(xgAway.toFixed(2)),
-    model: `${PREDICTOR_CONFIG.MODEL_VERSION} [${modelParts.join(" + ")}]`,
+    model: `${PREDICTOR_CONFIG.MODEL_VERSION} [${modelParts.join(" + ")}]${opts.sample ? " [SAMPLED]" : ""}`,
     probs: distResult.probs, markets: distResult.markets,
     distribution: distResult.distribution.slice(0,5),
     evidence,
     topScorers,
     keyIndicators,
+    chosenSample: opts.sample ? { home: chosenScore.home, away: chosenScore.away } : null,
+    ...(debug ? { debug } : {})
   };
 }
 
 // ============================================================
-// 9. PREDICTION SERVICE — 57 validation + error handling
+// 9. PREDICTION SERVICE - 57 validation + error handling
 // ============================================================
 export const PredictionService = {
   predictMatches(dataSource) {
@@ -782,95 +675,107 @@ export const PredictionService = {
         ? { memoryId: StateManager.activeMemoryId, gameNumber: dataSource.gameNumber }
         : {};
       const results = [];
-
-      // P1 optional validation warning (tidak block, hanya info)
       const p1Raw = (dataSource?.p1 || "").trim();
       let p1Warning = null;
       if (p1Raw && !isValidCountry(p1Raw)) {
-        p1Warning = `⚠️ P1 "${p1Raw}" di luar 57 resmi — akan diabaikan untuk prediksi.`;
+        p1Warning = `P1 "${p1Raw}" di luar 57 resmi - akan diabaikan untuk prediksi.`;
       }
-
       rows.forEach((m, idx) => {
         const homeRaw = (m?.home || "").trim();
         const awayRaw = (m?.away || "").trim();
+        const isB8 = idx === 7;
+        const b8Enabled = dataSource.b8Enabled ?? dataSource.matches?.[7]?.enabled ?? false;
+        const b8HasContent = !!(homeRaw || awayRaw);
+        if (isB8 && !b8Enabled && !b8HasContent) return;
+        if (isB8 && !b8Enabled) return;
         if (!homeRaw && !awayRaw) return;
-
-        const row = {
-          row: idx + 1,
-          homeInput: homeRaw,
-          awayInput: awayRaw,
-          homeName: homeRaw || "?",
-          awayName: awayRaw || "?",
-        };
+        const row = { row: idx + 1, homeInput: homeRaw, awayInput: awayRaw, homeName: homeRaw || "?", awayName: awayRaw || "?" };
         if (p1Warning) row.p1Warning = p1Warning;
-
         if (!homeRaw || !awayRaw) {
           row.error = "HOME dan AWAY harus terisi. Isi kedua negara dari 57 daftar resmi (ex: Brazil vs Germany).";
-          results.push(row);
-          return;
+          results.push(row); return;
         }
-
         const homeCode = normalizeCountry(homeRaw);
         const awayCode = normalizeCountry(awayRaw);
-
-        // 57-filter strict
         if (!ALLOWED_CODE_SET.has(homeCode) || !ALLOWED_CODE_SET.has(awayCode)) {
           const bad = [];
           if (!ALLOWED_CODE_SET.has(homeCode)) bad.push(getValidationErrorLabel(homeRaw));
           if (!ALLOWED_CODE_SET.has(awayCode)) bad.push(getValidationErrorLabel(awayRaw));
-          row.error = `Negara di luar 57 resmi WE10: ${bad.join(" vs ")} — Hanya 57 negara di teams.js yang didukung. Contoh valid: Brazil, Argentina, Germany, Japan, Nigeria. Lihat daftar lengkap di teams.js / OFFICIAL_57_LIST.`;
-          results.push(row);
-          return;
+          row.error = `Negara di luar 57 resmi WE10: ${bad.join(" vs ")} - Hanya 57 negara di teams.js yang didukung.`;
+          results.push(row); return;
         }
-
         if (!teamsDB[homeCode] || !teamsDB[awayCode]) {
           row.error = `Negara tidak dikenal: ${homeRaw || "?"} vs ${awayRaw || "?"}`;
-          results.push(row);
-          return;
+          results.push(row); return;
         }
         if (homeCode === awayCode) {
           row.error = `HOME dan AWAY tidak boleh sama: ${teamsDB[homeCode].name} vs ${teamsDB[homeCode].name}`;
-          results.push(row);
-          return;
+          results.push(row); return;
         }
-
-        row.homeCode = homeCode;
-        row.awayCode = awayCode;
-        row.homeName = teamsDB[homeCode].name;
-        row.awayName = teamsDB[awayCode].name;
-        row.homeFlag = teamsDB[homeCode].flag;
-        row.awayFlag = teamsDB[awayCode].flag;
-
+        row.homeCode = homeCode; row.awayCode = awayCode;
+        row.homeName = teamsDB[homeCode].name; row.awayName = teamsDB[awayCode].name;
+        row.homeFlag = teamsDB[homeCode].flag; row.awayFlag = teamsDB[awayCode].flag;
         try {
-          const pred = hybridPredict(homeCode, awayCode, excludeContext.memoryId ?? null, excludeContext.gameNumber ?? null);
+          const pred = hybridPredict(homeCode, awayCode, excludeContext.memoryId ?? null, excludeContext.gameNumber ?? null, { deterministic: true });
           row.prediction = pred;
         } catch (predErr) {
-          console.error("[Predictor] hybridPredict error", predErr);
           row.error = `Gagal kalkulasi prediksi: ${predErr?.message || String(predErr)}`;
         }
         results.push(row);
       });
-
-      // Jika semua baris kosong, beri hint 57
       if (results.length === 0) {
-        return [{ row: 0, error: "Isi minimal satu baris HOME vs AWAY dari 57 negara resmi untuk diprediksi. Contoh: Brazil vs Germany, Japan vs Nigeria.", homeName:"?", awayName:"?" }];
+        return [{ row: 0, error: "Isi minimal satu baris HOME vs AWAY dari 57 negara resmi untuk diprediksi.", homeName:"?", awayName:"?" }];
       }
       return results;
     } catch (e) {
-      console.error("[PredictionService.predictMatches] fatal", e);
-      return [{ row: 0, error: `Pipeline prediksi gagal: ${e?.message || String(e)} — cek console.`, homeName:"?", awayName:"?" }];
+      return [{ row: 0, error: `Pipeline prediksi gagal: ${e?.message || String(e)} - cek console.`, homeName:"?", awayName:"?" }];
     }
   },
-
+  bulkPredict(dataSource, iterations = 100) {
+    try {
+      const valid = this.predictMatches(dataSource).filter(r=>!r.error && r.prediction);
+      if (!valid.length) return { error: "Tidak ada match valid untuk bulk predict (isi B1-B7 dulu)." };
+      if (iterations < 1 || iterations > 5000) iterations = 100;
+      const globalScorerFreq = new Map(); // key -> {name,pos,teamCode,flag,teamName,matches,wins,totalGoals,reason}
+      const scoreFreq = new Map(); // "H:A" -> count
+      const perMatch = valid.map(v=>({ row:v.row, homeCode:v.homeCode, awayCode:v.awayCode, homeName:v.homeName, awayName:v.awayName, homeFlag:v.homeFlag, awayFlag:v.awayFlag, scoreMap:new Map(), scorerMap:new Map() }));
+      for (let iter=0; iter<iterations; iter++) {
+        for (const pm of perMatch) {
+          const seed = hashStringToSeed(`${pm.homeCode}|${pm.awayCode}|${iter}|bulk|${PREDICTOR_CONFIG.MODEL_VERSION}`);
+          const pred = hybridPredict(pm.homeCode, pm.awayCode, null, null, { deterministic:true, seed, sample:true });
+          const sk = `${pred.homeGoals}:${pred.awayGoals}`;
+          pm.scoreMap.set(sk, (pm.scoreMap.get(sk)||0)+1);
+          scoreFreq.set(sk, (scoreFreq.get(sk)||0)+1);
+          for (const pl of pred.topScorers) {
+            if ((pl.matchGoals||0) <=0) continue;
+            const k = `${pl.name}|${pl.teamCode}`;
+            const ex = pm.scorerMap.get(k);
+            if (ex) { ex.hits+=1; ex.totalGoals+=pl.matchGoals; }
+            else pm.scorerMap.set(k,{ name:pl.name, pos:pl.pos, teamCode:pl.teamCode, flag:pl.flag, teamName:pl.teamName, hits:1, totalGoals:pl.matchGoals, weight:pl.weight, reason:pl.reason });
+            const gex = globalScorerFreq.get(k);
+            if (gex) { gex.hits+=1; gex.totalGoals+=pl.matchGoals; }
+            else globalScorerFreq.set(k,{ name:pl.name, pos:pl.pos, teamCode:pl.teamCode, flag:pl.flag, teamName:pl.teamName, hits:1, totalGoals:pl.matchGoals, weight:pl.weight, reason:pl.reason });
+          }
+        }
+      }
+      const globalRank = [...globalScorerFreq.values()].sort((a,b)=> b.hits - a.hits || b.totalGoals - a.totalGoals).map(x=>({ ...x, freqPct: Number((x.hits/iterations*100).toFixed(1)), avgGoals: Number((x.totalGoals/x.hits).toFixed(2)) }));
+      const scoreRank = [...scoreFreq.entries()].sort((a,b)=> b[1]-a[1]).slice(0,10).map(([s,c])=>({ scoreline:s, count:c, pct: Number(c/(iterations*perMatch.length)*100).toFixed(1) }));
+      const perMatchRank = perMatch.map(pm=>{
+        const sRank = [...pm.scoreMap.entries()].sort((a,b)=>b[1]-a[1]).slice(0,5).map(([s,c])=>({ scoreline:s, count:c, pct: Number(c/iterations*100).toFixed(1) }));
+        const scRank = [...pm.scorerMap.values()].sort((a,b)=> b.hits - a.hits || b.totalGoals - a.totalGoals).slice(0,6).map(x=>({ ...x, freqPct: Number((x.hits/iterations*100).toFixed(1)) }));
+        return { row:pm.row, homeName:pm.homeName, awayName:pm.awayName, homeCode:pm.homeCode, awayCode:pm.awayCode, homeFlag:pm.homeFlag, awayFlag:pm.awayFlag, topScores:sRank, topScorers:scRank };
+      });
+      return { iterations, totalMatches: perMatch.length, globalRank: globalRank.slice(0,15), scoreRank, perMatch: perMatchRank };
+    } catch(e) { return { error: `Bulk predict gagal: ${e?.message||String(e)}` }; }
+  },
   runWalkForwardBacktest(memoryId = 1) {
     try {
       const memory = StateManager.db?.memories?.[memoryId];
       if (!memory || !Array.isArray(memory.games) || memory.games.length < 2) {
         return { error: "Minimal 2 games pada memory database diperlukan untuk backtest valid." };
       }
-      let totalTested = 0, exactHits = 0, result1X2Hits = 0, top3Hits = 0, top5Hits = 0;
+      let totalTested = 0, exactHits = 0, result1X2Hits = 0, top3Hits = 0, top5Hits = 0, topScorerHits = 0, topScorerTotal = 0;
       let sumAbsErrHome = 0, sumAbsErrAway = 0, sumBrier = 0, sumLogLoss = 0;
-
       for (let gIdx = 1; gIdx < memory.games.length; gIdx++) {
         const targetGame = memory.games[gIdx];
         if (!targetGame || !Array.isArray(targetGame.matches)) continue;
@@ -880,10 +785,8 @@ export const PredictionService = {
           const actual = parseScore(m?.score || "");
           if (!hCode || !aCode || !actual || !teamsDB[hCode] || !teamsDB[aCode]) continue;
           if (!ALLOWED_CODE_SET.has(hCode) || !ALLOWED_CODE_SET.has(aCode)) continue;
-
           let pred;
-          try { pred = hybridPredict(hCode, aCode, memoryId, targetGame.gameNumber); }
-          catch (_) { continue; }
+          try { pred = hybridPredict(hCode, aCode, memoryId, targetGame.gameNumber, { deterministic: true }); } catch (_) { continue; }
           totalTested++;
           if (pred.homeGoals === actual.home && pred.awayGoals === actual.away) exactHits++;
           const actual1X2 = actual.home > actual.away ? "HOME" : (actual.away > actual.home ? "AWAY" : "DRAW");
@@ -897,6 +800,12 @@ export const PredictionService = {
           sumBrier += (Math.pow(pred.probs.home - oH,2)+Math.pow(pred.probs.draw - oD,2)+Math.pow(pred.probs.away - oA,2))/3;
           const actualProb = actual1X2==="HOME"?pred.probs.home : actual1X2==="DRAW"?pred.probs.draw : pred.probs.away;
           sumLogLoss += -Math.log(Math.max(0.01, actualProb));
+          const actualTop = (targetGame.topGoals || []).filter(g=>g.player && g.country).map(g=> normalizeCountry(g.country) + ":" + g.player.trim().toLowerCase());
+          if (actualTop.length > 0) {
+            const predTop3 = pred.topScorers.slice(0,3).map(p=> p.teamCode.toLowerCase()+":"+p.name.trim().toLowerCase());
+            topScorerTotal++;
+            if (actualTop.some(at => predTop3.some(pt => pt.includes(at.split(":")[1]) || at.includes(pt.split(":")[1])))) topScorerHits++;
+          }
         }
       }
       if (totalTested === 0) return { error: "Tidak ada pertandingan valid (57-fix) terisi skor untuk backtest." };
@@ -906,13 +815,14 @@ export const PredictionService = {
         result1X2Accuracy: (result1X2Hits / totalTested) * 100,
         top3ScoreHitRate: (top3Hits / totalTested) * 100,
         top5ScoreHitRate: (top5Hits / totalTested) * 100,
+        topScorerHitRate: topScorerTotal > 0 ? (topScorerHits / topScorerTotal * 100) : 0,
+        topScorerSamples: topScorerTotal,
         maeHomeGoals: sumAbsErrHome / totalTested,
         maeAwayGoals: sumAbsErrAway / totalTested,
         meanBrierScore: sumBrier / totalTested,
         meanLogLoss: sumLogLoss / totalTested,
       };
     } catch (e) {
-      console.error("[Backtest] error", e);
       return { error: `Backtest gagal: ${e?.message || String(e)}` };
     }
   },

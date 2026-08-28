@@ -2,6 +2,7 @@ import { StateManager } from "../state/appState.js";
 import { MemoryManager } from "../services/memoryManager.js";
 import { Security } from "../utils/security.js";
 import { setupCountryAutocomplete } from "./autocomplete.js";
+import { PredictionService } from "../services/predictor.js";
 
 export const UIRenderer = {
   showAlert(message) {
@@ -70,7 +71,7 @@ export const UIRenderer = {
     // Banner info 57
     const infoBanner = document.createElement("div");
     infoBanner.style.cssText = "font-size:0.6rem;color:#0ff;background:#0a1a1a;border:1px solid #0ff;padding:6px 8px;margin-bottom:10px;font-family:var(--font-mono);";
-    infoBanner.textContent = "ENGINE: WE10 Konami Cup Hybrid v4.0 (LCG Monte-Carlo 3000 sims) — 57 Negara Fix | Sumber: thinkpad/konami_cup.js + teamRatings.js | Ghidra: SLPM_663.74 FUN_00216ef0 @0x003c2100";
+    infoBanner.textContent = "ENGINE: WE10 Konami Cup Hybrid v4.3 (BULK 100/1000x + Sampled Dixon-Coles + Roster Image Exact) — 57 Negara Fix | Sumber: thinkpad/konami_cup.js + teamRatings.js | Ghidra: SLPM_663.74 FUN_00216ef0 @0x003c2100 + ESP/TOG 11-man";
     dashboard.appendChild(infoBanner);
 
     // === OVERALL SUMMARY BOX — Kotak kemungkinan tambahan (Semua Prediksi) ===
@@ -89,11 +90,14 @@ export const UIRenderer = {
           const winnerLabel = winnerCode ? (pred.winner || winnerCode) : "DRAW";
           winCount[winnerLabel] = (winCount[winnerLabel] || 0) + 1;
 
-          // global scorer aggregation (sum expectedGoals, max prob, appearance)
+          // global scorer aggregation — SCORE-CONSISTENT: hanya pemain yg cetak gol (matchGoals>0) dan hanya dari tim yg main
           (pred.topScorers || []).forEach(pl => {
+            const actual = pl.matchGoals != null ? pl.matchGoals : 0;
+            if (actual <= 0) return; // jgn yg ga main / ga cetak masuk list — fix "nama pemain ga aku kenal" + "melebihi skor"
             const key = pl.name + "|" + pl.teamCode;
             const existing = globalScorerMap.get(key);
             if (existing) {
+              existing.totalActual += actual;
               existing.totalXG += pl.expectedGoals;
               existing.appearances += 1;
               existing.maxProb = Math.max(existing.maxProb, pl.prob);
@@ -101,15 +105,25 @@ export const UIRenderer = {
               existing.flags = pl.flag;
               existing.pos = pl.pos;
               existing.teamName = pl.teamName;
+              existing.reason = pl.reason || existing.reason;
             } else {
               globalScorerMap.set(key, {
                 name: pl.name, teamCode: pl.teamCode, teamName: pl.teamName, flag: pl.flag, pos: pl.pos,
-                totalXG: pl.expectedGoals, appearances: 1, maxProb: pl.prob, totalShare: pl.scoringShare
+                totalActual: actual, totalXG: pl.expectedGoals, appearances: 1, maxProb: pl.prob, totalShare: pl.scoringShare, reason: pl.reason || ""
               });
             }
           });
         });
-        const globalRank = [...globalScorerMap.values()].sort((a,b)=> b.totalXG - a.totalXG || b.maxProb - a.maxProb).slice(0,7);
+        // fallback jika semua 0-0
+        if (globalScorerMap.size === 0) {
+          validPreds.forEach(p => {
+            (p.prediction.topScorers||[]).slice(0,1).forEach(pl=>{
+              const key = pl.name+"|"+pl.teamCode;
+              if (!globalScorerMap.has(key)) globalScorerMap.set(key,{ name:pl.name, teamCode:pl.teamCode, teamName:pl.teamName, flag:pl.flag, pos:pl.pos, totalActual:0, totalXG:pl.expectedGoals, appearances:1, maxProb:pl.prob, totalShare:pl.scoringShare, reason:pl.reason||"" });
+            });
+          });
+        }
+        const globalRank = [...globalScorerMap.values()].sort((a,b)=> (b.totalActual - a.totalActual) || (b.totalXG - a.totalXG) || (b.maxProb - a.maxProb)).slice(0,7);
 
         const summaryCard = document.createElement("div");
         summaryCard.className = "pred-card pred-overall-summary";
@@ -133,13 +147,14 @@ export const UIRenderer = {
         const winTallyRows = Object.entries(winCount).map(([team,cnt])=> `<span style="background:#111;border:1px solid #333;padding:3px 6px;font-size:0.65rem;margin:2px;display:inline-block;">${Security.escapeHtml(team)}: <strong style="color:#0ff;">${cnt} Menang</strong></span>`).join("");
 
         const globalRows = globalRank.map((pl,idx)=>{
-          const estGol = Math.max(1, Math.min(4, Math.round(pl.totalXG * 1.2 + pl.appearances*0.35 + pl.maxProb/45)));
+          const golInt = pl.totalActual > 0 ? pl.totalActual : Math.max(1, Math.round(pl.totalXG));
           const badge = idx===0?"🥇":idx===1?"🥈":idx===2?"🥉":"#"+(idx+1);
-          return `<tr>
+          const reasonShort = pl.reason ? ` title="${Security.escapeHtml(pl.reason)}"` : "";
+          return `<tr${reasonShort}>
             <td style="padding:4px 6px;font-size:0.65rem;">${badge}</td>
             <td style="padding:4px 6px;font-size:1rem;text-align:center;">${Security.escapeHtml(pl.flag||"")}</td>
-            <td style="padding:4px 6px;font-size:0.7rem;"><strong>${Security.escapeHtml(pl.name)}</strong> <span style="color:#0ff;font-size:0.6rem;">[${Security.escapeHtml(pl.pos)}]</span><br><span style="font-size:0.6rem;color:#aaa;">${Security.escapeHtml(pl.teamName)} (${Security.escapeHtml(pl.teamCode)})</span></td>
-            <td style="padding:4px 6px;font-family:var(--font-retro);font-size:0.65rem;color:#0f0;text-align:center;">${estGol} GOL</td>
+            <td style="padding:4px 6px;font-size:0.7rem;"><strong>${Security.escapeHtml(pl.name)}</strong> <span style="color:#0ff;font-size:0.6rem;">[${Security.escapeHtml(pl.pos)}]</span><br><span style="font-size:0.6rem;color:#aaa;">${Security.escapeHtml(pl.teamName)} (${Security.escapeHtml(pl.teamCode)}) — ${Security.escapeHtml(pl.reason||"")}</span></td>
+            <td style="padding:4px 6px;font-family:var(--font-retro);font-size:0.65rem;color:#0f0;text-align:center;">${golInt} GOL</td>
             <td style="padding:4px 6px;font-size:0.6rem;text-align:center;">${pl.appearances} match<br><span style="color:#0ff;">${pl.maxProb.toFixed(1)}% max</span></td>
           </tr>`;
         }).join("") || `<tr><td colspan="5" style="padding:8px;text-align:center;color:#888;">Belum ada data scorer</td></tr>`;
@@ -165,9 +180,75 @@ export const UIRenderer = {
               <tbody>${globalRows}</tbody>
             </table>
           </div>
-          <div style="font-size:0.55rem;color:#555;margin-top:6px;">* Tabel B1-B7 skor X:X & G1-G7 negara/pemain/gol sudah otomatis terisi sesuai prediksi di atas. Skor X:X diambil dari <strong>homeGoals:awayGoals</strong> terbaik (Dixon-Coles), GOL diisi via formula <strong>round(totalXG*1.2 + appearances*0.35 + maxProb/45)</strong> clamped 1-4 dari simulasi Monte-Carlo 3000 per match (60/30/10 FW/MF/DF). Ghidra @0x003c2100 confirmed.</div>
+          <div style="font-size:0.55rem;color:#555;margin-top:6px;">* Tabel B1-B7 skor X:X & G1-G7 sudah konsisten: skor X:X dari <strong>distribusi Dixon-Coles (top prob)</strong>, GOL = <strong>matchGoals integer</strong> hasil alokasi LCG 1664525 tepat sebanyak homeGoals+awayGoals ke pemain CF/WF/OMF (GK terfilter) — hanya pemain dari tim yang main di B1-B8, jumlah gol pemain tidak melebihi total gol tim. Hover baris untuk lihat alasan kenapa di atas. Ghidra SLPM_663.74 + roster 0x18428F4 patch ESP/TOG exact 11-man.</div>
         `;
         dashboard.appendChild(summaryCard);
+        // === BULK BOX — 100/1000x sampling seperti game asli (Adebayor 100x/1000) ===
+        try {
+          const bulkWrap = document.createElement("div");
+          bulkWrap.id = "bulkPredictBox";
+          bulkWrap.style.cssText = "background:#111;border:2px solid #ff0;padding:10px;margin-top:10px;";
+          bulkWrap.innerHTML = `
+            <div class="pred-section-title" style="color:#ff0;border-color:#ff0;">🔁 BULK PREDICT — 100 / 1000x ITERASI (FREKUENSI SEPERTI GAME ASLI)</div>
+            <div style="font-size:0.6rem;color:#888;margin-bottom:6px;">Jalankan prediksi berkali-kali dengan LCG sampling — lihat pemain apa yang paling sering muncul. Contoh: <strong>Adebayor muncul 100x dalam 1000 predict</strong> = 10% anytime.</div>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px;">
+              <label style="font-size:0.65rem;color:#ccc;">Iterasi:</label>
+              <input id="bulkIterations" type="number" value="100" min="10" max="5000" step="10" style="width:90px;background:#000;color:#0f0;border:1px solid #555;padding:4px;font-family:var(--font-mono);" />
+              <button id="btnBulkRun" class="btn" style="background:#332200;border:1px solid #ff0;color:#ff0;padding:6px 12px;font-weight:bold;cursor:pointer;">▶ RUN BULK</button>
+              <span style="font-size:0.6rem;color:#aaa;">Skor variatif (sample Dixon-Coles), bukan monoton 1-2</span>
+            </div>
+            <div id="bulkOutput" style="background:#0a0a0a;border:1px solid #333;padding:8px;min-height:40px;font-size:0.7rem;color:#ccc;">Klik <strong>RUN BULK</strong> — sistem akan sampling ${'`'}hybridPredict(sample:true)${'`'} sebanyakan iterasi dan filter frekuensi.</div>
+          `;
+          dashboard.appendChild(bulkWrap);
+          // bind
+          setTimeout(()=>{
+            const btn = document.getElementById("btnBulkRun");
+            const inp = document.getElementById("bulkIterations");
+            const out = document.getElementById("bulkOutput");
+            if (btn && inp && out) {
+              btn.addEventListener("click", ()=>{
+                const n = Math.max(10, Math.min(5000, parseInt(inp.value,10)||100));
+                btn.disabled = true; btn.textContent = "⏳ RUNNING "+n+"x...";
+                out.innerHTML = "<div style='color:#ff0;padding:10px;text-align:center;'>⏳ Sampling "+n+" iterasi — variasi skor & top scorer...</div>";
+                setTimeout(()=>{
+                  try {
+                    // rebuild dataSource from current predictions' teams (instead of DOM)
+                    const dsMatches = validPreds.map(p=>({ home: p.homeName, away: p.awayName }));
+                    // need minimal dataSource shape for bulkPredict
+                    const bulkDS = { matches: dsMatches.map(m=>({ home:m.home, away:m.away })), p1:"", b8Enabled:false };
+                    // pad to 8 with empty to satisfy service but bulk filters via predictMatches-like logic
+                    while(bulkDS.matches.length < 8) bulkDS.matches.push({home:"",away:""});
+                    // Use same team codes as validPreds
+                    const fakeDS = { matches: validPreds.map(p=>({ home: p.homeName, away: p.awayName })), p1:"", b8Enabled:false, topGoals:[] };
+                    const res = PredictionService.bulkPredict(fakeDS, n);
+                    if (res.error) { out.innerHTML = `<div style="color:#f55;">⛔ ${Security.escapeHtml(res.error)}</div>`; }
+                    else {
+                      const globalRows = res.globalRank.slice(0,10).map((pl,idx)=>{
+                        const badge = idx<3 ? ["🥇","🥈","🥉"][idx] : "#"+(idx+1);
+                        return `<tr><td style="padding:4px;">${badge}</td><td style="padding:4px;text-align:center;">${Security.escapeHtml(pl.flag||"")}</td><td style="padding:4px;"><strong>${Security.escapeHtml(pl.name)}</strong> [${Security.escapeHtml(pl.pos)}]<br><span style="font-size:0.6rem;color:#aaa;">${Security.escapeHtml(pl.teamName)} (${pl.teamCode}) — ${Security.escapeHtml(pl.reason||"")}</span></td><td style="padding:4px;text-align:center;color:#0f0;font-weight:bold;">${pl.hits}x / ${n}</td><td style="padding:4px;text-align:center;">${pl.freqPct}%<br><span style="font-size:0.6rem;color:#888;">${pl.totalGoals} gol total</span></td></tr>`;
+                      }).join("") || "<tr><td colspan=5 style='padding:8px;text-align:center;'>Tidak ada scorer</td></tr>";
+                      const scoreRows = res.scoreRank.map(s=> `<span style="background:#1a1a1a;border:1px solid #444;padding:3px 6px;margin:2px;display:inline-block;font-family:var(--font-mono);">${Security.escapeHtml(s.scoreline)}: <strong style="color:#0ff;">${s.count}x</strong> (${s.pct}%)</span>`).join("");
+                      const perMatchHtml = res.perMatch.map(pm=>{
+                        const sc = pm.topScorers.slice(0,3).map(pl=> `<div style="font-size:0.65rem;"><strong>${Security.escapeHtml(pl.name)}</strong> (${pl.teamCode}) — ${pl.hits}x (${pl.freqPct}%)</div>`).join("");
+                        const scores = pm.topScores.slice(0,3).map(s=> `<div style="font-size:0.65rem;">${Security.escapeHtml(s.scoreline)}: ${s.count}x (${s.pct}%)</div>`).join("");
+                        return `<div style="background:#0f0f0f;border:1px solid #333;padding:6px;min-width:160px;"><div style="font-weight:bold;color:#0ff;margin-bottom:4px;">B${pm.row}: ${Security.escapeHtml(pm.homeName)} vs ${Security.escapeHtml(pm.awayName)}</div><div style="font-size:0.6rem;color:#aaa;margin-bottom:2px;">Top Skor:</div>${scores}<div style="font-size:0.6rem;color:#aaa;margin:4px 0 2px;">Top Scorer:</div>${sc}</div>`;
+                      }).join("");
+                      out.innerHTML = `
+                        <div style="margin-bottom:8px;"><strong style="color:#ff0;">Hasil Bulk ${n}x sampling (variasi seperti game asli):</strong> <span style="font-size:0.6rem;color:#888;">Skor tidak monoton — tiap iterasi sample Dixon-Coles via LCG</span></div>
+                        <div style="margin-bottom:6px;font-weight:bold;color:#0ff;">📊 Global Frekuensi Pemain (hanya roster match, contoh Adebayor 100x/1000) — Top 10:</div>
+                        <div style="overflow-x:auto;margin-bottom:8px;"><table class="result-table" style="font-size:0.7rem;"><thead><tr><th>#</th><th>FLAG</th><th>PEMAIN / NEGARA</th><th>MUNCUL</th><th>FREQ</th></tr></thead><tbody>${globalRows}</tbody></table></div>
+                        <div style="margin-bottom:4px;font-weight:bold;color:#0ff;">🏆 Distribusi Skor Paling Sering (Top 10):</div><div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px;">${scoreRows}</div>
+                        <div style="margin-bottom:4px;font-weight:bold;color:#0ff;">Per-Match Top:</div><div style="display:flex;gap:8px;overflow-x:auto;padding-bottom:4px;">${perMatchHtml}</div>
+                        <div style="font-size:0.55rem;color:#555;margin-top:6px;">* Frekuensi = berapa kali pemain cetak gol (matchGoals>0) dalam ${n} sampling. Hanya pemain dari tim yang main di B1-B8, konsisten skor ↔ gol, GK terfilter, roster ESP/TOG exact 11-man Image.</div>
+                      `;
+                    }
+                  } catch(err){ out.innerHTML = `<div style="color:#f55;">⛔ Bulk error: ${Security.escapeHtml(err?.message||String(err))}</div>`; }
+                  btn.disabled = false; btn.textContent = "▶ RUN BULK";
+                }, 40);
+              });
+            }
+          }, 0);
+        } catch(e){ console.warn("bulk box error", e); }
       }
     } catch (e) {
       console.warn("[overall summary] render error", e);
@@ -208,24 +289,26 @@ export const UIRenderer = {
         </div>
       `).join("");
 
-      // --- Top Scorers HTML (KONAMI 60/30/10 + Monte-Carlo) ---
+      // --- Top Scorers HTML — Score-Consistent: matchGoals + alasan kenapa di atas ---
       let topScorersHtml = `<div style="font-size:0.7rem;color:#888;padding:6px;">Belum ada data scorer.</div>`;
       if (Array.isArray(pred.topScorers) && pred.topScorers.length) {
         topScorersHtml = pred.topScorers.map((pl, idx) => {
           const rankBadge = idx === 0 ? "🥇" : idx === 1 ? "🥈" : idx === 2 ? "🥉" : `#${idx+1}`;
+          const matchBadge = pl.matchGoals > 0 ? `<span style="background:#0f0;color:#000;padding:1px 4px;border-radius:2px;font-size:0.6rem;margin-left:4px;">${pl.matchGoals} GOL di ${pred.homeGoals}:${pred.awayGoals}</span>` : `<span style="background:#333;color:#888;padding:1px 4px;border-radius:2px;font-size:0.6rem;margin-left:4px;">0 di ${pred.homeGoals}:${pred.awayGoals}</span>`;
+          const reason = pl.reason || `Weight ${pl.weight} • ${pl.pos}`;
           return `
-            <div class="top-scorer-item" style="display:flex;justify-content:space-between;align-items:center;background:${idx===0?'#1a2a1a':'#1a1a1a'};border:1px solid ${idx===0?'#0f0':'#444'};padding:6px 8px;border-radius:3px;">
+            <div class="top-scorer-item" title="${Security.escapeHtml(reason)}" style="display:flex;justify-content:space-between;align-items:center;background:${pl.matchGoals>0?'#1a2a1a':'#1a1a1a'};border:1px solid ${pl.matchGoals>0?'#0f0':'#444'};padding:6px 8px;border-radius:3px;">
               <div style="display:flex;gap:6px;align-items:center;">
                 <span style="font-size:0.7rem;min-width:22px;">${rankBadge}</span>
                 <span style="font-size:1rem;">${Security.escapeHtml(pl.flag||"")}</span>
                 <div>
-                  <div style="font-weight:bold;font-size:0.8rem;color:#fff;">${Security.escapeHtml(pl.name)} <span style="font-weight:normal;color:#0ff;font-size:0.65rem;">[${Security.escapeHtml(pl.pos)} • ${Security.escapeHtml(pl.teamCode)}]</span></div>
-                  <div style="font-size:0.65rem;color:#aaa;">${Security.escapeHtml(pl.teamName)}</div>
+                  <div style="font-weight:bold;font-size:0.8rem;color:#fff;">${Security.escapeHtml(pl.name)} <span style="font-weight:normal;color:#0ff;font-size:0.65rem;">[${Security.escapeHtml(pl.pos)} • ${Security.escapeHtml(pl.teamCode)}]</span>${matchBadge}</div>
+                  <div style="font-size:0.6rem;color:#aaa;">${Security.escapeHtml(pl.teamName)} — <span style="color:#ff0;">${Security.escapeHtml(reason)}</span></div>
                 </div>
               </div>
               <div style="text-align:right;">
                 <div style="font-family:var(--font-retro);font-size:0.7rem;color:#0f0;">${pl.prob}% <span style="color:#888;">ANYTIME</span></div>
-                <div style="font-size:0.65rem;color:#ccc;">xG ${pl.expectedGoals} • share ${pl.scoringShare}%</div>
+                <div style="font-size:0.65rem;color:#ccc;">xG ${pl.expectedGoals} • share ${pl.scoringShare}% • w ${pl.weight}</div>
               </div>
             </div>
           `;
@@ -366,9 +449,11 @@ export const UIRenderer = {
     if (matchGridForm) {
       if (!matchGridForm.dataset.uiInit) {
         matchGridForm.innerHTML = "";
-        for (let i = 0; i < 7; i++) {
+        for (let i = 0; i < 8; i++) {
           const row = document.createElement("div");
           row.className = "match-row-item";
+          if (i === 7) row.classList.add("b8-row");
+          row.dataset.idx = String(i);
           row.innerHTML = `
             <div class="match-num">B${i + 1}</div>
             <div class="team-input-wrap">
@@ -395,6 +480,10 @@ export const UIRenderer = {
               MemoryManager.updateMatchField(StateManager.activeMemoryId, StateManager.activeGameIndex, i, "home", clean, false);
             } else {
               StateManager.homeQuery.matches[i].home = clean;
+              if (i === 7 && clean) {
+                StateManager.homeQuery.matches[7].enabled = true;
+                StateManager.homeQuery.b8Enabled = true;
+              }
             }
           });
 
@@ -404,6 +493,10 @@ export const UIRenderer = {
               MemoryManager.updateMatchField(StateManager.activeMemoryId, StateManager.activeGameIndex, i, "score", clean, false);
             } else {
               StateManager.homeQuery.matches[i].score = clean;
+              if (i === 7 && clean) {
+                StateManager.homeQuery.matches[7].enabled = true;
+                StateManager.homeQuery.b8Enabled = true;
+              }
             }
           });
 
@@ -413,6 +506,10 @@ export const UIRenderer = {
               MemoryManager.updateMatchField(StateManager.activeMemoryId, StateManager.activeGameIndex, i, "away", clean, false);
             } else {
               StateManager.homeQuery.matches[i].away = clean;
+              if (i === 7 && clean) {
+                StateManager.homeQuery.matches[7].enabled = true;
+                StateManager.homeQuery.b8Enabled = true;
+              }
             }
           });
 
@@ -421,6 +518,10 @@ export const UIRenderer = {
               MemoryManager.updateMatchField(StateManager.activeMemoryId, StateManager.activeGameIndex, i, "home", val, true);
             } else {
               StateManager.homeQuery.matches[i].home = val;
+              if (i === 7) {
+                StateManager.homeQuery.matches[7].enabled = true;
+                StateManager.homeQuery.b8Enabled = true;
+              }
             }
           });
 
@@ -429,21 +530,109 @@ export const UIRenderer = {
               MemoryManager.updateMatchField(StateManager.activeMemoryId, StateManager.activeGameIndex, i, "away", val, true);
             } else {
               StateManager.homeQuery.matches[i].away = val;
+              if (i === 7) {
+                StateManager.homeQuery.matches[7].enabled = true;
+                StateManager.homeQuery.b8Enabled = true;
+              }
             }
+          });
+        }
+        // B8 collapsible toggle
+        const b8Wrap = document.createElement("div");
+        b8Wrap.id = "b8ToggleWrap";
+        b8Wrap.style.cssText = "margin-top:8px;text-align:center;";
+        b8Wrap.innerHTML = `<button class="btn" id="btnToggleB8" style="font-size:0.6rem;padding:6px 10px;">B8 [+] ADD MATCH</button>`;
+        matchGridForm.parentNode.insertBefore(b8Wrap, matchGridForm.nextSibling);
+        const btnToggleB8 = b8Wrap.querySelector("#btnToggleB8");
+        if (btnToggleB8) {
+          btnToggleB8.addEventListener("click", () => {
+            const cur = StateManager.isB8Enabled(dataSource);
+            StateManager.setB8Enabled(!cur);
+            UIRenderer.renderMatchGrid();
           });
         }
         matchGridForm.dataset.uiInit = "1";
       }
+      // Upgrade path for existing DOM with 7 rows -> 8
+      if (matchGridForm.querySelectorAll(".match-row-item").length === 7) {
+        const i = 7;
+        const row = document.createElement("div");
+        row.className = "match-row-item b8-row";
+        row.dataset.idx = "7";
+        row.innerHTML = `
+            <div class="match-num">B8</div>
+            <div class="team-input-wrap">
+              <input type="text" placeholder="HOME" data-idx="7" class="match-home" autocomplete="off" />
+              <div class="suggestions-box hidden"></div>
+            </div>
+            <div class="score-box-center">
+              <input type="text" placeholder="X:X" data-idx="7" class="match-score" autocomplete="off" />
+            </div>
+            <div class="team-input-wrap">
+              <input type="text" placeholder="AWAY" data-idx="7" class="match-away" autocomplete="off" />
+              <div class="suggestions-box hidden"></div>
+            </div>
+          `;
+        matchGridForm.appendChild(row);
+        const hIn = row.querySelector(".match-home");
+        const sIn = row.querySelector(".match-score");
+        const aIn = row.querySelector(".match-away");
+        hIn.addEventListener("input", () => {
+          const clean = Security.sanitizeInput(hIn.value);
+          if (StateManager.activeMemoryId !== null) MemoryManager.updateMatchField(StateManager.activeMemoryId, StateManager.activeGameIndex, 7, "home", clean, false);
+          else { StateManager.homeQuery.matches[7].home = clean; if (clean) { StateManager.homeQuery.matches[7].enabled = true; StateManager.homeQuery.b8Enabled = true; } }
+        });
+        sIn.addEventListener("input", () => {
+          const clean = String(sIn.value || "").trim().replace(/[-–—;]+/g, ":").replace(/[^0-9:]/g, "");
+          if (StateManager.activeMemoryId !== null) MemoryManager.updateMatchField(StateManager.activeMemoryId, StateManager.activeGameIndex, 7, "score", clean, false);
+          else { StateManager.homeQuery.matches[7].score = clean; if (clean) { StateManager.homeQuery.matches[7].enabled = true; StateManager.homeQuery.b8Enabled = true; } }
+        });
+        aIn.addEventListener("input", () => {
+          const clean = Security.sanitizeInput(aIn.value);
+          if (StateManager.activeMemoryId !== null) MemoryManager.updateMatchField(StateManager.activeMemoryId, StateManager.activeGameIndex, 7, "away", clean, false);
+          else { StateManager.homeQuery.matches[7].away = clean; if (clean) { StateManager.homeQuery.matches[7].enabled = true; StateManager.homeQuery.b8Enabled = true; } }
+        });
+        setupCountryAutocomplete(hIn, (val) => {
+          if (StateManager.activeMemoryId !== null) MemoryManager.updateMatchField(StateManager.activeMemoryId, StateManager.activeGameIndex, 7, "home", val, true);
+          else { StateManager.homeQuery.matches[7].home = val; StateManager.homeQuery.matches[7].enabled = true; StateManager.homeQuery.b8Enabled = true; }
+        });
+        setupCountryAutocomplete(aIn, (val) => {
+          if (StateManager.activeMemoryId !== null) MemoryManager.updateMatchField(StateManager.activeMemoryId, StateManager.activeGameIndex, 7, "away", val, true);
+          else { StateManager.homeQuery.matches[7].away = val; StateManager.homeQuery.matches[7].enabled = true; StateManager.homeQuery.b8Enabled = true; }
+        });
+      }
+      if (!document.getElementById("b8ToggleWrap")) {
+        const b8Wrap = document.createElement("div");
+        b8Wrap.id = "b8ToggleWrap";
+        b8Wrap.style.cssText = "margin-top:8px;text-align:center;";
+        b8Wrap.innerHTML = `<button class="btn" id="btnToggleB8" style="font-size:0.6rem;padding:6px 10px;">B8 [+] ADD MATCH</button>`;
+        matchGridForm.parentNode.insertBefore(b8Wrap, matchGridForm.nextSibling);
+        const btn = b8Wrap.querySelector("#btnToggleB8");
+        if (btn) btn.addEventListener("click", () => { const cur = StateManager.isB8Enabled(dataSource); StateManager.setB8Enabled(!cur); UIRenderer.renderMatchGrid(); });
+      }
 
       const rowEls = matchGridForm.querySelectorAll(".match-row-item");
       rowEls.forEach((row, i) => {
-        const mData = dataSource.matches?.[i] || { home: "", score: "", away: "" };
+        const mData = dataSource.matches?.[i] || { home: "", score: "", away: "", enabled: i < 7 };
         const h = row.querySelector(".match-home");
         const s = row.querySelector(".match-score");
         const a = row.querySelector(".match-away");
         if (h) h.value = mData.home || "";
         if (s) s.value = mData.score || "";
         if (a) a.value = mData.away || "";
+        if (i === 7) {
+          const isEnabled = StateManager.isB8Enabled(dataSource);
+          const hasContent = !!(mData.home || mData.away || mData.score);
+          const shouldShow = isEnabled || hasContent;
+          row.style.display = shouldShow ? "" : "none";
+          const btn = document.getElementById("btnToggleB8");
+          if (btn) {
+            btn.textContent = shouldShow ? "B8 [-] HIDE" : "B8 [+] ADD MATCH";
+            btn.style.background = shouldShow ? "#1a3a1a" : "";
+            btn.style.borderColor = shouldShow ? "#0ff" : "";
+            btn.style.color = shouldShow ? "#0ff" : "";
+          }
+        }
       });
     }
 

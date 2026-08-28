@@ -80,7 +80,7 @@ function calculateScorePoints(qScore, tScore) {
   }
   return 0;
 }
-export const MATCH_WEIGHTS = [25, 20, 18, 15, 10, 7, 5];
+export const MATCH_WEIGHTS = [25, 20, 18, 15, 10, 7, 5, 3]; // B8 weight 3 (collapsible)
 const GOALS_MAX_SCORE = 7 * 10; // 70
 
 export const SimilarityCalculator = {
@@ -89,12 +89,22 @@ export const SimilarityCalculator = {
     let maxPossiblePoints = 0;
     const explanations = [];
     
-    // Evaluate Matches
-    for (let i = 0; i < 7; i++) {
+    // Evaluate Matches — B1-B8 (B8 collapsible)
+    const maxMatches = Math.min(8, Math.max(queryGame.matches?.length || 0, targetGame.matches?.length || 0, 8));
+    for (let i = 0; i < maxMatches; i++) {
       const qMatch = queryGame.matches[i];
       const tMatch = targetGame.matches[i];
 
       if (!qMatch || !tMatch) continue;
+      // B8 collapsible: if B8 (i===7) and query B8 not enabled and no content, skip
+      const qEnabled = qMatch.enabled !== false;
+      const tEnabled = tMatch.enabled !== false;
+      if (i === 7) {
+        const qHasContent = !!(qMatch.home || qMatch.away || qMatch.score);
+        const tHasContent = !!(tMatch.home || tMatch.away || tMatch.score);
+        if (!qEnabled && !qHasContent) continue;
+        if (!tEnabled && !tHasContent) continue;
+      }
 
       const qHome = (qMatch.home || "").trim();
       const qAway = (qMatch.away || "").trim();

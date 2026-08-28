@@ -3,7 +3,7 @@ import { StateManager } from "../state/appState.js";
 export const MemoryManager = {
   initializeEmptyMemory(memoryId) {
     StateManager.db.memories[memoryId] = {
-      version: 3,
+      version: 4,
       memoryName: "Memory " + memoryId,
       memoryNumber: memoryId,
       createdAt: new Date().toISOString(),
@@ -18,8 +18,10 @@ export const MemoryManager = {
     return {
       gameNumber: gameNum,
       p1: "",
-      matches: Array.from({ length: 7 }, () => ({ home: "", score: "", away: "" })),
+      matches: Array.from({ length: 8 }, (_, i) => ({ home: "", score: "", away: "", enabled: i < 7 })),
       topGoals: Array.from({ length: 7 }, () => ({ country: "", player: "", goals: "" })),
+      b8Enabled: false,
+      b8Migrated: true,
       lastUpdate: new Date().toISOString()
     };
   },
@@ -94,9 +96,22 @@ export const MemoryManager = {
     const memory = StateManager.db.memories[memoryId];
     if (!memory || !memory.games[gameIndex]) return;
 
-    if (matchIndex < 0 || matchIndex >= 7) return;
+    if (matchIndex < 0 || matchIndex >= 8) return;
 
+    // Ensure B8 structure exists
+    if (!memory.games[gameIndex].matches[matchIndex]) {
+      memory.games[gameIndex].matches[matchIndex] = { home: "", score: "", away: "", enabled: matchIndex < 7 };
+    }
     memory.games[gameIndex].matches[matchIndex][field] = value;
+    // Keep b8Enabled in sync when B8 enabled field changes
+    if (matchIndex === 7 && field === "enabled") {
+      memory.games[gameIndex].b8Enabled = !!value;
+    }
+    // If B8 gets content, auto-enable
+    if (matchIndex === 7 && (field === "home" || field === "away" || field === "score") && value) {
+      memory.games[gameIndex].matches[7].enabled = true;
+      memory.games[gameIndex].b8Enabled = true;
+    }
     memory.games[gameIndex].lastUpdate = new Date().toISOString();
     memory.lastUpdate = new Date().toISOString();
     if (immediate) {
@@ -104,5 +119,21 @@ export const MemoryManager = {
     } else {
         StateManager.debouncedSave();
     }
+  },
+
+  setB8Enabled(memoryId, gameIndex, enabled) {
+    const memory = StateManager.db.memories[memoryId];
+    if (!memory || !memory.games[gameIndex]) return;
+    const game = memory.games[gameIndex];
+    if (!Array.isArray(game.matches) || game.matches.length < 8) {
+      // Ensure 8
+      const old = game.matches || [];
+      game.matches = Array.from({ length: 8 }, (_, i) => old[i] || { home: "", score: "", away: "", enabled: i < 7 });
+    }
+    game.matches[7].enabled = !!enabled;
+    game.b8Enabled = !!enabled;
+    game.lastUpdate = new Date().toISOString();
+    memory.lastUpdate = new Date().toISOString();
+    StateManager.debouncedSave();
   }
 };

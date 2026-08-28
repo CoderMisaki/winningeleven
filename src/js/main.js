@@ -224,10 +224,10 @@ document.addEventListener("DOMContentLoaded", async () => {
             const validPreds = predictions.filter(p => !p.error && p.prediction);
             if (validPreds.length > 0) {
               let filledScores = 0, filledGoals = 0;
-              // 1) Auto-fill skor B1-B7
+              // 1) Auto-fill skor B1-B8 (B8 jika enabled)
               validPreds.forEach(p => {
                 const idx = p.row - 1;
-                if (idx < 0 || idx >= 7) return;
+                if (idx < 0 || idx >= 8) return;
                 const scoreStr = `${p.prediction.homeGoals}:${p.prediction.awayGoals}`;
                 if (isEditor) {
                   const currentScore = StateManager.db.memories[StateManager.activeMemoryId]?.games[StateManager.activeGameIndex]?.matches[idx]?.score || "";
@@ -253,44 +253,57 @@ document.addEventListener("DOMContentLoaded", async () => {
                   }
                 }
               });
-              // 2) Auto-fill TOP GOALS G1-G7 dari global scorer aggregation
+              // 2) Auto-fill TOP GOALS G1-G7 — SCORE-CONSISTENT: pakai matchGoals (integer alokasi tepat homeGoals:awayGoals), hanya pemain dari tim yang main di B1-B8
               const globalMap = new Map();
               validPreds.forEach(p => {
                 (p.prediction.topScorers || []).forEach(pl => {
+                  // filter: hanya pemain yang cetak gol di prediksi scoreline ini (matchGoals>0) — jgn yg ga main masuk list
+                  const actual = pl.matchGoals != null ? pl.matchGoals : 0;
+                  if (actual <= 0) return;
                   const key = pl.name + "|" + pl.teamCode;
                   const ex = globalMap.get(key);
                   if (ex) {
+                    ex.totalActual += actual;
                     ex.totalXG += pl.expectedGoals;
                     ex.appearances += 1;
                     ex.maxProb = Math.max(ex.maxProb, pl.prob);
-                    ex.totalShare += pl.scoringShare;
+                    ex.reason = pl.reason || ex.reason;
                   } else {
                     globalMap.set(key, {
                       name: pl.name, teamCode: pl.teamCode, teamName: pl.teamName, flag: pl.flag, pos: pl.pos,
-                      totalXG: pl.expectedGoals, appearances: 1, maxProb: pl.prob, totalShare: pl.scoringShare
+                      totalActual: actual, totalXG: pl.expectedGoals, appearances: 1, maxProb: pl.prob, reason: pl.reason || ""
                     });
                   }
                 });
               });
-              const globalRank = [...globalMap.values()].sort((a,b)=> b.totalXG - a.totalXG || b.maxProb - a.maxProb).slice(0,7);
-              // Fill G1..G7 (kosongkan dulu jika sebelumnya beda)
+              // Jika semua 0-0 (no goals), fallback: ambil expected top tapi tetap filter ke tim yang main
+              if (globalMap.size === 0) {
+                validPreds.forEach(p => {
+                  (p.prediction.topScorers || []).slice(0,2).forEach(pl => {
+                    const key = pl.name + "|" + pl.teamCode;
+                    if (!globalMap.has(key)) globalMap.set(key, { name: pl.name, teamCode: pl.teamCode, teamName: pl.teamName, flag: pl.flag, pos: pl.pos, totalActual: 0, totalXG: pl.expectedGoals, appearances: 1, maxProb: pl.prob, reason: pl.reason || "" });
+                  });
+                });
+              }
+              const globalRank = [...globalMap.values()].sort((a,b)=> (b.totalActual - a.totalActual) || (b.totalXG - a.totalXG) || (b.maxProb - a.maxProb)).slice(0,7);
+              // Fill G1..G7 dengan gol INTEGER konsisten — jumlah gol pemain tidak boleh melebihi total gol tim di skor prediksi
               globalRank.forEach((pl, gi) => {
-                const estGol = Math.max(1, Math.min(4, Math.round(pl.totalXG * 1.2 + pl.appearances * 0.35 + pl.maxProb / 45))).toString();
+                const golInt = String(pl.totalActual > 0 ? pl.totalActual : Math.max(1, Math.round(pl.totalXG))); // integer konsisten
                 const countryName = pl.teamName || pl.teamCode;
                 if (isEditor) {
                   MemoryManager.updateTopGoalField(StateManager.activeMemoryId, StateManager.activeGameIndex, gi, "country", countryName, false);
                   MemoryManager.updateTopGoalField(StateManager.activeMemoryId, StateManager.activeGameIndex, gi, "player", pl.name, false);
-                  MemoryManager.updateTopGoalField(StateManager.activeMemoryId, StateManager.activeGameIndex, gi, "goals", estGol, false);
+                  MemoryManager.updateTopGoalField(StateManager.activeMemoryId, StateManager.activeGameIndex, gi, "goals", golInt, false);
                   if (dataSource.topGoals[gi]) {
                     dataSource.topGoals[gi].country = countryName;
                     dataSource.topGoals[gi].player = pl.name;
-                    dataSource.topGoals[gi].goals = estGol;
+                    dataSource.topGoals[gi].goals = golInt;
                   }
                 } else {
                   if (StateManager.homeQuery.topGoals[gi]) {
                     StateManager.homeQuery.topGoals[gi].country = countryName;
                     StateManager.homeQuery.topGoals[gi].player = pl.name;
-                    StateManager.homeQuery.topGoals[gi].goals = estGol;
+                    StateManager.homeQuery.topGoals[gi].goals = golInt;
                   }
                 }
                 filledGoals++;
