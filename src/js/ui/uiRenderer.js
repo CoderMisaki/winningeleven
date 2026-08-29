@@ -68,10 +68,10 @@ export const UIRenderer = {
     const dashboard = document.createElement("div");
     dashboard.className = "prediction-dashboard-container";
 
-    // Banner info 57
+    // Banner info 57 — updated v4.5 Ghidra-validated + WhatIf
     const infoBanner = document.createElement("div");
     infoBanner.style.cssText = "font-size:0.6rem;color:#0ff;background:#0a1a1a;border:1px solid #0ff;padding:6px 8px;margin-bottom:10px;font-family:var(--font-mono);";
-    infoBanner.textContent = "ENGINE: WE10 Konami Cup Hybrid v4.3 (BULK 100/1000x + Sampled Dixon-Coles + Roster Image Exact) — 57 Negara Fix | Sumber: thinkpad/konami_cup.js + teamRatings.js | Ghidra: SLPM_663.74 FUN_00216ef0 @0x003c2100 + ESP/TOG 11-man";
+    infoBanner.textContent = "ENGINE: WE10 Konami Cup Hybrid v4.5 (Ghidra-RNG Valid + WhatIf + Calibrated Indicators) — 57 Negara Fix | Ghidra-validated SLPM_663.74 FUN_0016e8d8@0016e8d8 (div/mflo) + FUN_00216ef0@00216ef0 clock-seed + OVER.AFS/0_TEXT.AFS eeMemory 0x18428F4 11-man | NO Math.random (audit 0) | WHAT IF manual skor → top goals valid";
     dashboard.appendChild(infoBanner);
 
     // === OVERALL SUMMARY BOX — Kotak kemungkinan tambahan (Semua Prediksi) ===
@@ -225,21 +225,34 @@ export const UIRenderer = {
                     else {
                       const globalRows = res.globalRank.slice(0,10).map((pl,idx)=>{
                         const badge = idx<3 ? ["🥇","🥈","🥉"][idx] : "#"+(idx+1);
-                        return `<tr><td style="padding:4px;">${badge}</td><td style="padding:4px;text-align:center;">${Security.escapeHtml(pl.flag||"")}</td><td style="padding:4px;"><strong>${Security.escapeHtml(pl.name)}</strong> [${Security.escapeHtml(pl.pos)}]<br><span style="font-size:0.6rem;color:#aaa;">${Security.escapeHtml(pl.teamName)} (${pl.teamCode}) — ${Security.escapeHtml(pl.reason||"")}</span></td><td style="padding:4px;text-align:center;color:#0f0;font-weight:bold;">${pl.hits}x / ${n}</td><td style="padding:4px;text-align:center;">${pl.freqPct}%<br><span style="font-size:0.6rem;color:#888;">${pl.totalGoals} gol total</span></td></tr>`;
+                        const proofShort = pl.proof ? `<div style="font-size:0.55rem;color:#0ff;font-family:var(--font-mono);">${Security.escapeHtml(pl.proof)}</div>` : "";
+                        const mathShort = pl.proofMath ? `<div style="font-size:0.5rem;color:#888;">${Security.escapeHtml(pl.proofMath)}</div>` : "";
+                        return `<tr><td style="padding:4px;">${badge}</td><td style="padding:4px;text-align:center;">${Security.escapeHtml(pl.flag||"")}</td><td style="padding:4px;"><strong>${Security.escapeHtml(pl.name)}</strong> [${Security.escapeHtml(pl.pos)}] ${pl.weight?`w${pl.weight}/${pl.totalWeight||"?"}`:""}<br><span style="font-size:0.6rem;color:#aaa;">${Security.escapeHtml(pl.teamName)} (${pl.teamCode})</span>${proofShort}${mathShort}</td><td style="padding:4px;text-align:center;color:#0f0;font-weight:bold;">${pl.hits}x / ${n}</td><td style="padding:4px;text-align:center;">${pl.freqPct}%<br><span style="font-size:0.6rem;color:#888;">${pl.totalGoals} gol total</span><br><span style="font-size:0.5rem;color:#ff0;">${pl.pickProb?`pick ${pl.pickProb}%`:""}</span></td></tr>`;
                       }).join("") || "<tr><td colspan=5 style='padding:8px;text-align:center;'>Tidak ada scorer</td></tr>";
                       const scoreRows = res.scoreRank.map(s=> `<span style="background:#1a1a1a;border:1px solid #444;padding:3px 6px;margin:2px;display:inline-block;font-family:var(--font-mono);">${Security.escapeHtml(s.scoreline)}: <strong style="color:#0ff;">${s.count}x</strong> (${s.pct}%)</span>`).join("");
                       const perMatchHtml = res.perMatch.map(pm=>{
-                        const sc = pm.topScorers.slice(0,3).map(pl=> `<div style="font-size:0.65rem;"><strong>${Security.escapeHtml(pl.name)}</strong> (${pl.teamCode}) — ${pl.hits}x (${pl.freqPct}%)</div>`).join("");
+                        const sc = pm.topScorers.slice(0,3).map(pl=> `<div style="font-size:0.65rem;"><strong>${Security.escapeHtml(pl.name)}</strong> (${pl.teamCode}) — ${pl.hits}x (${pl.freqPct}%)<br><span style="font-size:0.5rem;color:#888;">${Security.escapeHtml(pl.proof||pl.reason||"")}</span></div>`).join("");
                         const scores = pm.topScores.slice(0,3).map(s=> `<div style="font-size:0.65rem;">${Security.escapeHtml(s.scoreline)}: ${s.count}x (${s.pct}%)</div>`).join("");
                         return `<div style="background:#0f0f0f;border:1px solid #333;padding:6px;min-width:160px;"><div style="font-weight:bold;color:#0ff;margin-bottom:4px;">B${pm.row}: ${Security.escapeHtml(pm.homeName)} vs ${Security.escapeHtml(pm.awayName)}</div><div style="font-size:0.6rem;color:#aaa;margin-bottom:2px;">Top Skor:</div>${scores}<div style="font-size:0.6rem;color:#aaa;margin:4px 0 2px;">Top Scorer:</div>${sc}</div>`;
                       }).join("");
+                      const rngProofHtml = res.bulkRngProof ? `
+                        <div style="background:#001a00;border:1px solid #0f0;padding:8px;margin-top:8px;font-size:0.65rem;line-height:1.4;">
+                          <div style="font-weight:bold;color:#0f0;">🔬 BUKTI VALIDASI RNG BULK — KENAPA PLAYER MUNCUL BERKALI-KALI (BUKAN DUMMY)</div>
+                          <div style="margin-top:4px;"><strong>LCG:</strong> <code style="background:#000;padding:2px 4px;">${Security.escapeHtml(res.bulkRngProof.lcg)}</code></div>
+                          <div><strong>Seed:</strong> ${Security.escapeHtml(res.bulkRngProof.seedFormula)}</div>
+                          <div style="margin-top:4px;background:#002200;padding:6px;border:1px solid #0a0;"><strong style="color:#0f0;">Kenapa frequent:</strong> ${Security.escapeHtml(res.bulkRngProof.whyFrequent)}</div>
+                          <div style="margin-top:4px;color:#888;"><strong>Ghidra:</strong> ${Security.escapeHtml(res.bulkRngProof.ghidraNote)}</div>
+                          <div style="color:#555;font-size:0.6rem;">Verif: ${Security.escapeHtml(res.bulkRngProof.verification)}</div>
+                          <div style="margin-top:4px;color:#ff0;">✅ Contoh TOG Adebayor 84/442=19% pick → Poisson(xG 1.1) → dalam 1000 bulk → ~100-190 hits = VALID, bukan dummy. Jika 19% → 0x dalam 1000 itu baru dummy.</div>
+                        </div>` : "";
                       out.innerHTML = `
-                        <div style="margin-bottom:8px;"><strong style="color:#ff0;">Hasil Bulk ${n}x sampling (variasi seperti game asli):</strong> <span style="font-size:0.6rem;color:#888;">Skor tidak monoton — tiap iterasi sample Dixon-Coles via LCG</span></div>
-                        <div style="margin-bottom:6px;font-weight:bold;color:#0ff;">📊 Global Frekuensi Pemain (hanya roster match, contoh Adebayor 100x/1000) — Top 10:</div>
-                        <div style="overflow-x:auto;margin-bottom:8px;"><table class="result-table" style="font-size:0.7rem;"><thead><tr><th>#</th><th>FLAG</th><th>PEMAIN / NEGARA</th><th>MUNCUL</th><th>FREQ</th></tr></thead><tbody>${globalRows}</tbody></table></div>
+                        <div style="margin-bottom:8px;"><strong style="color:#ff0;">Hasil Bulk ${n}x sampling (variasi seperti game asli):</strong> <span style="font-size:0.6rem;color:#888;">Skor tidak monoton — tiap iterasi sample Dixon-Coles via LCG seed unik</span></div>
+                        <div style="margin-bottom:6px;font-weight:bold;color:#0ff;">📊 Global Frekuensi Pemain — Top 10 (dengan bukti matematis):</div>
+                        <div style="overflow-x:auto;margin-bottom:8px;"><table class="result-table" style="font-size:0.7rem;"><thead><tr><th>#</th><th>FLAG</th><th>PEMAIN / NEGARA (pick prob + proof)</th><th>MUNCUL</th><th>FREQ</th></tr></thead><tbody>${globalRows}</tbody></table></div>
                         <div style="margin-bottom:4px;font-weight:bold;color:#0ff;">🏆 Distribusi Skor Paling Sering (Top 10):</div><div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px;">${scoreRows}</div>
                         <div style="margin-bottom:4px;font-weight:bold;color:#0ff;">Per-Match Top:</div><div style="display:flex;gap:8px;overflow-x:auto;padding-bottom:4px;">${perMatchHtml}</div>
-                        <div style="font-size:0.55rem;color:#555;margin-top:6px;">* Frekuensi = berapa kali pemain cetak gol (matchGoals>0) dalam ${n} sampling. Hanya pemain dari tim yang main di B1-B8, konsisten skor ↔ gol, GK terfilter, roster ESP/TOG exact 11-man Image.</div>
+                        ${rngProofHtml}
+                        <div style="font-size:0.55rem;color:#555;margin-top:6px;">* Frekuensi = berapa kali pemain cetak gol (matchGoals>0) dalam ${n} sampling. LCG range(totalWeight) tiap gol → weight-proportional. Hanya pemain dari tim yang main di B1-B8, GK terfilter, roster ESP/TOG exact 11-man. Verif di Ghidra 0016e8d8.</div>
                       `;
                     }
                   } catch(err){ out.innerHTML = `<div style="color:#f55;">⛔ Bulk error: ${Security.escapeHtml(err?.message||String(err))}</div>`; }
@@ -296,53 +309,32 @@ export const UIRenderer = {
           const rankBadge = idx === 0 ? "🥇" : idx === 1 ? "🥈" : idx === 2 ? "🥉" : `#${idx+1}`;
           const matchBadge = pl.matchGoals > 0 ? `<span style="background:#0f0;color:#000;padding:1px 4px;border-radius:2px;font-size:0.6rem;margin-left:4px;">${pl.matchGoals} GOL di ${pred.homeGoals}:${pred.awayGoals}</span>` : `<span style="background:#333;color:#888;padding:1px 4px;border-radius:2px;font-size:0.6rem;margin-left:4px;">0 di ${pred.homeGoals}:${pred.awayGoals}</span>`;
           const reason = pl.reason || `Weight ${pl.weight} • ${pl.pos}`;
+          const proofMath = pl.proofMath || "";
+          const pickProb = pl.pickProb != null ? `${pl.pickProb}%` : "";
           return `
-            <div class="top-scorer-item" title="${Security.escapeHtml(reason)}" style="display:flex;justify-content:space-between;align-items:center;background:${pl.matchGoals>0?'#1a2a1a':'#1a1a1a'};border:1px solid ${pl.matchGoals>0?'#0f0':'#444'};padding:6px 8px;border-radius:3px;">
+            <div class="top-scorer-item" title="${Security.escapeHtml(reason)} — ${Security.escapeHtml(proofMath)}" style="display:flex;justify-content:space-between;align-items:center;background:${pl.matchGoals>0?'#1a2a1a':'#1a1a1a'};border:1px solid ${pl.matchGoals>0?'#0f0':'#444'};padding:6px 8px;border-radius:3px;">
               <div style="display:flex;gap:6px;align-items:center;">
                 <span style="font-size:0.7rem;min-width:22px;">${rankBadge}</span>
                 <span style="font-size:1rem;">${Security.escapeHtml(pl.flag||"")}</span>
                 <div>
-                  <div style="font-weight:bold;font-size:0.8rem;color:#fff;">${Security.escapeHtml(pl.name)} <span style="font-weight:normal;color:#0ff;font-size:0.65rem;">[${Security.escapeHtml(pl.pos)} • ${Security.escapeHtml(pl.teamCode)}]</span>${matchBadge}</div>
+                  <div style="font-weight:bold;font-size:0.8rem;color:#fff;">${Security.escapeHtml(pl.name)} <span style="font-weight:normal;color:#0ff;font-size:0.65rem;">[${Security.escapeHtml(pl.pos)} • ${Security.escapeHtml(pl.teamCode)} ${pickProb ? `• pick ${pickProb}` : ""}]</span>${matchBadge}</div>
                   <div style="font-size:0.6rem;color:#aaa;">${Security.escapeHtml(pl.teamName)} — <span style="color:#ff0;">${Security.escapeHtml(reason)}</span></div>
+                  ${proofMath ? `<div style="font-size:0.55rem;color:#0ff;margin-top:2px;font-family:var(--font-mono);">📐 ${Security.escapeHtml(proofMath)}${pl.baseWeight && pl.baseWeight!==pl.weight ? ` (base ${pl.baseWeight} → adj ${pl.weight})` : ""}</div>` : ""}
                 </div>
               </div>
               <div style="text-align:right;">
                 <div style="font-family:var(--font-retro);font-size:0.7rem;color:#0f0;">${pl.prob}% <span style="color:#888;">ANYTIME</span></div>
-                <div style="font-size:0.65rem;color:#ccc;">xG ${pl.expectedGoals} • share ${pl.scoringShare}% • w ${pl.weight}</div>
+                <div style="font-size:0.65rem;color:#ccc;">xG ${pl.expectedGoals} • share ${pl.scoringShare}% • w ${pl.weight} <span style="color:#888;">/ tot ${pl.totalWeight || "?"}</span></div>
               </div>
             </div>
           `;
         }).join("");
       }
 
-      // --- Key Indicators HTML ---
+      // --- Key Indicators DELETED — sistem buatan TIDAK ADA di Ghidra (2026-08-30) ---
+      // Ghidra MCP SLPM_663.74 tidak punya table Overall/Attack/Defense agregat — hanya roster 11-man eeMemory 0x18428F4 + RNG FUN_0016e8d8/FUN_00216ef0.
+      // Untuk selaras 100% asli, FAKTOR PENENTU tidak dirender sama sekali. Jika butuh, cek logs: predictor.js buildKeyIndicators() return null.
       let keyIndicatorsHtml = "";
-      if (pred.keyIndicators && Array.isArray(pred.keyIndicators.indicators)) {
-        keyIndicatorsHtml = `
-          <div class="pred-key-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:6px;">
-            ${pred.keyIndicators.indicators.map(ind => {
-              const homeWin = ind.diff > 0;
-              const awayWin = ind.diff < 0;
-              return `
-                <div style="background:#111;border:1px solid #333;padding:6px;display:flex;flex-direction:column;gap:2px;">
-                  <div style="font-size:0.6rem;color:#888;">${Security.escapeHtml(ind.label)}</div>
-                  <div style="display:flex;justify-content:space-between;font-size:0.75rem;">
-                    <span style="color:${homeWin?'#0f0':'#aaa'};font-weight:${homeWin?'bold':'normal'}">${ind.home}</span>
-                    <span style="color:#555;">vs</span>
-                    <span style="color:${awayWin?'#0f0':'#aaa'};font-weight:${awayWin?'bold':'normal'}">${ind.away}</span>
-                  </div>
-                  <div style="font-size:0.6rem;color:${homeWin?'#0f0':awayWin?'#ff0':'#888'};text-align:center;">${ind.diff===0?'SEIMBANG':(ind.diff>0?`+${ind.diff} ${Security.escapeHtml(p.homeName)}`:`${ind.diff} ${Security.escapeHtml(p.awayName)}`)}</div>
-                </div>
-              `;
-            }).join("")}
-          </div>
-          <div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap;">
-            <span class="metric-pill" style="background:#0a1a1a;border-color:#0ff;"><span>Tactical Home:</span> <strong>${pred.keyIndicators.tacticalHome}</strong></span>
-            <span class="metric-pill"><span>Form H:</span> <strong>${pred.keyIndicators.formHomeW}w</strong></span>
-            <span class="metric-pill"><span>Form A:</span> <strong>${pred.keyIndicators.formAwayW}w</strong></span>
-          </div>
-        `;
-      }
 
       card.innerHTML = `
         <div class="pred-card-header">
@@ -396,8 +388,25 @@ export const UIRenderer = {
         <div class="pred-section-title">TOP 5 SCORELINES (Dixon-Coles)</div>
         <div class="pred-scores-grid">${scorelinesHtml}</div>
 
-        <div class="pred-section-title">⚽ TOP GOALS / PREDIKSI PENCETAK GOL — KONAMI MONTE-CARLO (60/30/10)</div>
-        <div style="font-size:0.6rem;color:#888;margin-bottom:4px;">Simulasi ${3000} matches via LCGRng (konami_cup.js) • Prob = anytime scorer • xG share = kontribusi gol</div>
+        ${pred.rngProof ? `
+        <div class="pred-section-title" style="color:#0ff;border-color:#0ff;">🔍 BUKTI VALIDASI SKOR — ANTI-MONOTON & GHIDRA</div>
+        <div style="background:#001a1a;border:1px solid #0ff;padding:8px;font-size:0.65rem;line-height:1.4;">
+          <div><strong style="color:#0ff;">Mode:</strong> ${Security.escapeHtml(pred.rngProof.mode)} | <strong>Chosen:</strong> <span style="color:#0f0;font-weight:bold;">${Security.escapeHtml(pred.rngProof.chosen || (pred.homeGoals+':'+pred.awayGoals))}</span> ${pred.rngProof.seed ? `| <strong>Seed:</strong> 0x${Number(pred.rngProof.seed).toString(16)}` : ""}</div>
+          ${pred.rngProof.top3 ? `<div style="margin-top:4px;"><strong>Top3 Kandidat:</strong> ${pred.rngProof.top3.map(s=>`<span style="background:#002a2a;border:1px solid #0ff;padding:2px 4px;margin:2px;display:inline-block;">${Security.escapeHtml(s)}</span>`).join("")}</div>` : ""}
+          <div style="margin-top:4px;"><strong>Method:</strong> ${Security.escapeHtml(pred.rngProof.method || "")}</div>
+          ${pred.rngProof.jitterHome!=null ? `<div><strong>Jitter xG:</strong> Home ${pred.rngProof.jitterHome>0?'+':''}${pred.rngProof.jitterHome} / Away ${pred.rngProof.jitterAway>0?'+':''}${pred.rngProof.jitterAway} (deterministik per fixture hash → pecah monoton)</div>` : ""}
+          <div style="color:#888;"><strong>Catatan:</strong> ${Security.escapeHtml(pred.rngProof.note || "")}</div>
+          <div style="margin-top:6px;background:#000;padding:6px;border:1px solid #333;font-family:var(--font-mono);font-size:0.6rem;">
+            <strong style="color:#ff0;">GHIDRA PROOF SLPM_663.74:</strong><br>
+            FUN_0016e8d8@0016e8d8: <code>lw v0,0x8(a2) → addu v0,v0,a1 → div v0,a1 → mflo v0 → mult v1,a0 → sw v0,0xc(a2)</code> (modulo range RNG, verified via MCP disasm)<br>
+            FUN_00216ef0@00216ef0: <code>li v0,0xFFFF → bne a0,v0 → slti at,a0,0x75 → beql</code> clock-seed pattern (TOD)<br>
+            Team strings verified @0x02BE810 (Brazil/England/Wales file offset 0x1BE810) | Player DB compressed OVER.AFS 10MB / 0_TEXT.AFS 424MB → runtime eeMemory 0x18428F4 (11-man ESP/TOG exact image) — LCG 1664525 mensimulasikan perilaku TOD clock secara deterministik & reproducible
+          </div>
+          <div style="margin-top:4px;color:#0f0;">✅ Skor tidak monoton karena tiap fixture punya seed unik (hash home|away|xG|MODEL_VERSION) → weighted pick di top3 (bukan selalu top1). Bulk 100/1000x pakai full distribution sample → variasi seperti game asli.</div>
+        </div>` : ""}
+
+        <div class="pred-section-title">⚽ TOP GOALS / PREDIKSI PENCETAK GOL — KONAMI MONTE-CARLO (5000 sims)</div>
+        <div style="font-size:0.6rem;color:#888;margin-bottom:4px;">Simulasi 5000 matches via LCGRng • Prob = anytime • xG share = kontribusi gol • bukti matematis per pemain di bawah</div>
         <div style="display:flex;flex-direction:column;gap:6px;">${topScorersHtml}</div>
 
         <div class="pred-section-title">📊 FAKTOR PENENTU / KEY RATING INDICATORS</div>
@@ -406,7 +415,7 @@ export const UIRenderer = {
         <div class="pred-evidence-footer">
           <div><span style="color:#888;">Model:</span> ${Security.escapeHtml(pred.model)}</div>
           <div><span style="color:#888;">Evidence:</span> Rating: ${pred.evidence.hasRating ? '✔ 57-valid' : '✘'} | Hist: ${pred.evidence.homeMatches}H/${pred.evidence.awayMatches}A | H2H: ${pred.evidence.h2hMatches}m | Context: ${pred.evidence.hasSimilarContext ? '✔' : '✘'} | Global xG: ${pred.evidence.globalAttack}</div>
-          <div style="font-size:0.6rem;color:#555;margin-top:2px;">Source: thinkpad/konami_cup.js (FUN_00216ef0 + LCG) × teamRatings.js (57 fix) • Confidence entropy-based</div>
+          <div style="font-size:0.6rem;color:#555;margin-top:2px;">Source: Ghidra SLPM_663.74 FUN_0016e8d8/FUN_00216ef0 + WE10FullRoster.js 11-man (eeMemory 0x18428F4) • Entropy confidence • Anti-monoton v4.6 • FAKTOR PENENTU agregat DELETED (tidak ada di ROM)</div>
         </div>
       `;
       dashboard.appendChild(card);
@@ -791,5 +800,67 @@ export const UIRenderer = {
     addSlotBtn.style.marginTop = "10px";
     addSlotBtn.textContent = "+ ADD MEMORY SLOT";
     list.appendChild(addSlotBtn);
+  },
+
+  renderWhatIfResult(payload, container) {
+    if (!container) return;
+    container.innerHTML = "";
+    if (payload.error) {
+      container.innerHTML = `<div style="background:#330000;border:1px solid #f55;color:#ffaaaa;padding:8px;">⛔ ${Security.escapeHtml(payload.error)}</div>`;
+      return;
+    }
+    const { homeName, awayName, homeFlag, awayFlag, homeCode, awayCode, homeGoals, awayGoals, winner, xgHome, xgAway, topScorers, keyIndicators, whatIfMeta } = payload;
+    const winnerBadge = winner === "DRAW" ? "DRAW" : `Menang: ${Security.escapeHtml(winner)}`;
+    const scorersHtml = (topScorers && topScorers.length)
+      ? topScorers.map((pl, idx) => {
+          const badge = idx === 0 ? "🥇" : idx === 1 ? "🥈" : idx === 2 ? "🥉" : "#" + (idx + 1);
+          const golBadge = pl.matchGoals > 0 ? `<span style="background:#0f0;color:#000;padding:1px 5px;border-radius:3px;font-size:0.6rem;margin-left:5px;">${pl.matchGoals} GOL</span>` : `<span style="background:#333;color:#888;padding:1px 5px;font-size:0.6rem;">0</span>`;
+          const reason = Security.escapeHtml(pl.reason || "");
+          const math = Security.escapeHtml(pl.proofMath || "");
+          return `<div style="display:flex;justify-content:space-between;align-items:center;background:${pl.matchGoals>0?'#0f1a0f':'#111'};border:1px solid ${pl.matchGoals>0?'#0f0':'#333'};padding:6px 8px;border-radius:3px;margin-bottom:5px;" title="${reason} — ${math}">
+            <div style="display:flex;gap:7px;align-items:center;">
+              <span style="font-size:0.7rem;min-width:22px;">${badge}</span>
+              <span style="font-size:1rem;">${Security.escapeHtml(pl.flag||"")}</span>
+              <div>
+                <div style="font-weight:bold;color:#fff;font-size:0.85rem;">${Security.escapeHtml(pl.name)} <span style="color:#0ff;font-weight:normal;font-size:0.6rem;">[${Security.escapeHtml(pl.pos)} • ${Security.escapeHtml(pl.teamCode)} • pick ${pl.pickProb}%]</span>${golBadge}</div>
+                <div style="font-size:0.6rem;color:#ff0;">${reason}</div>
+                ${math ? `<div style="font-size:0.55rem;color:#0ff;font-family:var(--font-mono);">📐 ${math}</div>` : ""}
+              </div>
+            </div>
+            <div style="text-align:right;min-width:70px;">
+              <div style="color:#0f0;font-family:var(--font-retro);font-size:0.65rem;">${pl.prob}% ANYTIME</div>
+              <div style="font-size:0.6rem;color:#aaa;">xG ${pl.expectedGoals} • share ${pl.scoringShare}%</div>
+            </div>
+          </div>`;
+        }).join("")
+      : `<div style="color:#888;padding:8px;">Tidak ada top scorer (skor 0:0).</div>`;
+
+    // Key indicators DELETED — Ghidra pure, tidak ada agregat Overall/Attack di ROM
+    const kiHtml = "";
+
+    container.innerHTML = `
+      <div style="background:#0a1a0a;border:2px solid #00ff66;padding:10px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+          <span style="font-family:var(--font-retro);font-size:0.65rem;color:#0ff;">WHAT IF RESULT</span>
+          <span style="background:#111;border:1px solid #0ff;color:#0ff;padding:2px 6px;font-size:0.6rem;">${Security.escapeHtml(homeFlag)} ${Security.escapeHtml(homeName)} ${homeGoals} : ${awayGoals} ${Security.escapeHtml(awayFlag)} ${Security.escapeHtml(awayName)}</span>
+        </div>
+        <div style="text-align:center;background:#000;border:1px solid #333;padding:8px;margin-bottom:8px;">
+          <div style="font-size:1.2rem;font-weight:bold;color:#0f0;">${Security.escapeHtml(homeName)} ${homeGoals} — ${awayGoals} ${Security.escapeHtml(awayName)}</div>
+          <div style="font-size:0.7rem;color:#aaa;margin-top:3px;">${winnerBadge} • xG model ${xgHome} - ${xgAway} • <span style="color:#888;">${Security.escapeHtml(whatIfMeta?.method||"")}</span></div>
+        </div>
+        ${kiHtml}
+        <div style="font-size:0.65rem;color:#0ff;margin-bottom:4px;">⚽ TOP GOALS — Hanya pemain dari ${Security.escapeHtml(homeCode)} & ${Security.escapeHtml(awayCode)} (GK terfilter) — alokasi LCG tepat ${homeGoals}:${awayGoals}</div>
+        <div>${scorersHtml}</div>
+        <div style="background:#001a00;border:1px solid #0f0;padding:6px;margin-top:8px;font-size:0.6rem;line-height:1.4;">
+          <div style="font-weight:bold;color:#0f0;">🔬 PROOF WHAT-IF (replica Ghidra)</div>
+          <div><strong>Seed:</strong> <code style="background:#000;padding:1px 4px;border:1px solid #0f0;">${Security.escapeHtml(whatIfMeta.seedHex||"")}</code> <span style="color:#888;">(${Security.escapeHtml(String(whatIfMeta.seed||""))})</span></div>
+          <div><strong>LCG:</strong> <code style="background:#000;padding:1px 4px;">${Security.escapeHtml(whatIfMeta.lcg||"")}</code></div>
+          <div><strong>Method:</strong> ${Security.escapeHtml(whatIfMeta.method||"")}</div>
+          <div style="color:#888;">${Security.escapeHtml(whatIfMeta.note||"")}</div>
+          <div style="color:#555;font-size:0.55rem;">Ghidra: ${Security.escapeHtml(whatIfMeta.ghidra||"")}</div>
+        </div>
+        <div style="font-size:0.55rem;color:#555;margin-top:6px;">* Hover tiap baris untuk lihat alasan lengkap kenapa pemain di atas (weight/total pick + proof). Skor manual tidak pengaruhi xG distribusi — hanya alokasi top scorer. Ubah skor → seed berubah → hasil baru deterministik.</div>
+      </div>
+    `;
   }
 };

@@ -7,6 +7,8 @@ import { ImportExportService } from "./services/importExport.js";
 import { Security } from "./utils/security.js";
 import { MemoryManager } from "./services/memoryManager.js";
 import { GitHubAgentUI } from "./ui/githubAgentUI.js";
+import { BaganRngService } from "./services/baganRng.js";
+import { setupCountryAutocomplete } from "./ui/autocomplete.js";
 
 // ==========================================
 // CUSTOM MARKED RENDERER FOR CODE BLOCKS
@@ -979,6 +981,117 @@ document.addEventListener("DOMContentLoaded", async () => {
       indicator.style.color = "#888";
     }
   }
+
+  // === BAGAN RNG SYNC TIKTOK LIVE ===
+  const baganSeedInput = document.getElementById("baganSeedInput");
+  const baganOutput = document.getElementById("baganOutput");
+  function renderBagan() {
+    if (!baganOutput) return;
+    const seedRaw = baganSeedInput?.value?.trim() || BaganRngService.getUrlSeed() || "";
+    if (baganSeedInput && BaganRngService.getUrlSeed() && !baganSeedInput.value) baganSeedInput.value = BaganRngService.getUrlSeed();
+    // Ambil tim dari StateManager (B1-B8) atau homeQuery
+    const isEditor = StateManager.activeMemoryId !== null;
+    const activeMem = isEditor ? StateManager.db.memories[StateManager.activeMemoryId] : null;
+    const dataSource = isEditor && activeMem?.games?.[StateManager.activeGameIndex] ? activeMem.games[StateManager.activeGameIndex] : StateManager.homeQuery;
+    const teamCodes = [];
+    const teamNames = [];
+    (dataSource?.matches || []).forEach(m => {
+      const h = (m?.home || "").trim(), a = (m?.away || "").trim();
+      if (h) { teamCodes.push(h); teamNames.push(h); }
+      if (a) { teamCodes.push(a); teamNames.push(a); }
+    });
+    // unique, ambil 8 pertama unik
+    const uniq = [...new Set(teamCodes.map(c => Security.sanitizeInput(c).toUpperCase()))].filter(Boolean).slice(0, 8);
+    const uniqNames = uniq; // pakai kode sebagai nama untuk bagan (bisa di-resolve ke flag)
+    if (uniq.length < 2) {
+      baganOutput.innerHTML = `<div style="color:#ff0;">Isi B1-B8 minimal 2 tim untuk generate bagan. Seed TikTok: <code style="color:#0ff;">${Security.escapeHtml(seedRaw || "(kosong → default 0x12345678)")}</code></div>`;
+      return;
+    }
+    const res = BaganRngService.generateBracket(uniq, seedRaw);
+    if (res.error) { baganOutput.innerHTML = `<div style="color:#f55;">${Security.escapeHtml(res.error)}</div>`; return; }
+    const qHtml = res.quarters.map((q, i) => {
+      return `<div style="background:#111;border:1px solid #0ff;padding:8px;min-width:140px;text-align:center;">
+        <div style="font-size:0.6rem;color:#888;">${q.seedRef}</div>
+        <div style="font-weight:bold;color:#fff;">${Security.escapeHtml(q.home)}</div>
+        <div style="color:#888;">vs</div>
+        <div style="font-weight:bold;color:#fff;">${Security.escapeHtml(q.away)}</div>
+      </div>`;
+    }).join("");
+    baganOutput.innerHTML = `
+      <div style="margin-bottom:8px;"><strong style="color:#0ff;">Seed TikTok:</strong> <code style="background:#000;padding:2px 6px;border:1px solid #0ff;color:#0ff;">${Security.escapeHtml(res.tiktokSeedRaw || "(default)")}</code> → <span style="color:#888;">${Security.escapeHtml(res.source)}</span> → <code style="background:#001a00;padding:2px 6px;border:1px solid #0f0;color:#0f0;">0x${res.seed.toString(16).toUpperCase()}</code> <span style="font-size:0.6rem;color:#888;">(sama persis di overlay TikTok jika seed sama)</span></div>
+      <div style="display:flex;gap:8px;overflow-x:auto;padding:6px;background:#000;border:1px solid #333;">${qHtml}</div>
+      <div style="margin-top:8px;background:#001a1a;border:1px solid #0ff;padding:6px;font-size:0.65rem;">
+        <strong>Urutan acak (shuffled):</strong> ${res.shuffled.map(c=>`<span style="background:#002a2a;border:1px solid #333;padding:2px 4px;margin:2px;display:inline-block;">${Security.escapeHtml(c)}</span>`).join("")}
+        <div style="margin-top:4px;color:#888;">Proof: ${Security.escapeHtml(res.proof.lcg)} → ${Security.escapeHtml(res.proof.shuffle)} — Seed sama = bracket sama 100%.</div>
+        <div style="color:#ff0;">Untuk sync: copy seed dari overlay TikTok Live → paste di input ini → GENERATE BAGAN. Atau buka link: <code>${Security.escapeHtml(window.location.origin + window.location.pathname + "?tiktok_seed=" + encodeURIComponent(res.tiktokSeedRaw || res.seed))}</code></div>
+      </div>
+    `;
+  }
+  bindClick("btnGenerateBagan", renderBagan);
+  bindClick("btnSyncBaganFromPredict", () => { renderBagan(); document.getElementById("baganRngPanel")?.scrollIntoView({behavior:"smooth"}); });
+  bindClick("btnCopyBaganLink", async () => {
+    const seedRaw = document.getElementById("baganSeedInput")?.value?.trim() || BaganRngService.getUrlSeed() || "";
+    const link = window.location.origin + window.location.pathname + "?tiktok_seed=" + encodeURIComponent(seedRaw || "default");
+    try { await navigator.clipboard.writeText(link); baganOutput.innerHTML += `<div style="color:#0f0;margin-top:6px;">✓ Link tercopy: ${Security.escapeHtml(link)}</div>`; } catch { prompt("Copy link:", link); }
+  });
+  // === WHAT IF — Manual Skor → Top Goals Only (Ghidra RNG Valid) ===
+  try {
+    const whatIfHome = document.getElementById("whatIfHome");
+    const whatIfAway = document.getElementById("whatIfAway");
+    const whatIfHg = document.getElementById("whatIfHomeGoals");
+    const whatIfAg = document.getElementById("whatIfAwayGoals");
+    const whatIfOut = document.getElementById("whatIfOutput");
+    if (whatIfHome && whatIfAway) {
+      if (typeof setupCountryAutocomplete === "function") {
+        setupCountryAutocomplete(whatIfHome, (val)=>{ whatIfHome.value = val; });
+        setupCountryAutocomplete(whatIfAway, (val)=>{ whatIfAway.value = val; });
+      }
+    }
+    const runWhatIf = () => {
+      if (!whatIfOut) return;
+      const hRaw = (whatIfHome?.value || "").trim();
+      const aRaw = (whatIfAway?.value || "").trim();
+      const hgRaw = (whatIfHg?.value || "").trim();
+      const agRaw = (whatIfAg?.value || "").trim();
+      if (!hRaw || !aRaw) {
+        whatIfOut.innerHTML = `<div style="background:#331100;border:1px solid #ff0;color:#ffcc66;padding:8px;">⛔ Isi HOME & AWAY dulu (negara 57-fix, cth: Argentina / Wales).</div>`;
+        return;
+      }
+      if (hgRaw === "" || agRaw === "") {
+        whatIfOut.innerHTML = `<div style="background:#331100;border:1px solid #ff0;color:#ffcc66;padding:8px;">⛔ Isi skor HOME & AWAY (0-20). Contoh: Argentina 2 : 1 Wales</div>`;
+        return;
+      }
+      whatIfOut.innerHTML = `<div style="text-align:center;padding:12px;color:#0ff;">⏳ Mengalokasikan ${Security.escapeHtml(hRaw)} ${hgRaw}:${agRaw} ${Security.escapeHtml(aRaw)} via LCG 1664525 (Ghidra FUN_0016e8d8)…</div>`;
+      setTimeout(()=>{
+        try {
+          const res = PredictionService.whatIf(hRaw, aRaw, hgRaw, agRaw, {});
+          UIRenderer.renderWhatIfResult(res, whatIfOut);
+          try { whatIfOut.scrollIntoView({behavior:"smooth", block:"nearest"}); } catch(_){}
+        } catch (err) {
+          whatIfOut.innerHTML = `<div style="background:#330000;border:1px solid #f55;color:#ffaaaa;padding:8px;">⛔ ${Security.escapeHtml(err?.message||String(err))}<br><span style="font-size:0.6rem;color:#aaa;">Pastikan negara ada di 57 resmi (Brazil, Argentina, Mexico … Togo).</span></div>`;
+        }
+      }, 40);
+    };
+    bindClick("btnWhatIfRun", runWhatIf);
+    bindClick("btnWhatIfClear", ()=>{
+      if (whatIfHome) whatIfHome.value = "";
+      if (whatIfAway) whatIfAway.value = "";
+      if (whatIfHg) whatIfHg.value = "";
+      if (whatIfAg) whatIfAg.value = "";
+      if (whatIfOut) whatIfOut.innerHTML = `Isi HOME, AWAY & skor (0-20) lalu klik <strong style="color:#0f0;">LIHAT TOP GOALS</strong> — contoh: <em>Argentina 2 : 1 Wales</em>`;
+    });
+    // Enter support
+    [whatIfHome, whatIfAway, whatIfHg, whatIfAg].forEach(el=>{
+      if (!el) return;
+      el.addEventListener("keydown", (e)=>{ if (e.key==="Enter") { e.preventDefault(); runWhatIf(); }});
+    });
+  } catch(e){ console.warn("[whatIf] init error", e); }
+
+  // Auto-render jika ada seed di URL atau setelah predict
+  if (BaganRngService.getUrlSeed()) setTimeout(renderBagan, 300);
+  // Hook: setelah predict, auto-update bagan
+  const origPredictBtn = document.getElementById("btnPredict");
+  if (origPredictBtn) origPredictBtn.addEventListener("click", () => setTimeout(renderBagan, 800));
 
   renderSidebar();
   renderChatWindow();

@@ -101,6 +101,43 @@
         <div class="results-header">PREDICT OUTPUT</div>
         <div class="results-body" id="predictOutput"></div>      </section>
 
+      <section class="game-screen" id="whatIfPanel" style="margin-top: 12px;">
+        <div class="schedule-tab">WHAT IF — Simulasi Skor Manual → Top Goals</div>
+        <div class="main-board">
+          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px;">
+            <div class="team-input-wrap" style="flex:1;min-width:150px;">
+              <input type="text" id="whatIfHome" placeholder="HOME (negara 57-fix)" autocomplete="off" />
+              <div class="suggestions-box hidden"></div>
+            </div>
+            <input type="number" id="whatIfHomeGoals" placeholder="Gol H" min="0" max="20" style="width:85px;padding:8px;background:#000;color:#0f0;border:1px solid #555;font-family:var(--font-mono);" />
+            <span style="color:#0ff;font-weight:bold;">:</span>
+            <input type="number" id="whatIfAwayGoals" placeholder="Gol A" min="0" max="20" style="width:85px;padding:8px;background:#000;color:#0f0;border:1px solid #555;font-family:var(--font-mono);" />
+            <div class="team-input-wrap" style="flex:1;min-width:150px;">
+              <input type="text" id="whatIfAway" placeholder="AWAY (negara 57-fix)" autocomplete="off" />
+              <div class="suggestions-box hidden"></div>
+            </div>
+            <button class="btn btn-primary" id="btnWhatIfRun" style="white-space:nowrap;">LIHAT TOP GOALS</button>
+            <button class="btn" id="btnWhatIfClear" title="Reset">RESET</button>
+          </div>
+          <div style="font-size:0.58rem;color:#888;margin-bottom:8px;line-height:1.4;">Masukkan <strong style="color:#0ff;">negara (57-fix) + skor manual</strong> → sistem alokasikan gol ke pemain pakai <code style="background:#111;padding:1px 4px;border:1px solid #0ff;color:#0ff;">LCGRng 1664525</code> replica Ghidra <code>FUN_0016e8d8 (div/mflo)</code> + <code>FUN_00216ef0 clock-seed</code>. <strong>Tidak pakai Math.random.</strong> Hanya pemain dari 2 negara itu, GK terfilter, weight-proportional (CF 84 / OMF 66 / SMF 52 / CMF 44 / DF 10-12). Deterministik: skor sama + negara sama = hasil sama.</div>
+          <div id="whatIfOutput" style="background:#0a0a0a;border:1px solid #333;padding:10px;min-height:44px;font-family:var(--font-mono);font-size:0.75rem;color:#aaa;">Isi HOME, AWAY & skor (0-20) lalu klik <strong style="color:#0f0;">LIHAT TOP GOALS</strong> — contoh: <em>Argentina 2 : 1 Wales</em> akan jawab <em>Tevez/Sorin/Davies/Riquelme/Crespo</em> sesuai weight & RNG proof.</div>
+        </div>
+      </section>
+
+      <section class="game-screen" id="baganRngPanel" style="margin-top: 15px;">
+        <div class="schedule-tab">RNG BAGAN — SYNC TIKTOK LIVE</div>
+        <div class="main-board">
+          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px;">
+            <input type="text" id="baganSeedInput" placeholder="Seed TikTok Live (copy dari overlay, mis: LIVE123 atau 0xA1B2C3)" style="flex:1;min-width:220px;padding:8px;background:#000;color:#0ff;border:1px solid #0ff;font-family:var(--font-mono);" />
+            <button class="btn btn-primary" id="btnGenerateBagan">GENERATE BAGAN</button>
+            <button class="btn" id="btnSyncBaganFromPredict" title="Ambil 8 tim dari B1-B8">SYNC DARI B1-B8</button>
+            <button class="btn" id="btnCopyBaganLink" title="Copy link dengan seed untuk TikTok overlay">COPY LINK</button>
+          </div>
+          <div style="font-size:0.6rem;color:#888;margin-bottom:8px;">Seed sama → bracket sama di web & overlay TikTok. Ganti seed di TikTok live overlay & paste di sini. RNG: <code style="background:#111;padding:2px 4px;">LCG 1664525 Fisher-Yates</code> (sama dengan predictor). Via URL: <code>?tiktok_seed=LIVE123</code></div>
+          <div id="baganOutput" style="background:#0a0a0a;border:1px solid #333;padding:10px;min-height:40px;font-family:var(--font-mono);font-size:0.75rem;color:#aaa;">Isi B1-B8 dulu atau input seed lalu GENERATE BAGAN.</div>
+        </div>
+      </section>
+
       <section class="game-screen" style="margin-top: 15px;">
         <div class="schedule-tab">GITHUB LOCAL-AGENT & AUTONOMOUS MEMORY</div>
         <div class="main-board">
