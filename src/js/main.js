@@ -1,6 +1,6 @@
 import { StateManager } from "./state/appState.js";
 import { NavigationManager } from "./ui/navigation.js";
-import { PredictionService } from "./services/predictor.js";
+import { PredictionService, PREDICTOR_CONFIG } from "./services/predictor.js";
 import { UIRenderer } from "./ui/uiRenderer.js";
 import { MatchingEngine } from "./services/matchingEngine.js";
 import { ImportExportService } from "./services/importExport.js";
@@ -221,100 +221,87 @@ document.addEventListener("DOMContentLoaded", async () => {
 
           UIRenderer.renderPredictionDashboard(predictions, predictOutput);
 
-          // === AUTO-FILL TABLES — B1-B7 skor X:X & G1-G7 negara/pemain/gol (WE10 100% akurat) ===
+          // === AUTO-FILL (SPEC R) — respect PREDICTOR_CONFIG.AUTO_APPLY (default false) ===
           try {
             const validPreds = predictions.filter(p => !p.error && p.prediction);
             if (validPreds.length > 0) {
-              let filledScores = 0, filledGoals = 0;
-              // 1) Auto-fill skor B1-B8 (B8 jika enabled)
-              validPreds.forEach(p => {
-                const idx = p.row - 1;
-                if (idx < 0 || idx >= 8) return;
-                const scoreStr = `${p.prediction.homeGoals}:${p.prediction.awayGoals}`;
-                if (isEditor) {
-                  const currentScore = StateManager.db.memories[StateManager.activeMemoryId]?.games[StateManager.activeGameIndex]?.matches[idx]?.score || "";
-                  // isi jika kosong atau X:X agar tidak overwrite manual yang sudah ada? spec minta tetap isi biar ga kosong → overwrite jika kosong
-                  if (!currentScore || currentScore.trim() === "" ) {
+              const doFillScores = () => {
+                let filledScores=0;
+                validPreds.forEach(p => {
+                  const idx = p.row - 1;
+                  if (idx < 0 || idx >= 8) return;
+                  const scoreStr = `${p.prediction.homeGoals}:${p.prediction.awayGoals}`;
+                  if (isEditor) {
                     MemoryManager.updateMatchField(StateManager.activeMemoryId, StateManager.activeGameIndex, idx, "score", scoreStr, false);
                     if (dataSource.matches[idx]) dataSource.matches[idx].score = scoreStr;
                     filledScores++;
-                  } else if (currentScore !== scoreStr) {
-                    // tetap update ke prediksi terbaru agar akurat WE10 (boleh overwrite)
-                    MemoryManager.updateMatchField(StateManager.activeMemoryId, StateManager.activeGameIndex, idx, "score", scoreStr, false);
-                    if (dataSource.matches[idx]) dataSource.matches[idx].score = scoreStr;
-                    filledScores++;
-                  }
-                } else {
-                  const cur = StateManager.homeQuery.matches[idx]?.score || "";
-                  if (!cur || cur.trim() === "") {
-                    StateManager.homeQuery.matches[idx].score = scoreStr;
-                    filledScores++;
-                  } else if (cur !== scoreStr) {
-                    StateManager.homeQuery.matches[idx].score = scoreStr;
-                    filledScores++;
-                  }
-                }
-              });
-              // 2) Auto-fill TOP GOALS G1-G7 — SCORE-CONSISTENT: pakai matchGoals (integer alokasi tepat homeGoals:awayGoals), hanya pemain dari tim yang main di B1-B8
-              const globalMap = new Map();
-              validPreds.forEach(p => {
-                (p.prediction.topScorers || []).forEach(pl => {
-                  // filter: hanya pemain yang cetak gol di prediksi scoreline ini (matchGoals>0) — jgn yg ga main masuk list
-                  const actual = pl.matchGoals != null ? pl.matchGoals : 0;
-                  if (actual <= 0) return;
-                  const key = pl.name + "|" + pl.teamCode;
-                  const ex = globalMap.get(key);
-                  if (ex) {
-                    ex.totalActual += actual;
-                    ex.totalXG += pl.expectedGoals;
-                    ex.appearances += 1;
-                    ex.maxProb = Math.max(ex.maxProb, pl.prob);
-                    ex.reason = pl.reason || ex.reason;
                   } else {
-                    globalMap.set(key, {
-                      name: pl.name, teamCode: pl.teamCode, teamName: pl.teamName, flag: pl.flag, pos: pl.pos,
-                      totalActual: actual, totalXG: pl.expectedGoals, appearances: 1, maxProb: pl.prob, reason: pl.reason || ""
-                    });
+                    StateManager.homeQuery.matches[idx].score = scoreStr;
+                    filledScores++;
                   }
                 });
-              });
-              // Jika semua 0-0 (no goals), fallback: ambil expected top tapi tetap filter ke tim yang main
-              if (globalMap.size === 0) {
+                UIRenderer.renderMatchGrid();
+                if (!isEditor) StateManager.debouncedSave();
+                return filledScores;
+              };
+              const doFillGoals = () => {
+                const globalMap = new Map();
                 validPreds.forEach(p => {
-                  (p.prediction.topScorers || []).slice(0,2).forEach(pl => {
+                  (p.prediction.topScorers || []).forEach(pl => {
+                    const actual = pl.matchGoals != null ? pl.matchGoals : 0;
+                    if (actual <= 0) return;
                     const key = pl.name + "|" + pl.teamCode;
-                    if (!globalMap.has(key)) globalMap.set(key, { name: pl.name, teamCode: pl.teamCode, teamName: pl.teamName, flag: pl.flag, pos: pl.pos, totalActual: 0, totalXG: pl.expectedGoals, appearances: 1, maxProb: pl.prob, reason: pl.reason || "" });
+                    const ex = globalMap.get(key);
+                    if (ex) { ex.totalActual += actual; ex.totalXG += pl.expectedGoals; ex.appearances += 1; ex.maxProb = Math.max(ex.maxProb, pl.prob); ex.reason = pl.reason || ex.reason; }
+                    else globalMap.set(key, { name: pl.name, teamCode: pl.teamCode, teamName: pl.teamName, flag: pl.flag, pos: pl.pos, totalActual: actual, totalXG: pl.expectedGoals, appearances: 1, maxProb: pl.prob, reason: pl.reason || "" });
                   });
                 });
-              }
-              const globalRank = [...globalMap.values()].sort((a,b)=> (b.totalActual - a.totalActual) || (b.totalXG - a.totalXG) || (b.maxProb - a.maxProb)).slice(0,7);
-              // Fill G1..G7 dengan gol INTEGER konsisten — jumlah gol pemain tidak boleh melebihi total gol tim di skor prediksi
-              globalRank.forEach((pl, gi) => {
-                const golInt = String(pl.totalActual > 0 ? pl.totalActual : Math.max(1, Math.round(pl.totalXG))); // integer konsisten
-                const countryName = pl.teamName || pl.teamCode;
-                if (isEditor) {
-                  MemoryManager.updateTopGoalField(StateManager.activeMemoryId, StateManager.activeGameIndex, gi, "country", countryName, false);
-                  MemoryManager.updateTopGoalField(StateManager.activeMemoryId, StateManager.activeGameIndex, gi, "player", pl.name, false);
-                  MemoryManager.updateTopGoalField(StateManager.activeMemoryId, StateManager.activeGameIndex, gi, "goals", golInt, false);
-                  if (dataSource.topGoals[gi]) {
-                    dataSource.topGoals[gi].country = countryName;
-                    dataSource.topGoals[gi].player = pl.name;
-                    dataSource.topGoals[gi].goals = golInt;
-                  }
-                } else {
-                  if (StateManager.homeQuery.topGoals[gi]) {
-                    StateManager.homeQuery.topGoals[gi].country = countryName;
-                    StateManager.homeQuery.topGoals[gi].player = pl.name;
-                    StateManager.homeQuery.topGoals[gi].goals = golInt;
-                  }
+                if (globalMap.size === 0) {
+                  validPreds.forEach(p => {
+                    (p.prediction.topScorers || []).slice(0,2).forEach(pl => {
+                      const key = pl.name + "|" + pl.teamCode;
+                      if (!globalMap.has(key)) globalMap.set(key, { name: pl.name, teamCode: pl.teamCode, teamName: pl.teamName, flag: pl.flag, pos: pl.pos, totalActual: 0, totalXG: pl.expectedGoals, appearances: 1, maxProb: pl.prob, reason: pl.reason || "" });
+                    });
+                  });
                 }
-                filledGoals++;
-              });
-              // Kosongkan sisa G yang tidak terisi (jika validPreds <7, sisanya biarkan tapi jangan overwrite dengan kosong? spec minta 7 baris terisi jika ada 7, kalau cuma 3 match ya 6 top scorer tetap penuh)
-              // Trigger re-render grid agar input X:X & G tampil langsung tanpa refresh
-              UIRenderer.renderMatchGrid();
-              if (!isEditor) StateManager.debouncedSave();
-              console.log(`[Predict] Auto-fill: ${filledScores} skor & ${filledGoals} top goals (Ghidra 100% WE10)`);
+                const globalRank = [...globalMap.values()].sort((a,b)=> (b.totalActual - a.totalActual) || (b.totalXG - a.totalXG) || (b.maxProb - a.maxProb)).slice(0,7);
+                let filledGoals=0;
+                globalRank.forEach((pl, gi) => {
+                  const golInt = String(pl.totalActual > 0 ? pl.totalActual : Math.max(1, Math.round(pl.totalXG)));
+                  const countryName = pl.teamName || pl.teamCode;
+                  if (isEditor) {
+                    MemoryManager.updateTopGoalField(StateManager.activeMemoryId, StateManager.activeGameIndex, gi, "country", countryName, false);
+                    MemoryManager.updateTopGoalField(StateManager.activeMemoryId, StateManager.activeGameIndex, gi, "player", pl.name, false);
+                    MemoryManager.updateTopGoalField(StateManager.activeMemoryId, StateManager.activeGameIndex, gi, "goals", golInt, false);
+                    if (dataSource.topGoals[gi]) { dataSource.topGoals[gi].country = countryName; dataSource.topGoals[gi].player = pl.name; dataSource.topGoals[gi].goals = golInt; }
+                  } else {
+                    if (StateManager.homeQuery.topGoals[gi]) { StateManager.homeQuery.topGoals[gi].country = countryName; StateManager.homeQuery.topGoals[gi].player = pl.name; StateManager.homeQuery.topGoals[gi].goals = golInt; }
+                  }
+                  filledGoals++;
+                });
+                UIRenderer.renderMatchGrid();
+                if (!isEditor) StateManager.debouncedSave();
+                return filledGoals;
+              };
+
+              if (PREDICTOR_CONFIG.AUTO_APPLY) {
+                const s = doFillScores(); const g = doFillGoals();
+                console.log(`[Predict] Auto-fill (AUTO_APPLY=true): ${s} skor & ${g} top goals`);
+              } else {
+                const bar = document.createElement("div");
+                bar.style.cssText = "background:#001a00;border:1px solid #0f0;padding:8px;margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;";
+                bar.innerHTML = `
+                  <span style="font-size:0.65rem;color:#0ff;">APPLY PREDICTION?</span>
+                  <button id="btnApplyScores" class="btn" style="background:#002a00;border:1px solid #0f0;color:#0f0;padding:6px 10px;cursor:pointer;">APPLY SCORES TO B1-B8</button>
+                  <button id="btnApplyGoals" class="btn" style="background:#002a00;border:1px solid #ff0;color:#ff0;padding:6px 10px;cursor:pointer;">APPLY TOP GOALS (G1-G7)</button>
+                  <button id="btnApplyBoth" class="btn btn-primary" style="padding:6px 10px;cursor:pointer;">APPLY BOTH</button>
+                  <span style="font-size:0.6rem;color:#888;">Dataset tidak akan tertimpa tanpa konfirmasi (SPEC R).</span>
+                `;
+                predictOutput.appendChild(bar);
+                document.getElementById("btnApplyScores")?.addEventListener("click", ()=>{ const n=doFillScores(); const b=document.getElementById("btnApplyScores"); if(b){b.textContent=`✓ ${n} SCORES APPLIED`; b.disabled=true;} });
+                document.getElementById("btnApplyGoals")?.addEventListener("click", ()=>{ const n=doFillGoals(); const b=document.getElementById("btnApplyGoals"); if(b){b.textContent=`✓ ${n} GOALS APPLIED`; b.disabled=true;} });
+                document.getElementById("btnApplyBoth")?.addEventListener("click", ()=>{ const s=doFillScores(); const g=doFillGoals(); const b=document.getElementById("btnApplyBoth"); if(b){b.textContent=`✓ ${s}+${g} APPLIED`; b.disabled=true;} document.getElementById("btnApplyScores")?.setAttribute("disabled",""); document.getElementById("btnApplyGoals")?.setAttribute("disabled",""); });
+              }
             }
           } catch (fillErr) {
             console.warn("[Predict] Auto-fill error", fillErr);

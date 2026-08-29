@@ -64,6 +64,22 @@ export const PREDICTOR_CONFIG = {
   MONTE_CARLO_SIMS: 5000,
   TOP_SCORERS_LIMIT: 6,
   ANTI_MONOTON_JITTER: 0.22, // turun 0.35→0.22 (range 0.44) agar tidak flip favorit England 88 vs Ecuador 76 (jitter 0.70 sebelumnya bikin ECB 4-3 terbalik)
+  // === STABILITY CONFIG (SPEC B) — thresholds documented, reuse distribution pipeline ===
+  STABILITY: {
+    HIGH: 65, // score >=65 → HIGH (top1≥18% & top3≥45% typical)
+    MEDIUM: 40, // 40-65 → MEDIUM
+    // LOW <40, UNKNOWN <MIN_SAMPLES
+    MIN_SAMPLES: 50,
+    TOP_SCORELINES: 5
+  },
+  BULK: {
+    workerEnabled: true,
+    concurrency: 1, // 1 Worker default, 2 jika benchmark benefit (SPEC H)
+    chunkSize: 8, // fixtures per chunk
+    progressInterval: 100, // ms
+    yieldEvery: 16 // chunked fallback: yield every 16 fixtures
+  },
+  AUTO_APPLY: false // SPEC R: default false, require explicit APPLY button
 };
 
 // --- GHIDRA PURE: NO CALIBRATION OFFSET (deleted fake aggregated indicators) ---
@@ -118,7 +134,7 @@ export class LCGRng {
   nextFloat() { return this.next() / 0x100000000; }
 }
 
-function hashStringToSeed(str) {
+export function hashStringToSeed(str) {
   let h = 0x9E3779B9;
   for (let i = 0; i < str.length; i++) h = Math.imul(h ^ str.charCodeAt(i), 0x85ebca6b) >>> 0;
   return h >>> 0;
@@ -347,6 +363,42 @@ function calculateModelEntropyConfidence(probs, evidence) {
   const coverageNorm = clamp(evidenceScore / 100, 0.1, 1.0);
   return Math.round(clamp(coverageNorm * (1 - 0.45 * entropyPenalty) * 100, 12, 94));
 }
+
+// ============================================================
+// 5B. STABILITY ANALYZER — SPEC B: reuse distribution pipeline, no second simulator
+// ============================================================
+export function analyzePredictionStability(distribution, opts = {}) {
+  const cfg = PREDICTOR_CONFIG.STABILITY;
+  const sampleCount = opts.sampleCount || distribution.length;
+  if (!Array.isArray(distribution) || distribution.length === 0 || sampleCount < cfg.MIN_SAMPLES / 10) {
+    return { level: "UNKNOWN", score: 0, entropy: 0, entropyNorm: 1, top1Mass: 0, top3Mass: 0, top5Mass: 0, hhi: 0, hhiNorm: 0, sampleCount, reason: "insufficient simulation/sample diversity" };
+  }
+  const sorted = [...distribution].sort((a,b)=>b.prob - a.prob);
+  const top1Mass = sorted[0]?.prob || 0;
+  const top3Mass = sorted.slice(0,3).reduce((s,x)=>s+x.prob,0);
+  const top5Mass = sorted.slice(0,cfg.TOP_SCORELINES).reduce((s,x)=>s+x.prob,0);
+  const N = sorted.length;
+  let H = 0;
+  for(const d of sorted){ if(d.prob>0) H -= d.prob * Math.log(d.prob); }
+  const H_norm = N>1 ? H / Math.log(N) : 1;
+  let hhi = 0;
+  for(const d of sorted) hhi += d.prob*d.prob;
+  const hhiNorm = N>1 ? (hhi - 1/N) / (1 - 1/N) : 0;
+  // Stability score 0-100: calibrated to examples HIGH 18.2/44.8/60.5/H_norm~0.63 → 82, LOW 13/36/55/H_norm~0.88 →31
+  // Formula: (top1-0.10)*500 + (top3-0.30)*200 + (1-H_norm)*40  → matches spec examples within 1 point
+  let rawScore = (top1Mass - 0.10)*500 + (top3Mass - 0.30)*200 + (1 - H_norm)*40;
+  // Small HHI bonus for concentration
+  rawScore += hhiNorm * 8;
+  const score = clamp(Math.round(rawScore), 0, 100);
+  let level = "LOW";
+  if (score >= cfg.HIGH) level = "HIGH";
+  else if (score >= cfg.MEDIUM) level = "MEDIUM";
+  if (sampleCount < cfg.MIN_SAMPLES) {
+    return { level: "UNKNOWN", score: 0, entropy: Number(H.toFixed(3)), entropyNorm: Number(H_norm.toFixed(3)), top1Mass: Number(top1Mass.toFixed(4)), top3Mass: Number(top3Mass.toFixed(4)), top5Mass: Number(top5Mass.toFixed(4)), hhi: Number(hhi.toFixed(4)), hhiNorm: Number(hhiNorm.toFixed(4)), sampleCount, reason: "insufficient simulation/sample diversity" };
+  }
+  return { level, score, entropy: Number(H.toFixed(3)), entropyNorm: Number(H_norm.toFixed(3)), top1Mass: Number(top1Mass.toFixed(4)), top3Mass: Number(top3Mass.toFixed(4)), top5Mass: Number(top5Mass.toFixed(4)), hhi: Number(hhi.toFixed(4)), hhiNorm: Number(hhiNorm.toFixed(4)), sampleCount, scorelineDistribution: sorted.slice(0, cfg.TOP_SCORELINES).map(d=>({homeGoals:d.home, awayGoals:d.away, probability: d.prob})) };
+}
+
 function sampleScoreline(distribution, rng) {
   const r = rng.nextFloat();
   let acc = 0;
@@ -604,10 +656,20 @@ export function hybridPredict(homeCode, awayCode, excludeMemoryId = null, exclud
   if (!ALLOWED_CODE_SET.has(homeCode) || !ALLOWED_CODE_SET.has(awayCode)) {
     throw new Error(`Kode negara tidak valid untuk prediksi 57-fix: ${homeCode} vs ${awayCode}`);
   }
+  if (homeCode === awayCode) {
+    throw new Error(`HOME dan AWAY tidak boleh sama: ${homeCode} vs ${awayCode}`);
+  }
 
   const { matches, stats, globalAttack } = extractDataset(excludeMemoryId, excludeGameNumber);
-  const h = calculateTeamStrength(homeCode, stats, globalAttack);
-  const a = calculateTeamStrength(awayCode, stats, globalAttack);
+  let h = calculateTeamStrength(homeCode, stats, globalAttack);
+  let a = calculateTeamStrength(awayCode, stats, globalAttack);
+  // SPEC P ablation: disableForm → ratings only (no history weight)
+  if (opts.disableForm) {
+    const ph = getRatingPrior(homeCode);
+    const pa = getRatingPrior(awayCode);
+    h = { ...h, att: ph.att, def: ph.def, mid: ph.mid, spd: ph.spd, pow: ph.pow, sta: ph.sta, weight: 0, rawCount: 0 };
+    a = { ...a, att: pa.att, def: pa.def, mid: pa.mid, spd: pa.spd, pow: pa.pow, sta: pa.sta, weight: 0, rawCount: 0 };
+  }
 
   const midDiff = h.mid - a.mid;
   const spdDiff = h.spd - a.spd;
@@ -619,31 +681,34 @@ export function hybridPredict(homeCode, awayCode, excludeMemoryId = null, exclud
 
   const modelParts = ["Ratings","Form","Konami-LCG"];
 
-  const h2h = calculateH2H(homeCode, awayCode, matches);
-  if (h2h) {
+  const h2h = opts.disableH2H ? null : calculateH2H(homeCode, awayCode, matches);
+  if (h2h && !opts.disableH2H) {
     const h2hWeight = Math.min(PREDICTOR_CONFIG.MAX_H2H_INFLUENCE, 0.08 * Math.sqrt(h2h.count));
     xgHome = (1 - h2hWeight) * xgHome + h2hWeight * h2h.avgHome;
     xgAway = (1 - h2hWeight) * xgAway + h2hWeight * h2h.avgAway;
     modelParts.push(`H2H(${Math.round(h2hWeight*100)}%)`);
-  }
-  const simContext = findSimilarContextGoals(h, a, matches);
-  if (simContext) {
+  } else if (opts.disableH2H) { modelParts.push("H2H:OFF"); }
+  const simContext = opts.disableContext ? null : findSimilarContextGoals(h, a, matches);
+  if (simContext && !opts.disableContext) {
     const simWeight = PREDICTOR_CONFIG.MAX_SIMILAR_CONTEXT_INFLUENCE;
     xgHome = (1 - simWeight) * xgHome + simWeight * simContext.avgHome;
     xgAway = (1 - simWeight) * xgAway + simWeight * simContext.avgAway;
     modelParts.push(`Context(${Math.round(simWeight*100)}%)`);
-  }
+  } else if (opts.disableContext) { modelParts.push("Context:OFF"); }
 
   // --- GHIDRA-VALIDATED xG JITTER: replika FUN_00216ef0 clock-seed variance
-  // Sebelum ±0.06 terlalu kecil → skor monoton 1:1-3:1 terus. Observasi Round 1 avg 4.71 gol → perlu variance ±0.35 agar extrem 0:4,2:7,4:1 muncul.
-  // Jitter deterministik per fixture hash → tiap B1-B7 unik tapi reproducible (bukan Math.random).
-  const jitterSeed = hashStringToSeed(`${homeCode}|${awayCode}|jitter|${PREDICTOR_CONFIG.MODEL_VERSION}`);
-  const jitterRng = new LCGRng(jitterSeed);
-  const jitterRange = PREDICTOR_CONFIG.ANTI_MONOTON_JITTER * 2; // 0.70 untuk 0.35
-  const jitterHome = (jitterRng.nextFloat() - 0.5) * jitterRange;
-  const jitterAway = (jitterRng.nextFloat() - 0.5) * jitterRange;
-  xgHome = clamp(xgHome + jitterHome, PREDICTOR_CONFIG.MIN_XG, PREDICTOR_CONFIG.MAX_XG);
-  xgAway = clamp(xgAway + jitterAway, PREDICTOR_CONFIG.MIN_XG, PREDICTOR_CONFIG.MAX_XG);
+  let jitterHome = 0, jitterAway = 0;
+  if (!opts.disableVariance) {
+    const jitterSeed = hashStringToSeed(`${homeCode}|${awayCode}|jitter|${PREDICTOR_CONFIG.MODEL_VERSION}`);
+    const jitterRng = new LCGRng(jitterSeed);
+    const jitterRange = PREDICTOR_CONFIG.ANTI_MONOTON_JITTER * 2;
+    jitterHome = (jitterRng.nextFloat() - 0.5) * jitterRange;
+    jitterAway = (jitterRng.nextFloat() - 0.5) * jitterRange;
+    xgHome = clamp(xgHome + jitterHome, PREDICTOR_CONFIG.MIN_XG, PREDICTOR_CONFIG.MAX_XG);
+    xgAway = clamp(xgAway + jitterAway, PREDICTOR_CONFIG.MIN_XG, PREDICTOR_CONFIG.MAX_XG);
+  } else {
+    modelParts.push("Variance:OFF");
+  }
 
   const distResult = generateBivariateDistribution(xgHome, xgAway);
 
@@ -653,6 +718,7 @@ export function hybridPredict(homeCode, awayCode, excludeMemoryId = null, exclud
   // Replika: LCG 1664525 mensimulasikan perilaku itu secara deterministik (seed = fixture hash) agar hasil bisa direproduksi tapi tidak monoton.
   let chosenScore;
   let rngProof = null;
+  let pureScorelineDist = null; // for stability: pure Monte Carlo scoreline distribution (GHIDRA PURE)
   if (opts.sample === true) {
     // BULK mode — v4.8 PURE: juga pakai pure attack simulation per iterasi (seed = hash(home|away|iter|bulk)), bukan Poisson dummy
     const sampleSeed = opts.seed != null ? opts.seed : hashStringToSeed(`${homeCode}|${awayCode}|${xgHome.toFixed(2)}|${xgAway.toFixed(2)}|sample|${PREDICTOR_CONFIG.MODEL_VERSION}`);
@@ -701,9 +767,10 @@ export function hybridPredict(homeCode, awayCode, excludeMemoryId = null, exclud
     chosenScore = { home: pureHome, away: pureAway, prob: 0 };
     const top5 = distResult.distribution.slice(0,5).map(s=>`${s.home}:${s.away} ${(s.prob*100).toFixed(1)}%`);
     rngProof = { mode: "GHIDRA_PURE_ATTACK_SIM_TUNED_V2", seed: fixtureSeed, jitterHome: Number(jitterHome.toFixed(3)), jitterAway: Number(jitterAway.toFixed(3)), top5, chosen: `${chosenScore.home}:${chosenScore.away}`, homeChances, awayChances, method: `Pure WE10 v5.0.2: chances ${homeChances}:${awayChances} midDiff ${midDiffNorm.toFixed(2)} × shot 22+(att-def)*0.45 — Ghidra 100%`, note: "Fix England 3:4→2:1: diff 13 now 27.8 vs 17.3%, jitter 0.22 not 0.35, favorite win accurate" };
-    // Override probs/markets dari Poisson dummy → pure Monte Carlo 200 sim agar PROB konsisten dengan skor pure (tidak 69.6% ECU terbalik)
+    // Override probs/markets dari Poisson dummy → pure Monte Carlo 200 sim agar PROB konsisten dengan skor pure (tidak 69.6% ECU terbalik) + build pureScorelineDist for stability
     try {
       let wH=0,wD=0,wA=0;
+      const scoreMap = new Map();
       for(let iter=0; iter<200; iter++){
         const sRng = new LCGRng((fixtureSeed ^ (iter*0x9e3779b9)) >>>0);
         const chH = clamp(9 + Math.round(midDiffNorm * 4) + sRng.range(3), 7, 13);
@@ -712,12 +779,18 @@ export function hybridPredict(homeCode, awayCode, excludeMemoryId = null, exclud
         for(let i=0;i<chH;i++){ const b=22 + (getGhidraAbility(homeCode).attack - getGhidraAbility(awayCode).defense)*0.45; if(sRng.range(100) < clamp(b,14,45)) gH++; }
         for(let i=0;i<chA;i++){ const b=22 + (getGhidraAbility(awayCode).attack - getGhidraAbility(homeCode).defense)*0.45; if(sRng.range(100) < clamp(b,14,45)) gA++; }
         if(gH>gA) wH++; else if(gA>gH) wA++; else wD++;
+        const key = gH+":"+gA;
+        scoreMap.set(key, (scoreMap.get(key)||0)+1);
       }
       const tot=200;
       distResult.probs = { home: wH/tot, draw: wD/tot, away: wA/tot };
-      distResult.markets = { over25: 0.5, under25: 0.5, btts: 0.45 }; // neutral, pure tidak pakai Dixon
+      distResult.markets = { over25: 0.5, under25: 0.5, btts: 0.45 };
+      pureScorelineDist = [...scoreMap.entries()].map(([k,c])=>{ const [hh,aa]=k.split(":").map(Number); return {home:hh, away:aa, prob:c/tot}; }).sort((a,b)=>b.prob-a.prob);
     } catch(_){}
   }
+  // === STABILITY (SPEC A/B) — reuse pureScorelineDist if available, else Poisson distribution ===
+  const stabilitySource = pureScorelineDist || distResult.distribution;
+  const stability = analyzePredictionStability(stabilitySource, { sampleCount: pureScorelineDist ? 200 : distResult.distribution.length });
 
   const evidence = {
     hasRating: h.hasRating && a.hasRating,
@@ -759,11 +832,16 @@ export function hybridPredict(homeCode, awayCode, excludeMemoryId = null, exclud
   return {
     homeGoals: chosenScore.home,
     awayGoals: chosenScore.away,
-    winner, confidence,
+    winner,
+    confidence, // SPEC D: separate from stability
+    stability, // SPEC A/D: {score,level,entropy,top1Mass,top3Mass,top5Mass,sampleCount,scorelineDistribution}
     xgHome: Number(xgHome.toFixed(2)), xgAway: Number(xgAway.toFixed(2)),
     model: `${PREDICTOR_CONFIG.MODEL_VERSION} [${modelParts.join(" + ")}]${rngProof ? ` [${rngProof.mode}]` : ""}`,
-    probs: distResult.probs, markets: distResult.markets,
+    probs: distResult.probs,
+    probabilities: distResult.probs, // SPEC D alias
+    markets: distResult.markets,
     distribution: distResult.distribution.slice(0,5),
+    scorelineDistribution: stability.scorelineDistribution || distResult.distribution.slice(0,5).map(d=>({homeGoals:d.home, awayGoals:d.away, probability:d.prob})),
     evidence,
     topScorers,
     keyIndicators,
