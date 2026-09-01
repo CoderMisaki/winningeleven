@@ -1,0 +1,28 @@
+{
+  "note": "Edit skor ini tiap live TikTok - akan auto load ke TikTokHook 00401000/00401800 via pnach",
+  "generalSettings": {
+    "cup": "Konami Cup",
+    "eligibleTeams": "National",
+    "competitionType": "Knock-out System",
+    "homeAndAway": "Yes",
+    "groupName": "1~8",
+    "numberOfTeams": 24,
+    "numberOfPlayers": "1/24",
+    "entranceScene": "Only important matches",
+    "matchTime": "30 min.",
+    "difficulty": "★★★★★ (5)",
+    "accumulatedFatigue": "Yes",
+    "injuries": "Yes",
+    "stripSelection": "Yes"
+  },
+  "goals": [
+    [2,1],[1,1],[3,0],[0,0],[2,2],[1,0],[2,0],[1,2],
+    [3,1],[0,1],[2,1],[1,0],[0,2],[2,0],[1,1],[3,2],
+    [1,0],[2,2],[0,1],[1,3],[2,0],[0,0],[1,1],[2,1],
+    [3,0],[1,2],[2,1],[0,0],[1,1],[2,2],[3,3],[1,0],
+    [2,0],[0,1],[1,2],[2,1],[0,0],[1,1],[2,1],[3,1],
+    [1,0],[2,0],[1,1],[0,2],[2,1],[1,0],[3,2],[2,2]
+  ],
+  "topScorer": [7,5,4,4,3,3,3,2,2,2,1,1,1,1,0,0,0,0,0,0,0,0,0,0],
+  "topScorerNames": ["Player A 7 gol","Player B 5 gol","Player C 4 gol - sinkron live tiktok"]
+}

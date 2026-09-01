@@ -2,8 +2,11 @@ import { StateManager } from "../state/appState.js";
 import { MemoryManager } from "../services/memoryManager.js";
 import { Security } from "../utils/security.js";
 import { setupCountryAutocomplete } from "./autocomplete.js";
+import { setupPlayerAutocomplete, lookupPlayerExact, splitPlayerAndGoals } from "./playerAutocomplete.js";
 import { PredictionService, PREDICTOR_CONFIG } from "../services/predictor.js";
 import { createBulkRunner } from "../services/bulkRunner.js";
+import { toTitleCase } from "../utils/format.js";
+import { teamsDB } from "../data/teams.js";
 
 export const UIRenderer = {
   showAlert(message) {
@@ -69,10 +72,10 @@ export const UIRenderer = {
     const dashboard = document.createElement("div");
     dashboard.className = "prediction-dashboard-container";
 
-    // Banner info 57 — updated v4.5 Ghidra-validated + WhatIf
+    // Banner info 57 — v6.0 honest-calibrated
     const infoBanner = document.createElement("div");
-    infoBanner.style.cssText = "font-size:0.6rem;color:#0ff;background:#0a1a1a;border:1px solid #0ff;padding:6px 8px;margin-bottom:10px;font-family:var(--font-mono);";
-    infoBanner.textContent = "ENGINE: WE10 Konami Cup Hybrid v4.5 (Ghidra-RNG Valid + WhatIf + Calibrated Indicators) — 57 Negara Fix | Ghidra-validated SLPM_663.74 FUN_0016e8d8@0016e8d8 (div/mflo) + FUN_00216ef0@00216ef0 clock-seed + OVER.AFS/0_TEXT.AFS eeMemory 0x18428F4 11-man | NO Math.random (audit 0) | WHAT IF manual skor → top goals valid";
+    infoBanner.style.cssText = "font-size:0.6rem;color:#ff0;background:#332200;border:1px solid #ff0;padding:6px 8px;margin-bottom:10px;font-family:var(--font-mono);text-align:center;";
+    infoBanner.innerHTML = "⚠️ TABEL DI BAWAH = <strong>SAMPLE 1x (TIDAK STABIL)</strong> — contoh tunggal. <strong style='color:#0f0;'>HASIL STABIL 200x ADA DI KOTAK BIRU DI BAWAH</strong> — skor paling sering + rata-rata 200x + winrate konsisten (WE10 pure sim 3.0 gol/match, RNG LCG deterministik, bukan replika ROM)";
     dashboard.appendChild(infoBanner);
 
     // === OVERALL SUMMARY BOX — Kotak kemungkinan tambahan (Semua Prediksi) ===
@@ -124,7 +127,7 @@ export const UIRenderer = {
             });
           });
         }
-        const globalRank = [...globalScorerMap.values()].sort((a,b)=> (b.totalActual - a.totalActual) || (b.totalXG - a.totalXG) || (b.maxProb - a.maxProb)).slice(0,7);
+        const globalRank = [...globalScorerMap.values()].sort((a,b)=> (b.totalActual - a.totalActual) || (b.totalXG - a.totalXG) || (b.maxProb - a.maxProb)).slice(0,16);
 
         const summaryCard = document.createElement("div");
         summaryCard.className = "pred-card pred-overall-summary";
@@ -162,10 +165,10 @@ export const UIRenderer = {
 
         summaryCard.innerHTML = `
           <div class="pred-card-header" style="border-color:#00ff66;">
-            <span class="pred-badge-row" style="color:#00ff66;">📊 RINGKASAN KESELURUHAN PREDICT WE10 (GHIDRA-VERIFIED)</span>
+            <span class="pred-badge-row" style="color:#00ff66;">📊 RINGKASAN KESELURUHAN PREDICT WE10 (PURE SIM v6.0)</span>
             <span class="pred-conf-badge" style="border-color:#00ff66;color:#00ff66;background:#0d2615;">${validPreds.length} MATCHES</span>
           </div>
-          <div style="font-size:0.6rem;color:#888;margin-bottom:6px;">Kotak kemungkinan tambahan — lihat semua skor & top goals yang sering muncul (100% akurat SLPM_663.74)</div>
+          <div style="font-size:0.6rem;color:#888;margin-bottom:6px;">Kotak kemungkinan tambahan — lihat semua skor & top goals yang sering muncul (model terkalibrasi ~3.0 gol/match)</div>
           <div class="pred-section-title" style="color:#00ff66;">🏆 SKOR & PEMENANG PER MATCH (AUTO-FILL KE TABEL X:X)</div>
           <div style="overflow-x:auto;">
             <table class="result-table" style="font-size:0.7rem;">
@@ -174,14 +177,14 @@ export const UIRenderer = {
             </table>
           </div>
           <div style="margin:6px 0 6px;display:flex;flex-wrap:wrap;gap:4px;">${winTallyRows}</div>
-          <div class="pred-section-title" style="color:#ffaa00;">⚽ GLOBAL TOP GOALS — PEMAIN PALING SERING MUNCUL (AUTO-FILL KE TABEL G1-G7)</div>
+          <div class="pred-section-title" style="color:#ffaa00;">⚽ GLOBAL TOP GOALS — PEMAIN PALING SERING MUNCUL (AUTO-FILL KE TABEL G1-G16)</div>
           <div style="overflow-x:auto;">
             <table class="result-table" style="font-size:0.7rem;">
               <thead><tr><th>#</th><th>FLAG</th><th>PEMAIN / NEGARA</th><th>EST. GOL</th><th>MUNCUL</th></tr></thead>
               <tbody>${globalRows}</tbody>
             </table>
           </div>
-          <div style="font-size:0.55rem;color:#555;margin-top:6px;">* Tabel B1-B7 skor X:X & G1-G7 sudah konsisten: skor X:X dari <strong>distribusi Dixon-Coles (top prob)</strong>, GOL = <strong>matchGoals integer</strong> hasil alokasi LCG 1664525 tepat sebanyak homeGoals+awayGoals ke pemain CF/WF/OMF (GK terfilter) — hanya pemain dari tim yang main di B1-B8, jumlah gol pemain tidak melebihi total gol tim. Hover baris untuk lihat alasan kenapa di atas. Ghidra SLPM_663.74 + roster 0x18428F4 patch ESP/TOG exact 11-man.</div>
+          <div style="font-size:0.55rem;color:#555;margin-top:6px;">* Tabel B1-B8 skor X:X & G1-G16 konsisten: skor X:X dari <strong>pure sim MC 200 (top prob)</strong>, GOL = <strong>matchGoals integer</strong> hasil alokasi LCG 1664525 tepat sebanyak homeGoals+awayGoals ke pemain CF/WF/OMF (GK terfilter) — hanya pemain dari tim yang main di B1-B8, jumlah gol pemain tidak melebihi total gol tim. Hover baris untuk lihat alasan.</div>
         `;
         dashboard.appendChild(summaryCard);
         // === BULK BOX — 100/1000x sampling seperti game asli (Adebayor 100x/1000) ===
@@ -190,51 +193,62 @@ export const UIRenderer = {
           bulkWrap.id = "bulkPredictBox";
           bulkWrap.style.cssText = "background:#111;border:2px solid #ff0;padding:10px;margin-top:10px;";
           bulkWrap.innerHTML = `
-            <div class="pred-section-title" style="color:#ff0;border-color:#ff0;">🔁 BULK PREDICT — 100 / 1000x ITERASI (FREKUENSI SEPERTI GAME ASLI)</div>
-            <div style="font-size:0.6rem;color:#888;margin-bottom:6px;">Jalankan prediksi berkali-kali dengan LCG sampling — lihat pemain apa yang paling sering muncul. Contoh: <strong>Adebayor muncul 100x dalam 1000 predict</strong> = 10% anytime.</div>
+            <div class="pred-section-title" style="color:#ff0;border-color:#ff0;">🔁 BULK PREDICT — 100 / 200 / 1000x ITERASI (FREKUENSI SEPERTI GAME ASLI) — ANTI HANG</div>
+            <div style="font-size:0.6rem;color:#888;margin-bottom:6px;">Jalankan prediksi berkali-kali dengan LCG sampling — lihat pemain apa yang paling sering muncul. Contoh: <strong>Adebayor muncul 100x dalam 1000 predict</strong> = 10% anytime. <strong>Chunked yield tiap 16 task → tidak hang meski 200x×8 match.</strong></div>
             <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px;">
               <label style="font-size:0.65rem;color:#ccc;">Iterasi:</label>
-              <input id="bulkIterations" type="number" value="100" min="10" max="5000" step="10" style="width:90px;background:#000;color:#0f0;border:1px solid #555;padding:4px;font-family:var(--font-mono);" />
+              <input id="bulkIterations" type="number" value="200" min="10" max="5000" step="10" style="width:90px;background:#000;color:#0f0;border:1px solid #555;padding:4px;font-family:var(--font-mono);" />
               <button id="btnBulkRun" class="btn" style="background:#332200;border:1px solid #ff0;color:#ff0;padding:6px 12px;font-weight:bold;cursor:pointer;">▶ RUN BULK</button>
-              <span style="font-size:0.6rem;color:#aaa;">Skor variatif (sample Dixon-Coles), bukan monoton 1-2</span>
+              <button id="btnBulkCancel" class="btn" style="background:#330000;border:1px solid #f55;color:#f55;padding:6px 8px;display:none;">BATALKAN</button>
+              <span style="font-size:0.6rem;color:#aaa;">Skor WE10 pure sim (bukan dummy) — variatif, tidak monoton</span>
             </div>
-            <div id="bulkOutput" style="background:#0a0a0a;border:1px solid #333;padding:8px;min-height:40px;font-size:0.7rem;color:#ccc;">Klik <strong>RUN BULK</strong> — sistem akan sampling ${'`'}hybridPredict(sample:true)${'`'} sebanyakan iterasi dan filter frekuensi.</div>
+            <div id="bulkProgress" style="display:none;background:#000;border:1px solid #333;padding:6px;font-size:0.65rem;color:#0ff;margin-bottom:6px;"></div>
+            <div id="bulkOutput" style="background:#0a0a0a;border:1px solid #333;padding:8px;min-height:40px;font-size:0.7rem;color:#ccc;">Klik <strong>RUN BULK</strong> — async chunked 200x, progress bar, rata-rata winrate & top goals konsisten (WE10 roster weight).</div>
           `;
           dashboard.appendChild(bulkWrap);
-          // bind
+          // bind — async bulkRunner non-blocking
           setTimeout(()=>{
             const btn = document.getElementById("btnBulkRun");
+            const btnCancel = document.getElementById("btnBulkCancel");
             const inp = document.getElementById("bulkIterations");
             const out = document.getElementById("bulkOutput");
+            const progEl = document.getElementById("bulkProgress");
+            let currentRunner = null;
             if (btn && inp && out) {
-              btn.addEventListener("click", ()=>{
-                const n = Math.max(10, Math.min(5000, parseInt(inp.value,10)||100));
+              btn.addEventListener("click", async ()=>{
+                const n = Math.max(10, Math.min(5000, parseInt(inp.value,10)||200));
                 btn.disabled = true; btn.textContent = "⏳ RUNNING "+n+"x...";
-                out.innerHTML = "<div style='color:#ff0;padding:10px;text-align:center;'>⏳ Sampling "+n+" iterasi — variasi skor & top scorer...</div>";
-                setTimeout(()=>{
-                  try {
-                    // rebuild dataSource from current predictions' teams (instead of DOM)
-                    const dsMatches = validPreds.map(p=>({ home: p.homeName, away: p.awayName }));
-                    // need minimal dataSource shape for bulkPredict
-                    const bulkDS = { matches: dsMatches.map(m=>({ home:m.home, away:m.away })), p1:"", b8Enabled:false };
-                    // pad to 8 with empty to satisfy service but bulk filters via predictMatches-like logic
-                    while(bulkDS.matches.length < 8) bulkDS.matches.push({home:"",away:""});
-                    // Use same team codes as validPreds
-                    const fakeDS = { matches: validPreds.map(p=>({ home: p.homeName, away: p.awayName })), p1:"", b8Enabled:false, topGoals:[] };
-                    const res = PredictionService.bulkPredict(fakeDS, n);
-                    if (res.error) { out.innerHTML = `<div style="color:#f55;">⛔ ${Security.escapeHtml(res.error)}</div>`; }
-                    else {
+                if(btnCancel) btnCancel.style.display = "inline-block";
+                if(progEl){ progEl.style.display="block"; progEl.innerHTML = `⏳ 0/${validPreds.length*n} (0%) — elapsed 0s`; }
+                out.innerHTML = "<div style='color:#ff0;padding:10px;text-align:center;'>⏳ Sampling "+n+" iterasi async (chunked yield) — tidak hang...</div>";
+                try {
+                  const { createBulkRunner } = await import("../services/bulkRunner.js");
+                  currentRunner = createBulkRunner();
+                  if(btnCancel) btnCancel.onclick = ()=>{ currentRunner.cancel(); if(progEl) progEl.innerHTML = `<span style="color:#f55;">⛔ Dibatalkan</span>`; };
+                  const validRows = validPreds.map(p=>({ row:p.row, homeCode:p.homeCode, awayCode:p.awayCode, homeName:p.homeName, awayName:p.awayName, homeFlag:p.homeFlag, awayFlag:p.awayFlag }));
+                  const res = await currentRunner.run(validRows, n, (prog)=>{
+                    if(progEl){
+                      const barW = prog.percent;
+                      progEl.innerHTML = `
+                        <div style="display:flex;justify-content:space-between;font-size:0.6rem;margin-bottom:4px;"><span>${prog.completed}/${prog.total} (${prog.percent}%)</span><span>ETA ${prog.eta.toFixed(1)}s | ${prog.elapsed.toFixed(1)}s</span></div>
+                        <div style="background:#111;border:1px solid #333;height:10px;overflow:hidden;"><div style="background:linear-gradient(90deg,#ff0,#0f0);width:${barW}%;height:100%;transition:width 0.15s;"></div></div>
+                      `;
+                    }
+                  });
+                  if(res.cancelled){ out.innerHTML = `<div style="color:#f55;">⛔ Dibatalkan di ${res.completed}/${res.total}</div>`; }
+                  else if(res.error){ out.innerHTML = `<div style="color:#f55;">⛔ ${Security.escapeHtml(res.error)}</div>`; }
+                  else {
                       const globalRows = res.globalRank.slice(0,10).map((pl,idx)=>{
                         const badge = idx<3 ? ["🥇","🥈","🥉"][idx] : "#"+(idx+1);
                         const proofShort = pl.proof ? `<div style="font-size:0.55rem;color:#0ff;font-family:var(--font-mono);">${Security.escapeHtml(pl.proof)}</div>` : "";
-                        const mathShort = pl.proofMath ? `<div style="font-size:0.5rem;color:#888;">${Security.escapeHtml(pl.proofMath)}</div>` : "";
-                        return `<tr><td style="padding:4px;">${badge}</td><td style="padding:4px;text-align:center;">${Security.escapeHtml(pl.flag||"")}</td><td style="padding:4px;"><strong>${Security.escapeHtml(pl.name)}</strong> [${Security.escapeHtml(pl.pos)}] ${pl.weight?`w${pl.weight}/${pl.totalWeight||"?"}`:""}<br><span style="font-size:0.6rem;color:#aaa;">${Security.escapeHtml(pl.teamName)} (${pl.teamCode})</span>${proofShort}${mathShort}</td><td style="padding:4px;text-align:center;color:#0f0;font-weight:bold;">${pl.hits}x / ${n}</td><td style="padding:4px;text-align:center;">${pl.freqPct}%<br><span style="font-size:0.6rem;color:#888;">${pl.totalGoals} gol total</span><br><span style="font-size:0.5rem;color:#ff0;">${pl.pickProb?`pick ${pl.pickProb}%`:""}</span></td></tr>`;
+                        return `<tr><td style="padding:4px;">${badge}</td><td style="padding:4px;text-align:center;">${Security.escapeHtml(pl.flag||"")}</td><td style="padding:4px;"><strong>${Security.escapeHtml(pl.name)}</strong> [${Security.escapeHtml(pl.pos)}] w${pl.weight}/${pl.totalWeight||"?"}=${pl.pickProb||"?"}%<br><span style="font-size:0.6rem;color:#aaa;">${Security.escapeHtml(pl.teamName)} (${pl.teamCode})</span>${proofShort}</td><td style="padding:4px;text-align:center;color:#0f0;font-weight:bold;">${pl.hits}x / ${n}</td><td style="padding:4px;text-align:center;">${pl.freqPct}%<br><span style="font-size:0.6rem;color:#888;">${pl.totalGoals} gol total — avg ${pl.avgGoals}</span></td></tr>`;
                       }).join("") || "<tr><td colspan=5 style='padding:8px;text-align:center;'>Tidak ada scorer</td></tr>";
                       const scoreRows = res.scoreRank.map(s=> `<span style="background:#1a1a1a;border:1px solid #444;padding:3px 6px;margin:2px;display:inline-block;font-family:var(--font-mono);">${Security.escapeHtml(s.scoreline)}: <strong style="color:#0ff;">${s.count}x</strong> (${s.pct}%)</span>`).join("");
                       const perMatchHtml = res.perMatch.map(pm=>{
-                        const sc = pm.topScorers.slice(0,3).map(pl=> `<div style="font-size:0.65rem;"><strong>${Security.escapeHtml(pl.name)}</strong> (${pl.teamCode}) — ${pl.hits}x (${pl.freqPct}%)<br><span style="font-size:0.5rem;color:#888;">${Security.escapeHtml(pl.proof||pl.reason||"")}</span></div>`).join("");
+                        const sc = pm.topScorers.slice(0,3).map(pl=> `<div style="font-size:0.65rem;"><strong>${Security.escapeHtml(pl.name)}</strong> (${pl.teamCode}) — ${pl.hits}x (${pl.freqPct}%)</div>`).join("");
                         const scores = pm.topScores.slice(0,3).map(s=> `<div style="font-size:0.65rem;">${Security.escapeHtml(s.scoreline)}: ${s.count}x (${s.pct}%)</div>`).join("");
-                        return `<div style="background:#0f0f0f;border:1px solid #333;padding:6px;min-width:160px;"><div style="font-weight:bold;color:#0ff;margin-bottom:4px;">B${pm.row}: ${Security.escapeHtml(pm.homeName)} vs ${Security.escapeHtml(pm.awayName)}</div><div style="font-size:0.6rem;color:#aaa;margin-bottom:2px;">Top Skor:</div>${scores}<div style="font-size:0.6rem;color:#aaa;margin:4px 0 2px;">Top Scorer:</div>${sc}</div>`;
+                        const winInfo = `H ${pm.winRateHome}% D ${pm.winRateDraw}% A ${pm.winRateAway}% — avg ${pm.avgHome}:${pm.avgAway} — konsisten ${pm.konsistentWinner}`;
+                        return `<div style="background:#0f0f0f;border:1px solid #333;padding:6px;min-width:165px;"><div style="font-weight:bold;color:#0ff;margin-bottom:4px;">B${pm.row}: ${Security.escapeHtml(pm.homeName)} vs ${Security.escapeHtml(pm.awayName)}</div><div style="font-size:0.55rem;color:#0f0;margin-bottom:4px;">${winInfo}</div><div style="font-size:0.6rem;color:#aaa;margin-bottom:2px;">Top Skor:</div>${scores}<div style="font-size:0.6rem;color:#aaa;margin:4px 0 2px;">Top Scorer:</div>${sc}</div>`;
                       }).join("");
                       const rngProofHtml = res.bulkRngProof ? `
                         <div style="background:#001a00;border:1px solid #0f0;padding:8px;margin-top:8px;font-size:0.65rem;line-height:1.4;">
@@ -242,23 +256,23 @@ export const UIRenderer = {
                           <div style="margin-top:4px;"><strong>LCG:</strong> <code style="background:#000;padding:2px 4px;">${Security.escapeHtml(res.bulkRngProof.lcg)}</code></div>
                           <div><strong>Seed:</strong> ${Security.escapeHtml(res.bulkRngProof.seedFormula)}</div>
                           <div style="margin-top:4px;background:#002200;padding:6px;border:1px solid #0a0;"><strong style="color:#0f0;">Kenapa frequent:</strong> ${Security.escapeHtml(res.bulkRngProof.whyFrequent)}</div>
-                          <div style="margin-top:4px;color:#888;"><strong>Ghidra:</strong> ${Security.escapeHtml(res.bulkRngProof.ghidraNote)}</div>
-                          <div style="color:#555;font-size:0.6rem;">Verif: ${Security.escapeHtml(res.bulkRngProof.verification)}</div>
-                          <div style="margin-top:4px;color:#ff0;">✅ Contoh TOG Adebayor 84/442=19% pick → Poisson(xG 1.1) → dalam 1000 bulk → ~100-190 hits = VALID, bukan dummy. Jika 19% → 0x dalam 1000 itu baru dummy.</div>
+                          <div style="margin-top:4px;color:#888;"><strong>Audit:</strong> ${Security.escapeHtml(res.bulkRngProof.auditNote)}</div>
+                          <div style="margin-top:4px;color:#0ff;font-size:0.6rem;"><strong>Rata-rata dihitung:</strong> ${Security.escapeHtml(res.bulkRngProof.avgNote)}</div>
                         </div>` : "";
                       out.innerHTML = `
-                        <div style="margin-bottom:8px;"><strong style="color:#ff0;">Hasil Bulk ${n}x sampling (variasi seperti game asli):</strong> <span style="font-size:0.6rem;color:#888;">Skor tidak monoton — tiap iterasi sample Dixon-Coles via LCG seed unik</span></div>
-                        <div style="margin-bottom:6px;font-weight:bold;color:#0ff;">📊 Global Frekuensi Pemain — Top 10 (dengan bukti matematis):</div>
+                        <div style="margin-bottom:8px;"><strong style="color:#ff0;">Hasil Bulk ${n}x sampling — async chunked, tidak hang:</strong> <span style="font-size:0.6rem;color:#888;">Skor WE10 pure sim (chances 6±mid*3, shot 18%+0.35*diff) — variasi antar iterasi via LCG seed unik</span></div>
+                        <div style="margin-bottom:6px;font-weight:bold;color:#0ff;">📊 Global Frekuensi Pemain — Top 10 (WE10 roster, bukan dummy):</div>
                         <div style="overflow-x:auto;margin-bottom:8px;"><table class="result-table" style="font-size:0.7rem;"><thead><tr><th>#</th><th>FLAG</th><th>PEMAIN / NEGARA (pick prob + proof)</th><th>MUNCUL</th><th>FREQ</th></tr></thead><tbody>${globalRows}</tbody></table></div>
                         <div style="margin-bottom:4px;font-weight:bold;color:#0ff;">🏆 Distribusi Skor Paling Sering (Top 10):</div><div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px;">${scoreRows}</div>
-                        <div style="margin-bottom:4px;font-weight:bold;color:#0ff;">Per-Match Top:</div><div style="display:flex;gap:8px;overflow-x:auto;padding-bottom:4px;">${perMatchHtml}</div>
+                        <div style="margin-bottom:4px;font-weight:bold;color:#0ff;">Per-Match Top (avg & winrate 200x):</div><div style="display:flex;gap:8px;overflow-x:auto;padding-bottom:4px;">${perMatchHtml}</div>
                         ${rngProofHtml}
-                        <div style="font-size:0.55rem;color:#555;margin-top:6px;">* Frekuensi = berapa kali pemain cetak gol (matchGoals>0) dalam ${n} sampling. LCG range(totalWeight) tiap gol → weight-proportional. Hanya pemain dari tim yang main di B1-B8, GK terfilter, roster ESP/TOG exact 11-man. Verif di Ghidra 0016e8d8.</div>
+                        <div style="font-size:0.55rem;color:#555;margin-top:6px;">* Frekuensi = berapa kali pemain cetak gol dalam ${n} sampling. LCG range(totalWeight) tiap gol → weight-proportional. Hanya pemain dari tim yang main di B1-B8, GK terfilter, roster WE10FullRoster.js. Skor rata-rata = sum/ ${n}.</div>
                       `;
                     }
-                  } catch(err){ out.innerHTML = `<div style="color:#f55;">⛔ Bulk error: ${Security.escapeHtml(err?.message||String(err))}</div>`; }
-                  btn.disabled = false; btn.textContent = "▶ RUN BULK";
-                }, 40);
+                    if(progEl) progEl.style.display="none";
+                } catch(err){ out.innerHTML = `<div style="color:#f55;">⛔ Bulk error: ${Security.escapeHtml(err?.message||String(err))}</div>`; if(progEl) progEl.style.display="none"; }
+                btn.disabled = false; btn.textContent = "▶ RUN BULK";
+                if(btnCancel) btnCancel.style.display="none";
               });
             }
           }, 0);
@@ -338,8 +352,8 @@ export const UIRenderer = {
       }
 
       // --- Key Indicators DELETED — sistem buatan TIDAK ADA di Ghidra (2026-08-30) ---
-      // Ghidra MCP SLPM_663.74 tidak punya table Overall/Attack/Defense agregat — hanya roster 11-man eeMemory 0x18428F4 + RNG FUN_0016e8d8/FUN_00216ef0.
-      // Untuk selaras 100% asli, FAKTOR PENENTU tidak dirender sama sekali. Jika butuh, cek logs: predictor.js buildKeyIndicators() return null.
+      // Audit 2026-08-30: tidak ditemukan table agregat Overall/Attack terpetakan ke 57 tim di ROM.
+      // FAKTOR PENENTU tidak dirender (buildKeyIndicators() return null).
       let keyIndicatorsHtml = "";
       // === STABILITY PANEL (SPEC A/B/C/D) — reuse pureScorelineDist, no second simulator ===
       let stabilityHtml = "";
@@ -372,7 +386,7 @@ export const UIRenderer = {
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;">${distHtml}</div>
             ${warnLow}
             ${reasonHtml}
-            <div style="font-size:0.55rem;color:#555;margin-top:4px;">Stability ≠ Confidence. Stability = konsistensi simulasi (pure GHIDRA LCG, reuse distribution pipeline, no second simulator). HIGH: top1≥~18% & top3≥~45% typical. Config: HIGH≥${PREDICTOR_CONFIG?.STABILITY?.HIGH||65}, MEDIUM≥${PREDICTOR_CONFIG?.STABILITY?.MEDIUM||40}</div>
+            <div style="font-size:0.55rem;color:#555;margin-top:4px;">Stability ≠ Confidence. Stability = konsistensi simulasi (pure sim LCG (NR, deterministik), reuse distribution pipeline, no second simulator). HIGH: top1≥~18% & top3≥~45% typical. Config: HIGH≥${PREDICTOR_CONFIG?.STABILITY?.HIGH||65}, MEDIUM≥${PREDICTOR_CONFIG?.STABILITY?.MEDIUM||40}</div>
           </div>`;
       }
 
@@ -439,32 +453,33 @@ export const UIRenderer = {
         <!-- WHY THIS PREDICTION (SPEC U) -->
         <div class="pred-section-title">WHY THIS PREDICTION?</div>
         <div style="background:#001a1a;border:1px solid #0ff;padding:6px;font-size:0.65rem;line-height:1.4;">
-          <div>Rating: <strong>${pred.evidence.hasRating ? "Ghidra-validated team ability via getGhidraAbility (ROM 003bd400) — advantage " + (pred.probs.home>pred.probs.away ? Security.escapeHtml(p.homeName) : pred.probs.away>pred.probs.home ? Security.escapeHtml(p.awayName) : "balanced") : "INSUFFICIENT DATA"}</strong></div>
+          <div>Rating: <strong>${pred.evidence.hasRating ? "teamRatings ability (estimasi 57 tim) + form history — advantage " + (pred.probs.home>pred.probs.away ? Security.escapeHtml(p.homeName) : pred.probs.away>pred.probs.home ? Security.escapeHtml(p.awayName) : "balanced") : "INSUFFICIENT DATA"}</strong></div>
           <div>Form: <strong>${pred.evidence.homeMatches+pred.evidence.awayMatches>0 ? `Signal ${pred.evidence.homeWeight.toFixed(1)} vs ${pred.evidence.awayWeight.toFixed(1)}` : "INSUFFICIENT DATA"}</strong></div>
           <div>H2H: <strong>${pred.evidence.hasH2H ? pred.evidence.h2hMatches+" matches, favors "+(pred.xgHome>pred.xgAway ? Security.escapeHtml(p.homeName) : Security.escapeHtml(p.awayName)) : "INSUFFICIENT DATA"}</strong></div>
           <div>Context: <strong>${pred.evidence.hasSimilarContext ? "Similar fixtures favor "+(pred.xgHome>pred.xgAway ? Security.escapeHtml(p.homeName) : Security.escapeHtml(p.awayName)) : "INSUFFICIENT DATA"}</strong></div>
-          <div>Poisson: <strong>${pred.xgHome.toFixed(2)} xG vs ${pred.xgAway.toFixed(2)} xG (pure GHIDRA attack sim, not dummy Poisson)</strong></div>
+          <div>Poisson: <strong>${pred.xgHome.toFixed(2)} xG vs ${pred.xgAway.toFixed(2)} xG (pure attack sim v6.0 terkalibrasi — expected goals dari MC, konsisten dengan skor)</strong></div>
           <div>Stability: <strong style="color:${pred.stability.level==="HIGH"?"#0f0":pred.stability.level==="MEDIUM"?"#ff0":pred.stability.level==="LOW"?"#f55":"#888"};">${pred.stability.level} (${pred.stability.score}/100)</strong> — ${Security.escapeHtml(pred.stability.level==="LOW" ? "Treat exact score as uncertain" : "Single scoreline dominates")}</div>
         </div>
 
-        <div class="pred-section-title">MOST LIKELY SCORELINES — GHIDRA PURE DISTRIBUTION</div>
+        <div class="pred-section-title">MOST LIKELY SCORELINES — PURE SIM DISTRIBUTION (MC ${PREDICTOR_CONFIG?.PURE_SIM?.PROBS_SIMS || 200})</div>
         <div class="pred-scores-grid">${scorelinesHtml}</div>
 
         ${pred.rngProof ? `
-        <div class="pred-section-title" style="color:#0ff;border-color:#0ff;">🔍 BUKTI VALIDASI SKOR — ANTI-MONOTON & GHIDRA</div>
+        <div class="pred-section-title" style="color:#0ff;border-color:#0ff;">🔍 BUKTI VALIDASI SKOR — ANTI-MONOTON & PURE SIM</div>
         <div style="background:#001a1a;border:1px solid #0ff;padding:8px;font-size:0.65rem;line-height:1.4;">
           <div><strong style="color:#0ff;">Mode:</strong> ${Security.escapeHtml(pred.rngProof.mode)} | <strong>Chosen:</strong> <span style="color:#0f0;font-weight:bold;">${Security.escapeHtml(pred.rngProof.chosen || (pred.homeGoals+':'+pred.awayGoals))}</span> ${pred.rngProof.seed ? `| <strong>Seed:</strong> 0x${Number(pred.rngProof.seed).toString(16)}` : ""}</div>
-          ${pred.rngProof.top3 ? `<div style="margin-top:4px;"><strong>Top3 Kandidat:</strong> ${pred.rngProof.top3.map(s=>`<span style="background:#002a2a;border:1px solid #0ff;padding:2px 4px;margin:2px;display:inline-block;">${Security.escapeHtml(s)}</span>`).join("")}</div>` : ""}
+          ${pred.rngProof.top5 ? `<div style="margin-top:4px;"><strong>Top5 Kandidat:</strong> ${pred.rngProof.top5.map(s=>`<span style="background:#002a2a;border:1px solid #0ff;padding:2px 4px;margin:2px;display:inline-block;">${Security.escapeHtml(s)}</span>`).join("")}</div>` : ""}
           <div style="margin-top:4px;"><strong>Method:</strong> ${Security.escapeHtml(pred.rngProof.method || "")}</div>
-          ${pred.rngProof.jitterHome!=null ? `<div><strong>Jitter xG:</strong> Home ${pred.rngProof.jitterHome>0?'+':''}${pred.rngProof.jitterHome} / Away ${pred.rngProof.jitterAway>0?'+':''}${pred.rngProof.jitterAway} (deterministik per fixture hash → pecah monoton)</div>` : ""}
+          ${pred.rngProof.effAbilities ? `<div><strong>Eff. Ability (form-aware):</strong> Home ATT ${pred.rngProof.effAbilities.home.att}/DEF ${pred.rngProof.effAbilities.home.def} vs Away ATT ${pred.rngProof.effAbilities.away.att}/DEF ${pred.rngProof.effAbilities.away.def}</div>` : ""}
+          ${pred.rngProof.jitterHome!=null ? `<div><strong>Jitter xG:</strong> Home ${pred.rngProof.jitterHome>0?'+':''}${pred.rngProof.jitterHome} / Away ${pred.rngProof.jitterAway>0?'+':''}${pred.rngProof.jitterAway} (deterministik per fixture hash)</div>` : ""}
           <div style="color:#888;"><strong>Catatan:</strong> ${Security.escapeHtml(pred.rngProof.note || "")}</div>
           <div style="margin-top:6px;background:#000;padding:6px;border:1px solid #333;font-family:var(--font-mono);font-size:0.6rem;">
-            <strong style="color:#ff0;">GHIDRA PROOF SLPM_663.74:</strong><br>
-            FUN_0016e8d8@0016e8d8: <code>lw v0,0x8(a2) → addu v0,v0,a1 → div v0,a1 → mflo v0 → mult v1,a0 → sw v0,0xc(a2)</code> (modulo range RNG, verified via MCP disasm)<br>
-            FUN_00216ef0@00216ef0: <code>li v0,0xFFFF → bne a0,v0 → slti at,a0,0x75 → beql</code> clock-seed pattern (TOD)<br>
-            Team strings verified @0x02BE810 (Brazil/England/Wales file offset 0x1BE810) | Player DB compressed OVER.AFS 10MB / 0_TEXT.AFS 424MB → runtime eeMemory 0x18428F4 (11-man ESP/TOG exact image) — LCG 1664525 mensimulasikan perilaku TOD clock secara deterministik & reproducible
+            <strong style="color:#ff0;">AUDIT ROM SLPM_663.74 (jujur, 2026-08-30):</strong><br>
+            RNG = Numerical Recipes LCG 1664525 — <strong>keputusan implementasi deterministik, BUKAN replika RNG WE10</strong> (konstanta RNG standar NR/glibc/MSVC/Borland/MT19937 = 0 hits di ROM)<br>
+            FUN_0016e8d8 = ceiling-div helper (div/mflo) • FUN_00216ef0 = table lookup 0x3C2100+idx*8 • 003bd800 = pointer table — keduanya BUKAN RNG<br>
+            Ability = teamRatings.js (estimasi 57 tim) + form history • probs/markets/xG/scorelines semua dari ${PREDICTOR_CONFIG?.PURE_SIM?.PROBS_SIMS || 200} MC sim yang sama → konsisten
           </div>
-          <div style="margin-top:4px;color:#0f0;">✅ Skor tidak monoton karena tiap fixture punya seed unik (hash home|away|xG|MODEL_VERSION) → weighted pick di top3 (bukan selalu top1). Bulk 100/1000x pakai full distribution sample → variasi seperti game asli.</div>
+          <div style="margin-top:4px;color:#0f0;">✅ Skor tidak monoton karena tiap fixture punya seed unik (hash home|away|xG|MODEL_VERSION). Bulk 100/1000x pakai seed per iterasi → variasi antar iterasi.</div>
         </div>` : ""}
 
         <div class="pred-section-title">⚽ TOP GOALS / PREDIKSI PENCETAK GOL — KONAMI MONTE-CARLO (5000 sims)</div>
@@ -477,7 +492,7 @@ export const UIRenderer = {
         <div class="pred-evidence-footer">
           <div><span style="color:#888;">Model:</span> ${Security.escapeHtml(pred.model)}</div>
           <div><span style="color:#888;">Evidence:</span> Rating: ${pred.evidence.hasRating ? '✔ 57-valid' : '✘'} | Hist: ${pred.evidence.homeMatches}H/${pred.evidence.awayMatches}A | H2H: ${pred.evidence.h2hMatches}m | Context: ${pred.evidence.hasSimilarContext ? '✔' : '✘'} | Global xG: ${pred.evidence.globalAttack}</div>
-          <div style="font-size:0.6rem;color:#555;margin-top:2px;">Source: Ghidra SLPM_663.74 FUN_0016e8d8/FUN_00216ef0 + WE10FullRoster.js 11-man (eeMemory 0x18428F4) • Entropy confidence • Anti-monoton v4.6 • FAKTOR PENENTU agregat DELETED (tidak ada di ROM)</div>
+          <div style="font-size:0.6rem;color:#555;margin-top:2px;">Source: WE10FullRoster.js (roster eksternal) + teamRatings.js (ability estimasi) + form history • NR-LCG deterministik (bukan replika RNG WE10 — audit ROM 0 hits) • Entropy confidence • probs/markets/xG dari MC sim yang sama</div>
         </div>
       `;
       dashboard.appendChild(card);
@@ -503,6 +518,7 @@ export const UIRenderer = {
             MemoryManager.updateGameField(StateManager.activeMemoryId, StateManager.activeGameIndex, "p1", clean, false);
           } else {
             StateManager.homeQuery.p1 = clean;
+            StateManager.debouncedSaveHomeQuery();
           }
         });
         p1Input.dataset.uiBound = "1";
@@ -512,6 +528,7 @@ export const UIRenderer = {
           MemoryManager.updateGameField(StateManager.activeMemoryId, StateManager.activeGameIndex, "p1", val, true);
         } else {
           StateManager.homeQuery.p1 = val;
+          StateManager.saveHomeQueryImmediate();
         }
       });
     }
@@ -555,6 +572,7 @@ export const UIRenderer = {
                 StateManager.homeQuery.matches[7].enabled = true;
                 StateManager.homeQuery.b8Enabled = true;
               }
+              StateManager.debouncedSaveHomeQuery();
             }
           });
 
@@ -568,6 +586,7 @@ export const UIRenderer = {
                 StateManager.homeQuery.matches[7].enabled = true;
                 StateManager.homeQuery.b8Enabled = true;
               }
+              StateManager.debouncedSaveHomeQuery();
             }
           });
 
@@ -581,6 +600,7 @@ export const UIRenderer = {
                 StateManager.homeQuery.matches[7].enabled = true;
                 StateManager.homeQuery.b8Enabled = true;
               }
+              StateManager.debouncedSaveHomeQuery();
             }
           });
 
@@ -593,6 +613,7 @@ export const UIRenderer = {
                 StateManager.homeQuery.matches[7].enabled = true;
                 StateManager.homeQuery.b8Enabled = true;
               }
+              StateManager.saveHomeQueryImmediate();
             }
           });
 
@@ -605,6 +626,7 @@ export const UIRenderer = {
                 StateManager.homeQuery.matches[7].enabled = true;
                 StateManager.homeQuery.b8Enabled = true;
               }
+              StateManager.saveHomeQueryImmediate();
             }
           });
         }
@@ -711,7 +733,7 @@ export const UIRenderer = {
     if (topGoalsForm) {
       if (!topGoalsForm.dataset.uiInit) {
         topGoalsForm.innerHTML = "";
-        for (let i = 0; i < 7; i++) {
+        for (let i = 0; i < 16; i++) {
           const row = document.createElement("div");
           row.className = "top-goal-row-item";
           row.innerHTML = `
@@ -722,6 +744,7 @@ export const UIRenderer = {
             </div>
             <div class="team-input-wrap">
               <input type="text" placeholder="PEMAIN" data-idx="${i}" class="goal-player" autocomplete="off" />
+              <div class="suggestions-box hidden"></div>
             </div>
             <div class="team-input-wrap">
               <input type="number" placeholder="GOL" min="0" data-idx="${i}" class="goal-amount" autocomplete="off" />
@@ -739,15 +762,86 @@ export const UIRenderer = {
               MemoryManager.updateTopGoalField(StateManager.activeMemoryId, StateManager.activeGameIndex, i, "country", val, false);
             } else {
               StateManager.homeQuery.topGoals[i].country = val;
+              StateManager.debouncedSaveHomeQuery();
             }
           });
 
+          // Helper: auto isi negara & gol untuk row ini jika player dikenali
+          const autoFillCountryAndGoals = (playerName, isFromSelect) => {
+            const player = lookupPlayerExact(playerName);
+            if (!player) return;
+            const targetCountry = player.teamName;
+            const currentCountry = (cIn.value || '').trim();
+            const currentGoals = (gIn.value || '').trim();
+            // Auto-fill country jika kosong atau beda tim (biar cepat)
+            if (!currentCountry || currentCountry.toLowerCase() !== targetCountry.toLowerCase()) {
+              cIn.value = targetCountry;
+              if (StateManager.activeMemoryId !== null) {
+                MemoryManager.updateTopGoalField(StateManager.activeMemoryId, StateManager.activeGameIndex, i, "country", targetCountry, true);
+              } else {
+                StateManager.homeQuery.topGoals[i].country = targetCountry;
+              }
+            }
+            // Auto-fill goals jika kosong/0 → default 1 (biar 1 ketik jadi)
+            if (!currentGoals || currentGoals === '0') {
+              gIn.value = '1';
+              if (StateManager.activeMemoryId !== null) {
+                MemoryManager.updateTopGoalField(StateManager.activeMemoryId, StateManager.activeGameIndex, i, "goals", '1', true);
+              } else {
+                StateManager.homeQuery.topGoals[i].goals = '1';
+              }
+            }
+            if (StateManager.activeMemoryId === null) StateManager.saveHomeQueryImmediate();
+          };
+
           pIn.addEventListener("input", () => {
-            const val = Security.sanitizeInput(pIn.value);
+            let val = Security.sanitizeInput(pIn.value);
+            // Smart: jika ketik "Nakazawa1" atau "Nakazawa 1" → split jadi player + goals
+            const split = splitPlayerAndGoals(val);
+            if (split) {
+              const player = lookupPlayerExact(split.name);
+              if (player) {
+                const formatted = toTitleCase(split.name);
+                pIn.value = formatted;
+                val = formatted;
+                // Set player
+                if (StateManager.activeMemoryId !== null) {
+                  MemoryManager.updateTopGoalField(StateManager.activeMemoryId, StateManager.activeGameIndex, i, "player", formatted, false);
+                } else {
+                  StateManager.homeQuery.topGoals[i].player = formatted;
+                }
+                // Set goals langsung dari trailing digits
+                gIn.value = split.goals;
+                if (StateManager.activeMemoryId !== null) {
+                  MemoryManager.updateTopGoalField(StateManager.activeMemoryId, StateManager.activeGameIndex, i, "goals", split.goals, false);
+                } else {
+                  StateManager.homeQuery.topGoals[i].goals = split.goals;
+                }
+                // Auto-fill country dari player
+                const targetCountry = player.teamName;
+                cIn.value = targetCountry;
+                if (StateManager.activeMemoryId !== null) {
+                  MemoryManager.updateTopGoalField(StateManager.activeMemoryId, StateManager.activeGameIndex, i, "country", targetCountry, true);
+                } else {
+                  StateManager.homeQuery.topGoals[i].country = targetCountry;
+                  StateManager.saveHomeQueryImmediate();
+                }
+                // Simpan player juga
+                if (StateManager.activeMemoryId === null) StateManager.debouncedSaveHomeQuery();
+                else StateManager.debouncedSave();
+                return;
+              }
+            }
             if (StateManager.activeMemoryId !== null) {
               MemoryManager.updateTopGoalField(StateManager.activeMemoryId, StateManager.activeGameIndex, i, "player", val, false);
             } else {
               StateManager.homeQuery.topGoals[i].player = val;
+              StateManager.debouncedSaveHomeQuery();
+            }
+            // Jika player exact match tanpa angka, auto-fill country/goals (ketik lengkap)
+            if (val.length >= 3) {
+              const exact = lookupPlayerExact(val);
+              if (exact) autoFillCountryAndGoals(val, false);
             }
           });
 
@@ -757,6 +851,7 @@ export const UIRenderer = {
               MemoryManager.updateTopGoalField(StateManager.activeMemoryId, StateManager.activeGameIndex, i, "goals", val, false);
             } else {
               StateManager.homeQuery.topGoals[i].goals = val;
+              StateManager.debouncedSaveHomeQuery();
             }
           });
 
@@ -765,7 +860,33 @@ export const UIRenderer = {
               MemoryManager.updateTopGoalField(StateManager.activeMemoryId, StateManager.activeGameIndex, i, "country", val, true);
             } else {
               StateManager.homeQuery.topGoals[i].country = val;
+              StateManager.saveHomeQueryImmediate();
             }
+          });
+
+          // Player autocomplete with country prioritization + auto-fill negara & gol
+          setupPlayerAutocomplete(pIn, () => {
+            // Prefer current row country input value
+            const countryVal = cIn.value || (StateManager.activeMemoryId !== null
+              ? StateManager.db.memories[StateManager.activeMemoryId]?.games[StateManager.activeGameIndex]?.topGoals[i]?.country
+              : StateManager.homeQuery.topGoals[i]?.country) || '';
+            // Try to resolve to team code
+            const lower = countryVal.trim().toLowerCase();
+            for (const [code, info] of Object.entries(teamsDB)) {
+              if (info.name.toLowerCase() === lower) return code;
+            }
+            return countryVal;
+          }, (val) => {
+            const formatted = toTitleCase(val);
+            pIn.value = formatted;
+            if (StateManager.activeMemoryId !== null) {
+              MemoryManager.updateTopGoalField(StateManager.activeMemoryId, StateManager.activeGameIndex, i, "player", formatted, true);
+            } else {
+              StateManager.homeQuery.topGoals[i].player = formatted;
+              StateManager.saveHomeQueryImmediate();
+            }
+            // Auto-fill negara & skor (fitur cepat: naka → Nakazawa → Japan + 1)
+            autoFillCountryAndGoals(formatted, true);
           });
         }
         topGoalsForm.dataset.uiInit = "1";
@@ -914,12 +1035,12 @@ export const UIRenderer = {
         <div style="font-size:0.65rem;color:#0ff;margin-bottom:4px;">⚽ TOP GOALS — Hanya pemain dari ${Security.escapeHtml(homeCode)} & ${Security.escapeHtml(awayCode)} (GK terfilter) — alokasi LCG tepat ${homeGoals}:${awayGoals}</div>
         <div>${scorersHtml}</div>
         <div style="background:#001a00;border:1px solid #0f0;padding:6px;margin-top:8px;font-size:0.6rem;line-height:1.4;">
-          <div style="font-weight:bold;color:#0f0;">🔬 PROOF WHAT-IF (replica Ghidra)</div>
+          <div style="font-weight:bold;color:#0f0;">🔬 PROOF WHAT-IF (LCG deterministik)</div>
           <div><strong>Seed:</strong> <code style="background:#000;padding:1px 4px;border:1px solid #0f0;">${Security.escapeHtml(whatIfMeta.seedHex||"")}</code> <span style="color:#888;">(${Security.escapeHtml(String(whatIfMeta.seed||""))})</span></div>
           <div><strong>LCG:</strong> <code style="background:#000;padding:1px 4px;">${Security.escapeHtml(whatIfMeta.lcg||"")}</code></div>
           <div><strong>Method:</strong> ${Security.escapeHtml(whatIfMeta.method||"")}</div>
           <div style="color:#888;">${Security.escapeHtml(whatIfMeta.note||"")}</div>
-          <div style="color:#555;font-size:0.55rem;">Ghidra: ${Security.escapeHtml(whatIfMeta.ghidra||"")}</div>
+          <div style="color:#555;font-size:0.55rem;">Audit: ${Security.escapeHtml(whatIfMeta.audit||"")}</div>
         </div>
         <div style="font-size:0.55rem;color:#555;margin-top:6px;">* Hover tiap baris untuk lihat alasan lengkap kenapa pemain di atas (weight/total pick + proof). Skor manual tidak pengaruhi xG distribusi — hanya alokasi top scorer. Ubah skor → seed berubah → hasil baru deterministik.</div>
       </div>

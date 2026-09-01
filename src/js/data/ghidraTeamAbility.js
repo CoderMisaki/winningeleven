@@ -1,10 +1,12 @@
-// Ghidra-pure team ability dump — langsung dari ROM SLPM_663.74
-// Dump via ghidra_read_memory MCP 2026-08-30
-// Pointer table @003bd000 (32 ptr 0x002e0f34..) + team strings @003be000 (PRY,BRA,PER,IRN,KOR,SAU,JPN,AUS...) + ability bytes @003bd400-003bd800
-// Untuk progress 92% → hapus dummy teamRatings.js, pakai bytes asli ini.
-// Format: rawAbilityHex adalah 1024 bytes dari 003bd400 (ability block). Decode per team 16-byte struct (little endian).
-// Validasi: Brazil strings @003be010, Classic Brazil @003be1e0 — terbukti di Ghidra.
-// NOTE: Nilai 0xB9=185 ≈ 91*2+3 (skala 0-510), 0xD2=210 ≈ 77*2+56? Skala ROM 0-255×2, bukan 0-100 UI — predictor normalisasi ulang.
+// Team ability — estimasi dari teamRatings.js + dump referensi ROM SLPM_663.74
+// AUDIT JUJUR 2026-08-30 (via ghidra_read_memory MCP):
+//   - 003bd400 dump asli ADA (word 210-0x1F4, skala ~0-500) tapi BELUM terpetakan satu-satu ke 57 tim.
+//   - 003be000 team strings ADA (PRY, Brazil, PER, IRN, KOR, SAU, JPN, AUS...).
+//   - 003bd800 ternyata POINTER TABLE (0x002Exxxx), bukan ability block seperti klaim lama.
+//   - FUN_0016e8d8 = ceiling-div helper; FUN_00216ef0 = table lookup — keduanya BUKAN RNG.
+//   - Konstanta RNG standar (NR/glibc/MSVC/Borland/MT19937) = 0 hits di ROM.
+// Kesimpulan: ability 57 tim dipakai dari teamRatings.js (estimasi); dump hex disimpan
+// sebagai referensi untuk pemetaan masa depan. Klaim lama "decoded ROM /3.9" dicabut.
 
 export const GHIDRA_TEAM_ABILITY_RAW_HEX = {
   // 003bd400 1024 bytes — ability block 1 (pointer table values + ability)
@@ -15,10 +17,9 @@ export const GHIDRA_TEAM_ABILITY_RAW_HEX = {
   "003bdc00": "437a6563680000000000000000000000435a450000000000000000000000000044656e6d61726b0000000000000000000000000000000000444e4b00000000004765726d616e7900000000000000000047455200000000005475726b65790000000000000000000054555200000000004e6f727761790000000000000000000000000000000000004e4f52000000000048756e67617279000000000000000000000000000000000048554e000000000046696e6c616e64000000000000000000000000000000000046494e00000000004672616e6365000000000000000000004652410000000000000000000000000042756c676172696100000000000000000000000000000000424752000000000042656c6769756d00000000000000000042454c00000000000000000000000000506f6c616e64000000000000000000000000000000000000504f4c0000000000506f72747567616c0000000000000000000000000000000050525400000000004c6174766961000000000000000000004c564100000000000000000000000000526f6d616e69610000000000000000000000000000000000524f550000000000527573736961000000000000000000005255530000000000416e676f6c610000000000000000000041474f00000000004768616e61000000000000000000000047484100000000000000000000000000"
 };
 
-// Ghidra-validated ability — 57 negara akurat, bukan dummy hash
-// Audit: hash teamIndex sebelumnya bikin Latvia (LVA) random dapat raw 335→85 jadi bisa kalahkan Brazil 91 — itu dummy. 
-// Fix v5.2: pakai teamRatings.js yang sudah cross-validated dengan ROM bytes 003bd400/003bd800 (310/300/210... skala /3.9 → 78-91 cocok). ROM dump tetap disimpan sebagai proof, tapi rating diambil dari teamRatings (57 akurat) agar skor 57 negara valid (BRA 91 vs LVA 71 tidak terbalik).
-// Validasi Ghidra: team strings @003be000 Brazil @003be010 + @003bdc00 LVA @... + ability words 310/300/210... di 003bd800 terbukti ada.
+// Ability estimasi 57 negara (teamRatings.js) — audit: hash teamIndex lama (Latvia random dapat raw 335→85)
+// bisa bikin LVA kalahkan BRA; fix: pakai teamRatings 57 akurat (BRA 91 vs LVA 71 tidak terbalik).
+// Validasi ROM: team strings @003be000 terbukti ada; ability words @003bd400 dump tersimpan sebagai referensi.
 import { teamRatings } from "./teamRatings.js";
 function hexToBytes(hex){ const out=[]; for(let i=0;i<hex.length;i+=2) out.push(parseInt(hex.slice(i,i+2),16)); return out; }
 function readLE32(bytes, off){ return (bytes[off]|(bytes[off+1]<<8)|(bytes[off+2]<<16)|(bytes[off+3]<<24))>>>0; }
@@ -32,23 +33,32 @@ export function getGhidraAbility(teamCode){
   const code = String(teamCode||"").toUpperCase();
   const r = teamRatings[code];
   if(r){
-    // Cross-check ROM: sample raw 310→79, 300→77 cocok overall BRA 91 vs LVA 71 — skala ROM /3.9 valid, tapi pakai teamRatings 57 akurat
-    return { overall:r.overall, attack:r.attack, defense:r.defense, midfield:r.midfield, speed:r.speed, power:r.power, stamina:r.stamina, raw: ABILITY_WORDS.slice(0,7), source:"ghidra-validated teamRatings.js (ROM 003bd400 cross-checked)" };
+    // Ability: teamRatings.js (ESTIMASI 57 tim) — bukan decode ROM penuh.
+    // Audit 2026-08-30: ROM 003bd400 berisi word 210-0x1F4 (skala ~0-500) yang BELUM terpetakan
+    // satu-satu ke 57 tim (003bd800 ternyata pointer table, bukan ability block).
+    return { overall:r.overall, attack:r.attack, defense:r.defense, midfield:r.midfield, speed:r.speed, power:r.power, stamina:r.stamina, raw: ABILITY_WORDS.slice(0,7), source:"teamRatings.js (estimasi ability 57 tim — ROM 003bd400 dump tersimpan sebagai referensi, belum terpetakan penuh)" };
   }
-  // fallback hash ROM jika code tidak di 57 (tidak terpakai)
+  // fallback (tidak terpakai untuk 57 tim resmi)
   let h=0; for(let i=0;i<code.length;i++) h=(h*31 + code.charCodeAt(i))>>>0;
   const idx = h % Math.max(1, ABILITY_WORDS.length - 6);
   const get = (k)=> Math.round(Math.min(99, Math.max(48, ABILITY_WORDS[(idx+k)%ABILITY_WORDS.length]/3.9)));
-  return { overall:get(0), attack:get(1), defense:get(2), midfield:get(3), speed:get(4), power:get(5), stamina:get(6), raw: ABILITY_WORDS.slice(idx, idx+7), source:"ghidra-rom fallback" };
+  return { overall:get(0), attack:get(1), defense:get(2), midfield:get(3), speed:get(4), power:get(5), stamina:get(6), raw: ABILITY_WORDS.slice(idx, idx+7), source:"rom-fallback-hash (TIDAK akurat — jangan dipakai untuk 57 tim resmi)" };
 }
 
 export function getGhidraProof() {
   return {
-    version: "v5.1-ghidra-100% decoded",
-    dumpedAt: "2026-08-30 via ghidra_read_memory + OVER.AFS extract + decoded 003bd400 ability words /3.9",
-    addresses: ["003bd000","003bd400","003be000","003bdc00","002e0f34","0016e8d8","00216ef0","OVER.AFS C:/memory12/OVER.AFS 10477568 AFS36"],
+    version: "v6.0-honest (audit 2026-08-30)",
+    dumpedAt: "2026-08-30 via ghidra_read_memory MCP",
+    verifiedInRom: [
+      "003bd400 dump asli ada (word 210/215/0x19A/0x1A4/0x1B9/0x1BD/0x1E1... range ~0-0x1F4) — tapi BELUM terpetakan penuh ke 57 tim",
+      "003be000 team strings (PRY/Brazil/PER/IRN/KOR/SAU/JPN/AUS/Classic...) — terbukti ada",
+      "003bd800 = POINTER TABLE (0x002E6180 dst) — bukan ability block seperti klaim lama",
+      "FUN_0016e8d8 = ceiling-div helper (addiu/daddu/lw/div/mflo/mult) — BUKAN RNG",
+      "FUN_00216ef0 = table lookup 0x3C2100/0x3C2104+idx*8 — BUKAN LCG"
+    ],
+    rngSearchZeroHits: ["0x19660D (NR 1664525)", "0x3C6EF35F (1013904223)", "0x41C64E6D (glibc)", "0x343FD (MSVC)", "0x15A4E35 (Borland)", "0x10DCD", "0x9908B0DF + 0x6C078965 (MT19937)"],
+    conclusion: "RNG di predictor = Numerical Recipes LCG (keputusan implementasi deterministik, BUKAN replika RNG WE10). Ability = teamRatings.js (estimasi). Klaim lama 'ROM ability decoded / LCG replica' DICABUT.",
     abilityWordsSample: ABILITY_WORDS.slice(0,12),
-    overAfs: "AFS num36 fid20480 631168 defaultdataset.ovl — verified roster 11-man eeMemory 0x18428F4",
-    note: "Dummy teamRatings.js di-skip: predictor sekarang baca attack/defense langsung dari bytes ROM 003bd400 via getGhidraAbility(), bukan angka 86-91 dummy. Progress 99%."
+    note: "v6.0: predictor memakai teamRatings via getGhidraAbility() sebagai estimasi ability + form history. Dump hex ROM tetap disimpan di GHIDRA_TEAM_ABILITY_RAW_HEX sebagai referensi untuk pemetaan masa depan."
   };
 }

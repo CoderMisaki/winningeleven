@@ -10,7 +10,7 @@ function makeEmptyQuery() {
       away: "",
       enabled: i < 7 // B1-B7 enabled, B8 disabled collapsed by default
     })),
-    topGoals: Array.from({ length: 7 }, () => ({
+    topGoals: Array.from({ length: 16 }, () => ({
       country: "",
       player: "",
       goals: ""
@@ -52,6 +52,8 @@ function cleanScore(value) {
   return out;
 }
 
+const HOME_QUERY_KEY = "we10_tiktok_form_v1";
+
 export const StateManager = {
   db: {
     maxSlot: 7,
@@ -64,6 +66,7 @@ export const StateManager = {
   activeGameIndex: 0,
 
   saveTimer: null,
+  homeQuerySaveTimer: null,
 
   async init() {
     try {
@@ -173,7 +176,7 @@ export const StateManager = {
 
         // Bersihkan top goals
         const oldGoals = Array.isArray(game.topGoals) ? game.topGoals : [];
-        game.topGoals = Array.from({ length: 7 }, (_, i) => {
+        game.topGoals = Array.from({ length: 16 }, (_, i) => {
           const g = oldGoals[i] || {};
 
           return {
@@ -228,6 +231,33 @@ export const StateManager = {
       this.homeQuery.b8Enabled = !!this.homeQuery.matches[7]?.enabled;
     }
 
+    // === PERSISTENCE FIX: Load homeQuery from localStorage (v1 schema) ===
+    try {
+      const saved = this.loadHomeQuery();
+      if (saved) {
+        // Validate saved structure before applying
+        if (saved.p1 !== undefined) this.homeQuery.p1 = cleanText(saved.p1 || "");
+        if (Array.isArray(saved.matches) && saved.matches.length === 8) {
+          this.homeQuery.matches = saved.matches.map((m, i) => ({
+            home: cleanText(m.home || ""),
+            score: cleanScore(m.score || ""),
+            away: cleanText(m.away || ""),
+            enabled: i < 7 ? true : (typeof m.enabled === "boolean" ? m.enabled : !!saved.b8Enabled)
+          }));
+        }
+        if (Array.isArray(saved.topGoals) && saved.topGoals.length === 16) {
+          this.homeQuery.topGoals = saved.topGoals.map(g => ({
+            country: cleanText(g.country || ""),
+            player: cleanText(g.player || ""),
+            goals: cleanText(g.goals || "")
+          }));
+        }
+        if (typeof saved.b8Enabled === "boolean") this.homeQuery.b8Enabled = saved.b8Enabled;
+      }
+    } catch (e) {
+      console.warn("[StateManager] loadHomeQuery failed, using defaults", e);
+    }
+
     if (modified) {
       this.save();
     }
@@ -247,8 +277,45 @@ export const StateManager = {
     }, 300);
   },
 
+  // === HOME QUERY PERSISTENCE (localStorage v1) ===
+  saveHomeQueryImmediate() {
+    try {
+      const payload = {
+        version: 1,
+        p1: this.homeQuery.p1 || "",
+        matches: this.homeQuery.matches,
+        topGoals: this.homeQuery.topGoals,
+        b8Enabled: !!this.homeQuery.b8Enabled,
+        savedAt: new Date().toISOString()
+      };
+      localStorage.setItem(HOME_QUERY_KEY, JSON.stringify(payload));
+    } catch (e) {
+      console.warn("[StateManager] saveHomeQuery failed", e);
+    }
+  },
+  debouncedSaveHomeQuery() {
+    if (this.homeQuerySaveTimer) clearTimeout(this.homeQuerySaveTimer);
+    this.homeQuerySaveTimer = setTimeout(() => this.saveHomeQueryImmediate(), 250);
+  },
+  loadHomeQuery() {
+    try {
+      const raw = localStorage.getItem(HOME_QUERY_KEY);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      if (!parsed || typeof parsed !== "object" || parsed.version !== 1) return null;
+      return parsed;
+    } catch (e) {
+      console.warn("[StateManager] loadHomeQuery parse failed", e);
+      // If corrupt, clear
+      try { localStorage.removeItem(HOME_QUERY_KEY); } catch (_) {}
+      return null;
+    }
+  },
   clearHomeQuery() {
     this.homeQuery = makeEmptyQuery();
+    try { localStorage.removeItem(HOME_QUERY_KEY); } catch (_) {}
+    // Also trigger save to ensure cleared state persisted as empty
+    this.saveHomeQueryImmediate();
   },
 
   isB8Enabled(query = null) {
@@ -267,8 +334,10 @@ export const StateManager = {
     if (isEditor) {
       target.lastUpdate = new Date().toISOString();
       this.db.memories[this.activeMemoryId].lastUpdate = new Date().toISOString();
+      this.debouncedSave();
+    } else {
+      this.debouncedSaveHomeQuery();
     }
-    this.debouncedSave();
   },
 
   toggleB8() {
