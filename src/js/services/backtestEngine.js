@@ -5,8 +5,9 @@ import { teamsDB } from "../data/teams.js";
 
 /**
  * BacktestEngine — SPEC N/O/P/Q: walk-forward, baselines, ablation, calibration, no leakage
- * ROM/Ghidra VERIFIED: reuses hybridPredict LCG replica (no Math.random), deterministic per fixture
- * Hypothesis: team ability via getGhidraAbility, pure attack sim
+ * v6.0: backtest memakai path default produksi (pure sim v6.0) — bukan lagi Poisson topScore (sample:false)
+ * RNG: Numerical Recipes LCG (implementasi sendiri, BUKAN replika RNG WE10 — konstanta RNG 0 hits di ROM)
+ * Hypothesis: team ability via teamRatings (estimasi) + form history; pure attack sim calibrated ~3.0 gol
  * Model statistik buatan: Poisson for markets, ratings for xG — measured via baselines
  */
 
@@ -72,10 +73,11 @@ export function runWalkForwardBacktest(memoryId=1, opts={}){
       const actual = parseScore(m?.score||"");
       if(!hCode||!aCode||!actual||!teamsDB[hCode]||!teamsDB[aCode]) continue;
       // DATA LEAKAGE AUDIT: hybridPredict excludeMemoryId/GameNumber = targetGame, no future score/topGoals used
+      // v6.0: semua baseline & hybrid memakai path default produksi (pure sim) — dulu sample:false mengukur model Poisson yang TIDAK dipakai user
       let pred, predRatingOnly, predPoissonOnly;
-      try{ pred = hybridPredict(hCode,aCode, memoryId, targetGame.gameNumber, {deterministic:true, sample:false, ...opts}); }catch(_){ continue; }
-      try{ predRatingOnly = hybridPredict(hCode,aCode, memoryId, targetGame.gameNumber, {deterministic:true, sample:false, disableH2H:true, disableContext:true, ...opts}); }catch(_){ predRatingOnly=pred; }
-      try{ predPoissonOnly = hybridPredict(hCode,aCode, memoryId, targetGame.gameNumber, {deterministic:true, sample:false, disableH2H:true, disableContext:true, disableForm:true, ...opts}); }catch(_){ predPoissonOnly=pred; }
+      try{ pred = hybridPredict(hCode,aCode, memoryId, targetGame.gameNumber, {deterministic:true, ...opts}); }catch(_){ continue; }
+      try{ predRatingOnly = hybridPredict(hCode,aCode, memoryId, targetGame.gameNumber, {deterministic:true, disableH2H:true, disableContext:true, ...opts}); }catch(_){ predRatingOnly=pred; }
+      try{ predPoissonOnly = hybridPredict(hCode,aCode, memoryId, targetGame.gameNumber, {deterministic:true, disableH2H:true, disableContext:true, disableForm:true, ...opts}); }catch(_){ predPoissonOnly=pred; }
 
       totalTested++;
       // Hybrid metrics

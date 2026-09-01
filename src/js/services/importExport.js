@@ -84,7 +84,7 @@ export const ImportExportService = {
           gameNumber: 1,
           p1: "",
           matches: Array.from({ length: 8 }, (_, i) => ({ home: "", score: "", away: "", enabled: i < 7 })),
-          topGoals: Array.from({ length: 7 }, () => ({ country: "", player: "", goals: "" })),
+          topGoals: Array.from({ length: 16 }, () => ({ country: "", player: "", goals: "" })),
           b8Enabled: false,
           b8Migrated: true,
           lastUpdate: new Date().toISOString()

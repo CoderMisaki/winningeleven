@@ -19,7 +19,7 @@ export const MemoryManager = {
       gameNumber: gameNum,
       p1: "",
       matches: Array.from({ length: 8 }, (_, i) => ({ home: "", score: "", away: "", enabled: i < 7 })),
-      topGoals: Array.from({ length: 7 }, () => ({ country: "", player: "", goals: "" })),
+      topGoals: Array.from({ length: 16 }, () => ({ country: "", player: "", goals: "" })),
       b8Enabled: false,
       b8Migrated: true,
       lastUpdate: new Date().toISOString()
@@ -75,10 +75,10 @@ export const MemoryManager = {
     const memory = StateManager.db.memories[memoryId];
     if (!memory || !memory.games[gameIndex]) return;
 
-    if (goalIndex < 0 || goalIndex >= 7) return;
+    if (goalIndex < 0 || goalIndex >= 16) return;
 
     if (!memory.games[gameIndex].topGoals) {
-      memory.games[gameIndex].topGoals = Array.from({ length: 7 }, () => ({ country: "", player: "", goals: "" }));
+      memory.games[gameIndex].topGoals = Array.from({ length: 16 }, () => ({ country: "", player: "", goals: "" }));
     }
 
     memory.games[gameIndex].topGoals[goalIndex][field] = value;

@@ -1,8 +1,10 @@
 /**
  * Predict Worker — SPEC E: async non-blocking bulk Monte Carlo
- * ROM/Ghidra VERIFIED: LCG replica 1664525 (FUN_0016e8d8 div/mflo), no Math.random
- * Hypothesis: team ability via ROM dump, pure attack sim (chances 9±mid*4, shot 22+(att-def)*0.45)
- * Model statistik buatan: Poisson/Dixon for markets only
+ * v6.0: fallback defaults SELARAS dengan pure sim produksi (chances 6+rng(3), shot 18%)
+ * RNG: Numerical Recipes LCG 1664525 (implementasi sendiri — BUKAN replika RNG WE10,
+ * konstanta RNG asli tidak ditemukan di SLPM_663.74; lihat predictor.js GHIDRA_PROOF)
+ * NOTE: path ini saat ini tidak dipakai (bulkRunner fallback ke chunked hybridPredict)
+ *       — default di sini dijaga tetap selaras agar tidak drift diam-diam bila diaktifkan.
  */
 class LCGRng{ constructor(seed){ this.state=seed>>>0; } next(){ this.state=(Math.imul(this.state,1664525)+1013904223)>>>0; return this.state; } range(n){ return n<=0?0:this.next()%n; } nextFloat(){ return this.next()/0x100000000; } }
 
@@ -30,11 +32,11 @@ self.onmessage = function(e){
       // Simulate pure attack sim stats passed via job
       // job contains homeCode/awayCode, homeChances, awayChances, attack/defense already
       let homeGoals = 0, awayGoals = 0;
-      // If job has precomputed chances, use them, else fallback to 9±
-      const homeChances = job.homeChances ?? (9 + rng.range(7));
-      const awayChances = job.awayChances ?? (9 + rng.range(7));
-      for(let i=0;i<homeChances;i++){ if(rng.range(100) < (job.homeShotProb ?? 22)) homeGoals++; }
-      for(let i=0;i<awayChances;i++){ if(rng.range(100) < (job.awayShotProb ?? 22)) awayGoals++; }
+      // v6.0 aligned with production pure sim: CHANCES_BASE 6 + rng(3), BASE_SHOT_PROB 18%
+      const homeChances = job.homeChances ?? (6 + rng.range(3));
+      const awayChances = job.awayChances ?? (6 + rng.range(3));
+      for(let i=0;i<homeChances;i++){ if(rng.range(100) < (job.homeShotProb ?? 18)) homeGoals++; }
+      for(let i=0;i<awayChances;i++){ if(rng.range(100) < (job.awayShotProb ?? 18)) awayGoals++; }
       homeGoals = Math.min(10, homeGoals);
       awayGoals = Math.min(10, awayGoals);
       results.push({ row: job.row, homeCode: job.homeCode, awayCode: job.awayCode, homeGoals, awayGoals, seed: job.seed });

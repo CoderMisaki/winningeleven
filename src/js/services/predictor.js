@@ -46,9 +46,9 @@ export function getValidationErrorLabel(raw) {
 // 2. PREDICTOR CONFIG — Hybrid: Dixon-Coles Bayesian + Konami LCG
 // ============================================================
 export const PREDICTOR_CONFIG = {
-  MODEL_VERSION: "WE10 Konami Cup Hybrid v5.1 (Ghidra 97% — ROM Ability Decoded, Dummy teamRatings Skipped)",
-  ENGINE_SOURCE: "Ghidra SLPM_663.74 FUN_0016e8d8 div/mflo + FUN_00216ef0 LCG 1664525 + 003bd400/003bd800 ability words 310/300/210/240/225/235/230/185/200/220/215/315-335 dump hex + 003be000 Brazil @003be010 strings + OVER.AFS 10477568 AFS36 defaultdataset.ovl 631168 roster 11-man verified — teamRatings.js dummy SKIPPED via getGhidraAbility() /3.9 ROM scale — pure attack sim 9±mid*4 22%+0.45*ROMdiff v5.1",
-  GHIDRA_PROOF: "MCP verify: FUN_0016e8d8 @0016e8d8; FUN_00216ef0 @00216f00; dump 003bd800 ability block index28-43 310/300/210/240/225/235/230/185/200/220/215/315-335 + strings 003be000/003bdc00 Ireland @003bd9f0 — decoded via getGhidraAbility() ROM scale /3.9; OVER.AFS verified; NO dummy Overall 88 vs 73",
+  MODEL_VERSION: "WE10 Hybrid v6.0 (honest-calibrated) — teamRatings ability + form + NR-LCG pure sim ~3.0 gol",
+  ENGINE_SOURCE: "AUDIT GHIDRA 2026-08-30 (MCP SLPM_663.74): FUN_0016e8d8 = ceiling-div helper (div/mflo, BUKAN RNG); FUN_00216ef0 = table lookup 0x3C2100+idx*8 (BUKAN LCG); 003bd800 = pointer table 0x002Exxxx (bukan ability block); konstanta RNG standar (0x19660D NR, 0x41C64E6D glibc, 0x343FD MSVC, 0x15A4E35 Borland, 0x10DCD, MT19937 0x9908B0DF/0x6C078965) = 0 hits di ROM. Kesimpulan: RNG di sini adalah Numerical Recipes LCG 1664525 (pilihan implementasi deterministik, BUKAN replika RNG WE10 asli). Ability: teamRatings.js (estimasi 57 tim, bukan decode ROM penuh). Sim: chances 6±mid*3±rng(3) clamp 4-9, shot 18%+0.35*(att-def)+1 home edge, clamp 10-32% → avg ~3.0 gol/match.",
+  GHIDRA_PROOF: "MCP verify 2026-08-30: search byte 0x19660D & 0x3C6EF35F & 5 konstanta RNG lain = 0 hits; disasm 0016e8d8 = addiu/daddu/lw/div/mflo/mult (ceiling division); disasm 00216ef0 = slti 0x75 + load 0x3C2100/0x3C2104+idx*8 (table lookup); read 003bd800 = pointer table (80612e00 d8612e00...); read 003bd400 dump asli (210/215/0x19A/220... range 0-0x1F4). Klaim lama 'LCG replica FUN_xxx / ROM ability decoded' DICABUT — tidak ada bukti di ROM.",
   MAX_XG: 7.5,
   MIN_XG: 0.15,
   POISSON_CAP: 10,
@@ -63,7 +63,21 @@ export const PREDICTOR_CONFIG = {
   MAX_SIMILAR_CONTEXT_INFLUENCE: 0.12,
   MONTE_CARLO_SIMS: 5000,
   TOP_SCORERS_LIMIT: 6,
-  ANTI_MONOTON_JITTER: 0.22, // turun 0.35→0.22 (range 0.44) agar tidak flip favorit England 88 vs Ecuador 76 (jitter 0.70 sebelumnya bikin ECB 4-3 terbalik)
+  ANTI_MONOTON_JITTER: 0.22, // hanya mempengaruhi xG formula (display Poisson path), skor murni dari pure sim
+  // === PURE ATTACK SIM v6.0 — kalibrasi ulang agar avg total gol ~2.8-3.2 (sesuai WE10 asli ~2.5-3.5) ===
+  PURE_SIM: {
+    CHANCES_BASE: 6,          // peluang mencetak (chances) dasar per tim
+    CHANCES_MID_FACTOR: 3,    // ±chances oleh dominasi midfield (midDiff norm -1..1)
+    CHANCES_JITTER: 3,        // rng.range(3) variasi per fixture
+    CHANCES_MIN: 4,
+    CHANCES_MAX: 9,
+    BASE_SHOT_PROB: 18,       // % konversi dasar per chance
+    SHOT_DIFF_FACTOR: 0.35,   // poin persen per poin selisih ability att-def
+    HOME_EDGE: 1.0,           // poin persen bonus tim tuan rumah
+    SHOT_PROB_MIN: 10,
+    SHOT_PROB_MAX: 32,
+    PROBS_SIMS: 200           // Monte Carlo untuk probs/markets/xG display
+  },
   // === STABILITY CONFIG (SPEC B) — thresholds documented, reuse distribution pipeline ===
   STABILITY: {
     HIGH: 65, // score >=65 → HIGH (top1≥18% & top3≥45% typical)
@@ -82,9 +96,9 @@ export const PREDICTOR_CONFIG = {
   AUTO_APPLY: false // SPEC R: default false, require explicit APPLY button
 };
 
-// --- GHIDRA PURE: NO CALIBRATION OFFSET (deleted fake aggregated indicators) ---
+// --- TANPA CALIBRATION OFFSET BUATAN (audit: offset WAL/GRE/JPN dll tidak ada dasarnya) ---
 // AUDIT 2026-08-30: RATING_CALIBRATION sebelumnya adalah offset buatan (WAL+10/GRE-8/JPN+9/MEX-8/SCO+6/SWE+4/CRO+2) yang TIDAK ADA di Ghidra MCP SLPM_663.74.
-// Ghidra verify: tidak ada table Overall/Attack/Defense agregat di ROM — hanya roster 11-man di eeMemory 0x18428F4 + team strings @02BE810 + RNG FUN_0016e8d8/FUN_00216ef0.
+// Audit Ghidra: tidak ditemukan table agregat Overall/Attack/Defense yang terpetakan ke 57 tim di ROM (003bd400 = dump parsial tak terpetakan penuh).
 // Aggregate ratings di teamRatings.js adalah statistik UI luar ROM, bukan bukti Ghidra. Untuk selaras 100% asli, offset buatan dihapus.
 // Jika butuh, raw ratings tetap dipakai di getRatingPrior tanpa modifikasi.
 const RATING_CALIBRATION = {};
@@ -121,7 +135,7 @@ function tauCorrection(i, j, lambda, mu, rho) {
 }
 
 // ============================================================
-// 4. KONAMI CUP ENGINE — Port dari thinkpad/konami_cup.js
+// 4. KONAMI CUP ENGINE — Port dari thinkpad/konami_cup.js (LCG NR, implementasi sendiri)
 //    LCGRng + posCategory + pickScorer + PLAYER_DB_57
 // ============================================================
 
@@ -229,7 +243,7 @@ function poissonSample(lambda, rng) {
 }
 
 function getRatingPrior(code) {
-  // GHIDRA PURE v5.1: skip dummy teamRatings.js UI stats, baca langsung ROM bytes via getGhidraAbility()
+  // Ability prior: teamRatings.js (estimasi 57 tim) via getGhidraAbility() — audit: ROM 003bd400 belum terpetakan penuh ke 57 tim
   const g = getGhidraAbility(code);
   if (!g || !g.source?.includes("ghidra-rom")) {
     const r = teamRatings[code];
@@ -258,7 +272,13 @@ function getGameDecayWeight(game) {
   }
   return 1.0;
 }
-function extractDataset(excludeMemoryId = null, excludeGameNumber = null) {
+let _datasetCache = { key: null, value: null, ts: 0 };
+export function extractDataset(excludeMemoryId = null, excludeGameNumber = null) {
+  // Bulk optimization: cache dataset 2s to avoid 1600x recompute for 8*200 ensemble (tanpa hang)
+  const cacheKey = `${excludeMemoryId}|${excludeGameNumber}|${Object.keys(StateManager.db?.memories||{}).length}`;
+  if (_datasetCache.key === cacheKey && Date.now() - _datasetCache.ts < 2000 && _datasetCache.value) {
+    return _datasetCache.value;
+  }
   const memories = StateManager.db?.memories || {};
   const matches = [];
   const stats = {};
@@ -300,9 +320,11 @@ function extractDataset(excludeMemoryId = null, excludeGameNumber = null) {
   }
   const priorWeight = 25;
   const globalAttack = totalAppearances > 0 ? (priorWeight * PREDICTOR_CONFIG.BASE_GLOBAL_ATTACK + totalGoals) / (priorWeight + totalAppearances) : PREDICTOR_CONFIG.BASE_GLOBAL_ATTACK;
-  return { matches, stats, globalAttack };
+  const result = { matches, stats, globalAttack };
+  _datasetCache = { key: cacheKey, value: result, ts: Date.now() };
+  return result;
 }
-function calculateTeamStrength(code, stats, globalAttack) {
+export function calculateTeamStrength(code, stats, globalAttack) {
   const prior = getRatingPrior(code);
   const s = stats[code];
   const w = s ? s.weight : 0;
@@ -311,7 +333,7 @@ function calculateTeamStrength(code, stats, globalAttack) {
   const k = PREDICTOR_CONFIG.PRIOR_MATCH_WEIGHT;
   const att = clamp((w * attObs + k * prior.att) / (w + k), 0.35, 2.8);
   const def = clamp((w * defObs + k * prior.def) / (w + k), 0.35, 2.8);
-  return { att, def, mid: prior.mid, spd: prior.spd, pow: prior.pow, overall: prior.overall, hasRating: prior.has, weight: w, rawCount: s ? s.count : 0 };
+  return { att, def, mid: prior.mid, spd: prior.spd, pow: prior.pow, overall: prior.overall, hasRating: prior.has, weight: w, rawCount: s ? s.count : 0, priorAtt: prior.att, priorDef: prior.def };
 }
 function calculateH2H(homeCode, awayCode, matches) {
   let count = 0, sumW = 0, homeGoals = 0, awayGoals = 0;
@@ -435,8 +457,71 @@ function getHistoricalScorerMap() {
   return { map, totalGames };
 }
 
+export function generateTopScorersBulkFast(homeCode, awayCode, predictedHome, predictedAway, seed) {
+  // Lightweight scorer allocation for bulk 200x — no 5000 Monte Carlo, just weight-proportional direct pick per goal
+  // Uses same WE10FullRoster weight logic, GK filtered, DF boost 2.2, deterministik LCG
+  try {
+    const baseSeed = seed != null ? seed : hashStringToSeed(`${homeCode}|${awayCode}|${predictedHome}:${predictedAway}|bulkFast|${PREDICTOR_CONFIG.MODEL_VERSION}`);
+    const rng = new LCGRng(baseSeed);
+    const { map: histMap } = getHistoricalScorerMap();
+    function buildAdjustedRoster(teamCode) {
+      const roster = (KONAMI_PLAYER_DB[teamCode] || []).filter(p => p.pos !== 'GK');
+      const filtered = roster.length ? roster : (KONAMI_PLAYER_DB[teamCode] || []);
+      return filtered.map(p => {
+        const key = p.name.trim().toLowerCase() + "|" + teamCode;
+        const hist = histMap.get(key);
+        let w = p.weight;
+        if (["CB","SB","SW","WB"].includes(p.pos)) w = Math.round(w * 2.2);
+        else if (["DMF","CMF"].includes(p.pos)) w = Math.round(w * 1.15);
+        if (hist) {
+          const histRate = hist.goals / Math.max(1, hist.appearances);
+          const alpha = Math.min(0.35, hist.appearances / 8);
+          const histWeight = Math.min(95, Math.max(10, histRate * 22 + 25));
+          w = w * (1 - alpha) + histWeight * alpha;
+        }
+        return { ...p, adjWeight: w };
+      });
+    }
+    const homeAdj = buildAdjustedRoster(homeCode);
+    const awayAdj = buildAdjustedRoster(awayCode);
+    const totalWHome = homeAdj.reduce((s,p)=>s+(p.adjWeight||p.weight),0);
+    const totalWAway = awayAdj.reduce((s,p)=>s+(p.adjWeight||p.weight),0);
+    function pickAdj(teamAdj) {
+      const total = teamAdj.reduce((s, p) => s + (p.adjWeight || p.weight), 0);
+      if (total <= 0) return teamAdj[0];
+      let r = rng.range(Math.floor(total));
+      for (const p of teamAdj) { const w = p.adjWeight || p.weight; if (r < w) return p; r -= w; }
+      return teamAdj[teamAdj.length - 1];
+    }
+    const picked = [];
+    const usedHome = new Set(); const usedAway = new Set();
+    function pickDistinct(teamAdj, code, usedSet, matchGoals) {
+      if (matchGoals >= 5) return pickAdj(teamAdj);
+      if (matchGoals === 4) {
+        let attempts=0;
+        const curMap = new Map();
+        picked.filter(x=>x.teamCode===code).forEach(x=> curMap.set(x.name, (curMap.get(x.name)||0)+1));
+        while(attempts<20){ const p=pickAdj(teamAdj); const cur=curMap.get(p.name)||0; const k=`${p.name}|${code}`; if(cur<2 && !usedSet.has(k)) return p; if(cur<2) return p; attempts++; }
+      }
+      let attempts=0;
+      while(attempts<12){ const p=pickAdj(teamAdj); const k=`${p.name}|${code}`; if(!usedSet.has(k)) return p; if(usedSet.size>=teamAdj.length) return p; attempts++; }
+      return pickAdj(teamAdj);
+    }
+    for(let i=0;i<predictedHome;i++){ const p=pickDistinct(homeAdj, homeCode, usedHome, predictedHome); usedHome.add(`${p.name}|${homeCode}`); picked.push({ name:p.name, pos:p.pos, teamCode:homeCode, teamName:teamsDB[homeCode]?.name||homeCode, flag:teamsDB[homeCode]?.flag||"", weight:Math.round(p.adjWeight||p.weight), totalWeight:Math.round(totalWHome), pickProb:Number(((p.adjWeight||p.weight)/totalWHome*100).toFixed(1)), matchGoals:1, proofMath:`weight ${Math.round(p.adjWeight||p.weight)}/${Math.round(totalWHome)}=${((p.adjWeight||p.weight)/totalWHome*100).toFixed(1)}% LCG`, reason:`Weight ${Math.round(p.adjWeight||p.weight)}/${Math.round(totalWHome)}=${((p.adjWeight||p.weight)/totalWHome*100).toFixed(1)}% pick — cetak 1 gol di ${predictedHome}:${predictedAway}` }); }
+    for(let i=0;i<predictedAway;i++){ const p=pickDistinct(awayAdj, awayCode, usedAway, predictedAway); usedAway.add(`${p.name}|${awayCode}`); picked.push({ name:p.name, pos:p.pos, teamCode:awayCode, teamName:teamsDB[awayCode]?.name||awayCode, flag:teamsDB[awayCode]?.flag||"", weight:Math.round(p.adjWeight||p.weight), totalWeight:Math.round(totalWAway), pickProb:Number(((p.adjWeight||p.weight)/totalWAway*100).toFixed(1)), matchGoals:1, proofMath:`weight ${Math.round(p.adjWeight||p.weight)}/${Math.round(totalWAway)}=${((p.adjWeight||p.weight)/totalWAway*100).toFixed(1)}% LCG`, reason:`Weight ${Math.round(p.adjWeight||p.weight)}/${Math.round(totalWAway)}=${((p.adjWeight||p.weight)/totalWAway*100).toFixed(1)}% pick — cetak 1 gol di ${predictedHome}:${predictedAway}` }); }
+    // Merge duplicate picks (if hat-trick allowed for 5+)
+    const merged = new Map();
+    picked.forEach(pl=>{ const k=`${pl.name}|${pl.teamCode}`; const ex=merged.get(k); if(ex) ex.matchGoals+=1; else merged.set(k, {...pl}); });
+    return [...merged.values()].sort((a,b)=>b.matchGoals-a.matchGoals);
+  } catch(e){ console.error("[bulkFast] scorer error", e); return []; }
+}
+
 export function generateTopScorers(homeCode, awayCode, xgHome, xgAway, opts = {}) {
   try {
+    // BULK FAST PATH — skip 5000 Monte Carlo for 200x ensemble
+    if (opts.bulkFast && Number.isInteger(opts.predictedHome) && Number.isInteger(opts.predictedAway)) {
+      return generateTopScorersBulkFast(homeCode, awayCode, opts.predictedHome, opts.predictedAway, opts.seed);
+    }
     const numSims = opts.numSims || PREDICTOR_CONFIG.MONTE_CARLO_SIMS;
     const deterministic = opts.deterministic !== false;
     const seedBase = `${homeCode}|${awayCode}|${xgHome.toFixed(2)}|${xgAway.toFixed(2)}|${PREDICTOR_CONFIG.MODEL_VERSION}`;
@@ -599,7 +684,7 @@ export function generateTopScorers(homeCode, awayCode, xgHome, xgAway, opts = {}
       // Rumus WE10 replika: P(pick) = weight / sumWeights tim * (1 - exp(-xG_tim))
       // Contoh TOG Adebayor: weight 84 / total ~442 = 19% * xG 1.2 → prob anytime ~11% → 110x/1000 wajar
       const baseXg = teamCode===homeCode? xgHome : xgAway;
-      const histInfo = getHistoricalScorerMap().map.get(name.toLowerCase()+"|"+teamCode);
+      const histInfo = histMap.get(name.toLowerCase()+"|"+teamCode); // FIX PERF: reuse histMap (dulu getHistoricalScorerMap() dipanggil per pemain = O(pemain × memori))
       const histBoost = adjWeight !== baseWeight ? ` + histBoost ${((adjWeight-baseWeight)/baseWeight*100).toFixed(1)}% (${histInfo?.goals||0} gol/${histInfo?.appearances||0} app)` : "";
       const reasonParts = [];
       reasonParts.push(`Weight ${Math.round(adjWeight)}${histBoost} / total ${Math.round(totalW)} = ${pickProb.toFixed(1)}% pick`);
@@ -642,11 +727,70 @@ export function generateTopScorers(homeCode, awayCode, xgHome, xgAway, opts = {}
 //    AUDIT 2026-08-30: FAKTOR PENENTU (Overall/Attack/Defense/Midfield/Speed/Power/Stamina delta) adalah sistem BUATAN.
 //    Ghidra MCP SLPM_663.74: TIDAK ADA table agregat Overall/Attack/Defense di ROM — search "Overall"/"Attack" 0 hits, hanya roster 11-man eeMemory 0x18428F4 + team strings @02BE810.
 //    teamRatings.js (raw 73-91) adalah rekap UI luar ROM, bukan bukti Ghidra. Menampilkan selisih agregat sebagai "faktor penentu" menyesatkan validitas.
-//    Untuk selaras 100% asli, fungsi ini DIHAPUS — hybridPredict & whatIfPredict tetap pakai roster + RNG Ghidra (FUN_0016e8d8/FUN_00216ef0), bukan agregat.
+//    Fungsi ini DIHAPUS — hybridPredict & whatIfPredict pakai roster + pure sim (RNG = NR-LCG implementasi sendiri, bukan decode ROM).
 //    Dipanggil tetap return null agar UI tidak render.
 // ============================================================
 function getCalibratedRating(code) { return teamRatings[code] || null; }
 function buildKeyIndicators() { return null; }
+
+// ============================================================
+// 7B. PURE ATTACK SIM HELPERS v6.0 — satu model untuk skor, probs, markets, xG
+//     Form (history) sekarang BENAR-BENAR mempengaruhi skor via effectiveAbilities.
+//     RNG: Numerical Recipes LCG (pilihan implementasi deterministik — BUKAN replika RNG WE10,
+//     konstanta RNG asli tidak ditemukan di SLPM_663.74, lihat GHIDRA_PROOF).
+// ============================================================
+export function effectiveAbilities(strength, rating) {
+  // Form factor = rasio strength aktual vs prior (1.0 = tanpa history / performa sesuai rating).
+  // attRatio > 1 → tim mencetak lebih banyak dari ekspektasi rating → ability naik (maks ±12%).
+  const attRatio = strength.priorAtt > 0 ? strength.att / strength.priorAtt : 1;
+  const defRatio = strength.priorDef > 0 ? strength.def / strength.priorDef : 1;
+  return {
+    att: clamp(Math.round(rating.attack * (0.75 + 0.25 * attRatio)), 40, 99),
+    def: clamp(Math.round(rating.defense * (1.25 - 0.25 * defRatio)), 40, 99)
+  };
+}
+export function pureMatchSample(rng, midDiffNorm, hAb, aAb) {
+  const cfg = PREDICTOR_CONFIG.PURE_SIM;
+  const midShift = Math.round(midDiffNorm * cfg.CHANCES_MID_FACTOR);
+  const homeChances = clamp(cfg.CHANCES_BASE + midShift + rng.range(cfg.CHANCES_JITTER), cfg.CHANCES_MIN, cfg.CHANCES_MAX);
+  const awayChances = clamp(cfg.CHANCES_BASE - midShift + rng.range(cfg.CHANCES_JITTER), cfg.CHANCES_MIN, cfg.CHANCES_MAX);
+  let home = 0, away = 0;
+  for (let i = 0; i < homeChances; i++) {
+    const base = cfg.BASE_SHOT_PROB + (hAb.att - aAb.def) * cfg.SHOT_DIFF_FACTOR + cfg.HOME_EDGE;
+    if (rng.range(100) < clamp(base, cfg.SHOT_PROB_MIN, cfg.SHOT_PROB_MAX)) home++;
+  }
+  for (let i = 0; i < awayChances; i++) {
+    const base = cfg.BASE_SHOT_PROB + (aAb.att - hAb.def) * cfg.SHOT_DIFF_FACTOR;
+    if (rng.range(100) < clamp(base, cfg.SHOT_PROB_MIN, cfg.SHOT_PROB_MAX)) away++;
+  }
+  return { home: Math.min(10, home), away: Math.min(10, away), homeChances, awayChances };
+}
+function pureProbsAndMarkets(seed, midDiffNorm, hAb, aAb, sims) {
+  const n = sims || PREDICTOR_CONFIG.PURE_SIM.PROBS_SIMS;
+  let wH = 0, wD = 0, wA = 0, over25 = 0, btts = 0, sumH = 0, sumA = 0;
+  const scoreMap = new Map();
+  for (let iter = 0; iter < n; iter++) {
+    const rng = new LCGRng((seed ^ Math.imul(iter + 1, 0x9e3779b9)) >>> 0);
+    const s = pureMatchSample(rng, midDiffNorm, hAb, aAb);
+    if (s.home > s.away) wH++; else if (s.away > s.home) wA++; else wD++;
+    if (s.home + s.away >= 3) over25++;
+    if (s.home > 0 && s.away > 0) btts++;
+    sumH += s.home; sumA += s.away;
+    const key = s.home + ":" + s.away;
+    scoreMap.set(key, (scoreMap.get(key) || 0) + 1);
+  }
+  const dist = [...scoreMap.entries()]
+    .map(([k, c]) => { const [hh, aa] = k.split(":").map(Number); return { home: hh, away: aa, prob: c / n }; })
+    .sort((x, y) => y.prob - x.prob);
+  const over25P = over25 / n;
+  return {
+    probs: { home: wH / n, draw: wD / n, away: wA / n },
+    markets: { over25: over25P, under25: 1 - over25P, btts: btts / n },
+    dist,
+    avgHome: Number((sumH / n).toFixed(2)),
+    avgAway: Number((sumA / n).toFixed(2))
+  };
+}
 
 // ============================================================
 // 8. HYBRID PREDICT — Bayesian + Konami Monte-Carlo
@@ -696,7 +840,7 @@ export function hybridPredict(homeCode, awayCode, excludeMemoryId = null, exclud
     modelParts.push(`Context(${Math.round(simWeight*100)}%)`);
   } else if (opts.disableContext) { modelParts.push("Context:OFF"); }
 
-  // --- GHIDRA-VALIDATED xG JITTER: replika FUN_00216ef0 clock-seed variance
+  // --- xG JITTER: variasi formula-xG antar fixture (skor final tetap dari pure sim) ---
   let jitterHome = 0, jitterAway = 0;
   if (!opts.disableVariance) {
     const jitterSeed = hashStringToSeed(`${homeCode}|${awayCode}|jitter|${PREDICTOR_CONFIG.MODEL_VERSION}`);
@@ -713,80 +857,58 @@ export function hybridPredict(homeCode, awayCode, excludeMemoryId = null, exclud
   const distResult = generateBivariateDistribution(xgHome, xgAway);
 
   // — Sample scoreline ANTI-MONOTON v4.4: bukan selalu topScore (penyebab monoton 1-2/2-1 terus).
-  // Logika baru: single predict pakai DRA di antara top-3 weighted by prob (deterministik per fixture via hashSeed), bulk pakai full distribution sample.
-  // Validasi Ghidra: FUN_0016e8d8 adalah modulo-range RNG (div/mflo), bukan LCG statis — game asli tiap kickoff seed dari TOD clock, jadi skor variatif.
-  // Replika: LCG 1664525 mensimulasikan perilaku itu secara deterministik (seed = fixture hash) agar hasil bisa direproduksi tapi tidak monoton.
+  // Logika: single predict pakai pure sim deterministik per fixture (seed = fixture hash), bulk pakai seed per iterasi.
+  // Catatan audit: RNG = NR-LCG 1664525 (implementasi sendiri) — konstanta RNG asli WE10 tidak ditemukan di SLPM_663.74 (search 0 hits), jadi ini BUKAN replika ROM.
   let chosenScore;
   let rngProof = null;
-  let pureScorelineDist = null; // for stability: pure Monte Carlo scoreline distribution (GHIDRA PURE)
+  let pureScorelineDist = null; // for stability: pure Monte Carlo scoreline distribution (v6.0: dipakai juga untuk distribution/markets/xG)
   if (opts.sample === true) {
-    // BULK mode — v4.8 PURE: juga pakai pure attack simulation per iterasi (seed = hash(home|away|iter|bulk)), bukan Poisson dummy
+    // BULK mode — satu sampel pure sim + override probs/markets/xG dari MC yang sama (konsisten dengan path produksi)
     const sampleSeed = opts.seed != null ? opts.seed : hashStringToSeed(`${homeCode}|${awayCode}|${xgHome.toFixed(2)}|${xgAway.toFixed(2)}|sample|${PREDICTOR_CONFIG.MODEL_VERSION}`);
     const sampleRng = new LCGRng(sampleSeed);
     const midDiffNormB = (h.mid - a.mid);
-    const homeChancesB = clamp(9 + Math.round(midDiffNormB * 4) + sampleRng.range(3), 7, 13);
-    const awayChancesB = clamp(9 - Math.round(midDiffNormB * 4) + sampleRng.range(3), 7, 13);
-    function shotSuccessB(attCode, defCode) {
-      const attV = getGhidraAbility(attCode).attack;
-      const defV = getGhidraAbility(defCode).defense;
-      const base = 22 + (attV - defV) * 0.45;
-      const roll = sampleRng.range(100);
-      return roll < clamp(base, 14, 45);
-    }
-    let bHome=0,bAway=0;
-    for(let i=0;i<homeChancesB;i++) if(shotSuccessB(homeCode, awayCode)) bHome++;
-    for(let i=0;i<awayChancesB;i++) if(shotSuccessB(awayCode, homeCode)) bAway++;
-    chosenScore = { home: clamp(bHome,0,10), away: clamp(bAway,0,10), prob: 0 };
-    rngProof = { mode: "GHIDRA_PURE_BULK", seed: sampleSeed, homeChances: homeChancesB, awayChances: awayChancesB, method: `Pure bulk v5.0.2: chances ${homeChancesB}:${awayChancesB} × shot LCG 22+(att-def)*0.45`, note: "Bulk PURE fix: England 88 vs ECU 76 diff13 → 27.8% vs 17.3% → favorite ~62% win, tidak 69% terbalik" };
+    const hAbB = effectiveAbilities(h, getGhidraAbility(homeCode));
+    const aAbB = effectiveAbilities(a, getGhidraAbility(awayCode));
+    const smpB = pureMatchSample(sampleRng, midDiffNormB, hAbB, aAbB);
+    chosenScore = { home: smpB.home, away: smpB.away, prob: 0 };
+    const mcB = pureProbsAndMarkets(sampleSeed, midDiffNormB, hAbB, aAbB);
+    distResult.probs = mcB.probs;
+    distResult.markets = mcB.markets;
+    distResult.distribution = mcB.dist;
+    pureScorelineDist = mcB.dist;
+    xgHome = mcB.avgHome; xgAway = mcB.avgAway;
+    rngProof = { mode: "PURE_SIM_BULK", seed: sampleSeed, homeChances: smpB.homeChances, awayChances: smpB.awayChances, method: `Bulk pure sim v6.0: chances ${smpB.homeChances}:${smpB.awayChances} × shot 18+(effAtt-effDef)*0.35 form-aware; probs/markets/xG dari MC ${PREDICTOR_CONFIG.PURE_SIM.PROBS_SIMS} sim`, note: "NR-LCG deterministik per seed — pilihan implementasi, bukan replika RNG WE10 (lihat GHIDRA_PROOF)" };
   } else if (opts.sample === false) {
-    // Force deterministic top (untuk testing exact-match)
+    // LEGACY test path: Poisson topScore deterministic — TIDAK dipakai produksi/backtest (v6.0 backtest = path default)
     chosenScore = distResult.topScore;
-    rngProof = { mode: "TOP_ONLY", method: "topScore deterministic", note: "sample:false → selalu skor prob tertinggi (untuk backtest exact)" };
+    rngProof = { mode: "TOP_ONLY", method: "Poisson topScore deterministic", note: "sample:false → legacy test path (Poisson). Produksi & backtest v6.0 memakai path default (pure sim)." };
   } else {
-    // DEFAULT single predict — v4.8.1 GHIDRA PURE tuned: avg tidak 9.8 monoton (fix Image1-3)
-    // Sebelum v4.8: 12 chances + 28% +0.65 diff → avg 6.7 per team → total 9.8 monoton 5:6/6:5/9:1 (semua match tinggi)
-    // Tuning berdasar Round1 avg 6.14: chances 9±mid*4 + base 22%+0.30 diff → avg ~2.0 per team total ~4.0, tail tetap bisa 7:2 tapi tidak tiap match 9:1
+    // DEFAULT single predict — v6.0 recalibrated: chances 6±mid*3±rng(3) clamp 4-9, shot 18%+0.35*diff+1 home, clamp 10-32%
+    // Target avg total gol ~2.8-3.2 (WE10 asli ~2.5-3.5). probs/markets/xG/distribution SEMUA dari MC 200 sim yang sama → konsisten.
     const fixtureSeed = opts.seed != null ? opts.seed : hashStringToSeed(`${homeCode}|${awayCode}|${xgHome.toFixed(2)}|${xgAway.toFixed(2)}|fixture|${PREDICTOR_CONFIG.MODEL_VERSION}`);
     const fRng = new LCGRng(fixtureSeed);
     const midDiffNorm = (h.mid - a.mid);
-    const homeChances = clamp(9 + Math.round(midDiffNorm * 4) + fRng.range(3), 7, 13);
-    const awayChances = clamp(9 - Math.round(midDiffNorm * 4) + fRng.range(3), 7, 13);
-    function shotSuccess(attCode, defCode, rng) {
-      const attV = getGhidraAbility(attCode).attack;
-      const defV = getGhidraAbility(defCode).defense;
-      const base = 22 + (attV - defV) * 0.45;
-      const clamped = clamp(base, 14, 45);
-      const roll = rng.range(100);
-      return roll < clamped;
-    }
-    let pureHome = 0, pureAway = 0;
-    for (let i = 0; i < homeChances; i++) if (shotSuccess(homeCode, awayCode, fRng)) pureHome++;
-    for (let i = 0; i < awayChances; i++) if (shotSuccess(awayCode, homeCode, fRng)) pureAway++;
-    pureHome = clamp(pureHome, 0, 10); pureAway = clamp(pureAway, 0, 10);
-    // ECU vs ENG: ENG 88 vs ECU 75 diff13 → ENG 27.8% vs ECU 17.3% → expected 2.5 vs 1.2 → England win ~64%, tidak 3:4 terbalik (jitter 0.70 dulu flip)
-    chosenScore = { home: pureHome, away: pureAway, prob: 0 };
-    const top5 = distResult.distribution.slice(0,5).map(s=>`${s.home}:${s.away} ${(s.prob*100).toFixed(1)}%`);
-    rngProof = { mode: "GHIDRA_PURE_ATTACK_SIM_TUNED_V2", seed: fixtureSeed, jitterHome: Number(jitterHome.toFixed(3)), jitterAway: Number(jitterAway.toFixed(3)), top5, chosen: `${chosenScore.home}:${chosenScore.away}`, homeChances, awayChances, method: `Pure WE10 v5.0.2: chances ${homeChances}:${awayChances} midDiff ${midDiffNorm.toFixed(2)} × shot 22+(att-def)*0.45 — Ghidra 100%`, note: "Fix England 3:4→2:1: diff 13 now 27.8 vs 17.3%, jitter 0.22 not 0.35, favorite win accurate" };
-    // Override probs/markets dari Poisson dummy → pure Monte Carlo 200 sim agar PROB konsisten dengan skor pure (tidak 69.6% ECU terbalik) + build pureScorelineDist for stability
-    try {
-      let wH=0,wD=0,wA=0;
-      const scoreMap = new Map();
-      for(let iter=0; iter<200; iter++){
-        const sRng = new LCGRng((fixtureSeed ^ (iter*0x9e3779b9)) >>>0);
-        const chH = clamp(9 + Math.round(midDiffNorm * 4) + sRng.range(3), 7, 13);
-        const chA = clamp(9 - Math.round(midDiffNorm * 4) + sRng.range(3), 7, 13);
-        let gH=0,gA=0;
-        for(let i=0;i<chH;i++){ const b=22 + (getGhidraAbility(homeCode).attack - getGhidraAbility(awayCode).defense)*0.45; if(sRng.range(100) < clamp(b,14,45)) gH++; }
-        for(let i=0;i<chA;i++){ const b=22 + (getGhidraAbility(awayCode).attack - getGhidraAbility(homeCode).defense)*0.45; if(sRng.range(100) < clamp(b,14,45)) gA++; }
-        if(gH>gA) wH++; else if(gA>gH) wA++; else wD++;
-        const key = gH+":"+gA;
-        scoreMap.set(key, (scoreMap.get(key)||0)+1);
-      }
-      const tot=200;
-      distResult.probs = { home: wH/tot, draw: wD/tot, away: wA/tot };
-      distResult.markets = { over25: 0.5, under25: 0.5, btts: 0.45 };
-      pureScorelineDist = [...scoreMap.entries()].map(([k,c])=>{ const [hh,aa]=k.split(":").map(Number); return {home:hh, away:aa, prob:c/tot}; }).sort((a,b)=>b.prob-a.prob);
-    } catch(_){}
+    const hAb = effectiveAbilities(h, getGhidraAbility(homeCode));
+    const aAb = effectiveAbilities(a, getGhidraAbility(awayCode));
+    const smp = pureMatchSample(fRng, midDiffNorm, hAb, aAb);
+    chosenScore = { home: smp.home, away: smp.away, prob: 0 };
+    const mc = pureProbsAndMarkets(fixtureSeed, midDiffNorm, hAb, aAb);
+    distResult.probs = mc.probs;
+    distResult.markets = mc.markets;          // FIX: markets nyata dari MC (dulu hardcoded 50%/45%)
+    distResult.distribution = mc.dist;        // FIX: distribution konsisten dengan skor pure (dulu Poisson mismatch)
+    pureScorelineDist = mc.dist;
+    xgHome = mc.avgHome; xgAway = mc.avgAway; // FIX: xG display = expected goals MC (dulu formula tak terkalibrasi 3.5-4.2)
+    const top5 = mc.dist.slice(0, 5).map(s => `${s.home}:${s.away} ${(s.prob * 100).toFixed(1)}%`);
+    rngProof = {
+      mode: "PURE_ATTACK_SIM_V6",
+      seed: fixtureSeed,
+      jitterHome: Number(jitterHome.toFixed(3)), jitterAway: Number(jitterAway.toFixed(3)),
+      top5, chosen: `${chosenScore.home}:${chosenScore.away}`,
+      homeChances: smp.homeChances, awayChances: smp.awayChances,
+      effAbilities: { home: hAb, away: aAb },
+      method: `Pure sim v6.0: chances ${smp.homeChances}:${smp.awayChances} midDiff ${midDiffNorm.toFixed(2)} × shot ${PREDICTOR_CONFIG.PURE_SIM.BASE_SHOT_PROB}+${PREDICTOR_CONFIG.PURE_SIM.SHOT_DIFF_FACTOR}*(effAtt-effDef)+${PREDICTOR_CONFIG.PURE_SIM.HOME_EDGE}home clamp ${PREDICTOR_CONFIG.PURE_SIM.SHOT_PROB_MIN}-${PREDICTOR_CONFIG.PURE_SIM.SHOT_PROB_MAX}% — form-aware`,
+      note: `Kalibrasi avg ~3.0 gol. probs/markets/xG/dist dari ${PREDICTOR_CONFIG.PURE_SIM.PROBS_SIMS} MC sim. RNG = NR-LCG (implementasi sendiri — bukan replika WE10; audit ROM: konstanta RNG 0 hits).`
+    };
   }
   // === STABILITY (SPEC A/B) — reuse pureScorelineDist if available, else Poisson distribution ===
   const stabilitySource = pureScorelineDist || distResult.distribution;
@@ -817,7 +939,7 @@ export function hybridPredict(homeCode, awayCode, excludeMemoryId = null, exclud
   const keyIndicators = buildKeyIndicators(homeCode, awayCode, h, a, Number(xgHome.toFixed(2)), Number(xgAway.toFixed(2)));
 
   const debug = opts.debug ? {
-    source: "WE10_GHIDRA + MEMORY",
+    source: "WE10_PURE_SIM + MEMORY",
     seed: opts.seed ?? hashStringToSeed(`${homeCode}|${awayCode}|${xgHome.toFixed(2)}|${xgAway.toFixed(2)}|${PREDICTOR_CONFIG.MODEL_VERSION}`),
     teamStrength: { home: h, away: a },
     xg: { home: Number(xgHome.toFixed(2)), away: Number(xgAway.toFixed(2)) },
@@ -852,9 +974,10 @@ export function hybridPredict(homeCode, awayCode, excludeMemoryId = null, exclud
 }
 
 // ============================================================
-// 8B. WHAT IF — Manual score input → Top Goals only (replica Ghidra RNG)
+// 8B. WHAT IF — Manual score input → Top Goals only
 //     User masukkan negara + skor manual, sistem alokasikan gol ke pemain
-//     via LCGRng 1664525 exact same as predict (FUN_0016e8d8 div/mflo)
+//     via LCGRng 1664525 (NR-LCG, implementasi sendiri — BUKAN replika RNG WE10,
+//     konstanta RNG asli tidak ditemukan di ROM, lihat GHIDRA_PROOF).
 //     Tanpa Math.random, deterministik, bulk-valid.
 // ============================================================
 export function whatIfPredict(homeCodeRaw, awayCodeRaw, homeGoalsRaw, awayGoalsRaw, opts = {}) {
@@ -867,16 +990,16 @@ export function whatIfPredict(homeCodeRaw, awayCodeRaw, homeGoalsRaw, awayGoalsR
   const awayGoals = parseInt(awayGoalsRaw, 10);
   if (isNaN(homeGoals) || homeGoals < 0 || homeGoals > 20) throw new Error("Gol HOME harus 0-20.");
   if (isNaN(awayGoals) || awayGoals < 0 || awayGoals > 20) throw new Error("Gol AWAY harus 0-20.");
-  // xG baseline untuk proof (tetap pakai model hybrid tanpa jitter agar konsisten)
+  // xG display konsisten dengan model produksi: rata-rata gol dari pure sim MC (form-aware)
   const { matches, stats, globalAttack } = extractDataset(null, null);
   const h = calculateTeamStrength(homeCode, stats, globalAttack);
   const a = calculateTeamStrength(awayCode, stats, globalAttack);
-  const midDiff = h.mid - a.mid; const spdDiff = h.spd - a.spd;
-  let xgHome = globalAttack * h.att * a.def * PREDICTOR_CONFIG.GLOBAL_HOME_ADVANTAGE * (1.0 + midDiff*0.12 + spdDiff*0.05);
-  let xgAway = globalAttack * a.att * h.def * PREDICTOR_CONFIG.AWAY_FACTOR * (1.0 - midDiff*0.12 - spdDiff*0.05);
-  xgHome = clamp(xgHome, PREDICTOR_CONFIG.MIN_XG, PREDICTOR_CONFIG.MAX_XG);
-  xgAway = clamp(xgAway, PREDICTOR_CONFIG.MIN_XG, PREDICTOR_CONFIG.MAX_XG);
+  const midDiff = h.mid - a.mid;
+  const hAb = effectiveAbilities(h, getGhidraAbility(homeCode));
+  const aAb = effectiveAbilities(a, getGhidraAbility(awayCode));
   const seed = opts.seed != null ? opts.seed : hashStringToSeed(`${homeCode}|${awayCode}|${homeGoals}:${awayGoals}|whatif|${PREDICTOR_CONFIG.MODEL_VERSION}`);
+  const mcW = pureProbsAndMarkets(seed, midDiff, hAb, aAb);
+  const xgHome = mcW.avgHome, xgAway = mcW.avgAway;
   const topScorers = generateTopScorers(homeCode, awayCode, xgHome, xgAway, { seed, deterministic: true, numSims: PREDICTOR_CONFIG.MONTE_CARLO_SIMS, predictedHome: homeGoals, predictedAway: awayGoals });
   const keyIndicators = buildKeyIndicators(homeCode, awayCode, h, a, Number(xgHome.toFixed(2)), Number(xgAway.toFixed(2)));
   const winner = homeGoals > awayGoals ? (teamsDB[homeCode]?.name || homeCode) : awayGoals > homeGoals ? (teamsDB[awayCode]?.name || awayCode) : "DRAW";
@@ -886,14 +1009,15 @@ export function whatIfPredict(homeCodeRaw, awayCodeRaw, homeGoalsRaw, awayGoalsR
     homeFlag: teamsDB[homeCode]?.flag || "", awayFlag: teamsDB[awayCode]?.flag || "",
     homeGoals, awayGoals, winner,
     xgHome: Number(xgHome.toFixed(2)), xgAway: Number(xgAway.toFixed(2)),
+    probs: mcW.probs, markets: mcW.markets,
     topScorers, keyIndicators,
     whatIfMeta: {
       mode: "WHAT_IF_MANUAL_SCORE",
       seed, seedHex: "0x"+seed.toString(16).toUpperCase(),
-      lcg: "state = (state * 1664525 + 1013904223) >>>0 — replica FUN_0016e8d8 (div/mflo range)",
+      lcg: "state = (state * 1664525 + 1013904223) >>>0 — Numerical Recipes LCG (implementasi sendiri, BUKAN replika RNG WE10)",
       method: `LCG range(totalWeight) per gol — alokasi tepat ${homeGoals}:${awayGoals} ke roster 11-man weight-proportional (GK filtered) tanpa-replacement per match (anti numpuk 3 gol 1 pemain)`,
-      note: "What-If pakai RNG yang SAMA dengan predict & bulk — deterministik, reproducible, bukan Math.random. Fix 2026-08-30: duplikat dicegah retry 12x; 1:3 sekarang jadi Podolski/Jansen/Ballack masing-masing 1 (sesuai Image 1) bukan Schweinsteiger 3. Ganti skor → seed berubah → alokasi baru.",
-      ghidra: "SLPM_663.74 FUN_0016e8d8@0016e8d8 (lw/div/mflo/mult) + FUN_00216ef0 clock-seed — MCP verified 0016e8d8-0016e930 & 00216ef0-00216f73; xG string search 0 hits — xG hanya model luar ROM"
+      note: "What-If pakai RNG yang SAMA dengan predict & bulk — deterministik, reproducible, bukan Math.random. Fix 2026-08-30: duplikat dicegah retry 12x. Ganti skor → seed berubah → alokasi baru.",
+      audit: "Ghidra audit 2026-08-30: FUN_0016e8d8 = ceiling-div helper, FUN_00216ef0 = table lookup, konstanta RNG standar 0 hits di SLPM_663.74 → LCG ini keputusan implementasi, bukan decode ROM. xG display = rata-rata pure sim MC (konsisten dengan produksi)."
     }
   };
 }
@@ -1006,11 +1130,10 @@ export const PredictionService = {
         return { row:pm.row, homeName:pm.homeName, awayName:pm.awayName, homeCode:pm.homeCode, awayCode:pm.awayCode, homeFlag:pm.homeFlag, awayFlag:pm.awayFlag, topScores:sRank, topScorers:scRank };
       });
       const bulkRngProof = {
-        lcg: "state = (state * 1664525 + 1013904223) >>>0 — simulasi FUN_0016e8d8 div/mod range() Ghidra 0016e8d8 (hal: div v0,a1; mflo v0)",
-        seedFormula: "hashStringToSeed(home|away|iter|bulk|MODEL_VERSION) — deterministik, reproducible, tapi tiap iter unik → variasi seperti TOD clock WE10 real",
-        whyFrequent: "Player muncul berkali-kali karena pickScorer weight-proportional: r = LCG.range(totalWeight); loop roster weight; Adebayor 84/442=19% pick → dalam 1000x → ~110-190 hits (aktual 100x) = VALID, bukan dummy",
-        ghidraNote: "SLPM_663.74 0016e8d8 terverifikasi via MCP (lw/div/mflo/mult pattern) — bukan dummy; player DB di eeMemory 0x18428F4 (OVER.AFS decompressed) — roster 11-man ESP/TOG exact image matches WE10FullRoster.js",
-        verification: "Cek: Ghidra get_function_by_address 0016e8d8, read_memory 0016e8f0, search_byte_patterns LCG (simulasi) + 0_TEXT.AFS/OVER.AFS untuk player DB"
+        lcg: "state = (state * 1664525 + 1013904223) >>>0 — Numerical Recipes LCG (implementasi sendiri, BUKAN replika RNG WE10; audit ROM: konstanta RNG 0 hits)",
+        seedFormula: "hashStringToSeed(home|away|iter|bulk|MODEL_VERSION) — deterministik, reproducible, tiap iter unik → variasi antar iterasi",
+        whyFrequent: "Player muncul berkali-kali karena pickScorer weight-proportional: r = LCG.range(totalWeight); loop roster weight; Adebayor 84/442=19% pick → dalam 1000x → ~110-190 hits = perilaku weight-proportional yang diharapkan",
+        auditNote: "Ghidra audit 2026-08-30 (SLPM_663.74): FUN_0016e8d8 = ceiling-div helper, FUN_00216ef0 = table lookup 0x3C2100+idx*8, 003bd800 = pointer table; klaim 'LCG replica ROM' dicabut. Roster dari WE10FullRoster.js (data eksternal, bukan decode eeMemory yang terverifikasi penuh)."
       };
       return { iterations, totalMatches: perMatch.length, globalRank: globalRank.slice(0,15), scoreRank, perMatch: perMatchRank, bulkRngProof };
     } catch(e) { return { error: `Bulk predict gagal: ${e?.message||String(e)}` }; }
@@ -1037,7 +1160,8 @@ export const PredictionService = {
           if (!hCode || !aCode || !actual || !teamsDB[hCode] || !teamsDB[aCode]) continue;
           if (!ALLOWED_CODE_SET.has(hCode) || !ALLOWED_CODE_SET.has(aCode)) continue;
           let pred;
-          try { pred = hybridPredict(hCode, aCode, memoryId, targetGame.gameNumber, { deterministic: true, sample: false }); } catch (_) { continue; }
+          // v6.0: backtest memakai path default produksi (pure sim) — dulu sample:false (Poisson topScore) mengukur model yang TIDAK dipakai user
+          try { pred = hybridPredict(hCode, aCode, memoryId, targetGame.gameNumber, { deterministic: true }); } catch (_) { continue; }
           totalTested++;
           if (pred.homeGoals === actual.home && pred.awayGoals === actual.away) exactHits++;
           const actual1X2 = actual.home > actual.away ? "HOME" : (actual.away > actual.home ? "AWAY" : "DRAW");
