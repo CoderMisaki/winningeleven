@@ -286,14 +286,17 @@ export const UIRenderer = {
       const card = document.createElement("div");
       card.className = "pred-card";
 
-      if (p.error) {
+      // FIX BUG: baris tanpa `prediction` (mis. negara tidak valid) sebelumnya tetap masuk
+      // cabang sukses dan menjatuhkan seluruh render karena `pred.probs` undefined.
+      if (p.error || !p.prediction) {
         const flagHint = p.homeFlag || p.awayFlag ? `<span style="margin-left:6px;">${Security.escapeHtml(p.homeFlag||"")} ${Security.escapeHtml(p.awayFlag||"")}</span>` : "";
+        const errText = p.error || "Prediksi gagal diproses (data tidak lengkap).";
         card.innerHTML = `
           <div class="pred-card-header">
             <span class="pred-badge-row">MATCH B${p.row}</span>
             <span class="pred-match-title">${Security.escapeHtml(p.homeName)} vs ${Security.escapeHtml(p.awayName)}${flagHint}</span>
           </div>
-          <div class="pred-error-banner">⛔ ${Security.escapeHtml(p.error)}</div>
+          <div class="pred-error-banner">⛔ ${Security.escapeHtml(errText)}</div>
           ${p.p1Warning ? `<div style="background:#332200;border:1px solid #ffaa00;color:#ffcc66;padding:6px;font-size:0.7rem;margin-top:6px;">${Security.escapeHtml(p.p1Warning)}</div>` : ""}
           <div style="font-size:0.6rem;color:#888;margin-top:6px;">Daftar 57 valid: Brazil, Argentina, Mexico, USA, Uruguay, Colombia, Chile, Paraguay, Ecuador, Peru, Costa Rica, Trinidad & Tobago, Italy, France, England, Spain, Germany, Holland, Portugal, Czech, Croatia, Sweden, Greece, Russia, Turkey, Scotland, Wales, Bulgaria, Poland, Slovenia, Finland, Hungary, Switzerland, Romania, N. Ireland, Ireland, Ukraine, Norway, Belgium, Latvia, Austria, Slovakia, Serbia & Mont., Denmark, Japan, Korea, Australia, Saudi Arabia, Iran, Nigeria, Cameroon, Ghana, South Africa, Ivory Coast, Angola, Tunisia, Togo.</div>
         `;

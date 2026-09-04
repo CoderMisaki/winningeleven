@@ -55,15 +55,22 @@ export function runWalkForwardBacktest(memoryId=1, opts={}){
   };
   // Collect training matches for mostCommon baseline (incremental)
   const trainingMatches = [];
+  let trainingCursor = 0; // index game berikutnya yang belum dimasukkan ke training set
 
   for(let gIdx=1; gIdx<games.length; gIdx++){
     const targetGame = games[gIdx];
     if(!targetGame || !Array.isArray(targetGame.matches)) continue;
-    // Build training set up to gIdx-1 for mostCommon
-    for(let k=0;k<gIdx;k++){
-      for(const m of games[k].matches || []){
-        trainingMatches.push(m);
+    // FIX BUG: sebelumnya setiap iterasi mengisi ULANG seluruh game 0..gIdx-1,
+    // sehingga game lama terhitung berulang-ulang (O(n^2)) dan baseline
+    // "most common scoreline" bias ke game-game awal. Sekarang inkremental:
+    // cukup tambahkan game terakhir yang baru lewat (gIdx-1).
+    if (gIdx - 1 >= trainingCursor) {
+      for (let k = trainingCursor; k <= gIdx - 1; k++) {
+        for (const m of games[k].matches || []) {
+          trainingMatches.push(m);
+        }
       }
+      trainingCursor = gIdx;
     }
     const mostCommonScore = getMostCommonScoreline(trainingMatches);
 
@@ -159,14 +166,14 @@ export function runWalkForwardBacktest(memoryId=1, opts={}){
 export function runAblationTest(memoryId=1){
   const base = runWalkForwardBacktest(memoryId);
   if(base.error) return base;
+  // FIX BUG: tiga konfigurasi terakhir sebelumnya identik ({}) sehingga kolom
+  // "delta" selalu 0 dan ablation tidak mengukur apa-apa. Sekarang bertingkat rapi.
   const configs = [
     {name:"Ratings", opts:{disableForm:true, disableH2H:true, disableContext:true, disableVariance:true}},
-    {name:"Ratings+Form", opts:{disableH2H:true, disableContext:true, disableVariance:true}},
-    {name:"Ratings+Form+H2H", opts:{disableContext:true, disableVariance:true}},
-    {name:"+Context", opts:{disableVariance:true}},
-    {name:"+Poisson", opts:{disableVariance:true}},
-    {name:"+Variance", opts:{}},
-    {name:"Full Hybrid", opts:{}},
+    {name:"Ratings+Form", opts:{disableForm:false, disableH2H:true, disableContext:true, disableVariance:true}},
+    {name:"Ratings+Form+H2H", opts:{disableForm:false, disableH2H:false, disableContext:true, disableVariance:true}},
+    {name:"+Context", opts:{disableForm:false, disableH2H:false, disableContext:false, disableVariance:true}},
+    {name:"+Variance (Full Hybrid)", opts:{}}
   ];
   const results=[];
   let prevAcc = null;

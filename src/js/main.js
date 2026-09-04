@@ -22,10 +22,13 @@ if (typeof marked !== "undefined") {
   const customRenderer = new marked.Renderer();
 
   customRenderer.code = function (code, lang) {
-    const validLang = lang && hljs.getLanguage(lang) ? lang : "";
+    // FIX BUG: `hljs` diakses tanpa pengecekan — kalau CDN highlight.js gagal dimuat
+    // (offline / diblokir CSP) seluruh render markdown ikut error.
+    const hljsReady = typeof hljs !== "undefined" && !!hljs;
+    const validLang = lang && hljsReady && typeof hljs.getLanguage === "function" && hljs.getLanguage(lang) ? lang : "";
     let highlightedCode = Security.escapeHtml(code);
 
-    if (validLang && typeof hljs !== "undefined") {
+    if (validLang && hljsReady && typeof hljs.highlight === "function") {
       try {
         highlightedCode = hljs.highlight(code, { language: validLang }).value;
       } catch (_) {}
@@ -66,6 +69,18 @@ document.addEventListener("DOMContentLoaded", async () => {
   const bindClick = (id, handler) => {
     const el = document.getElementById(id);
     if (el) el.addEventListener("click", handler);
+  };
+
+  // FIX BUG: StateManager.save() hanya menyimpan `db` (memories) ke IndexedDB.
+  // Perubahan pada homeQuery (mode MATCHING CENTER) harus disimpan ke localStorage
+  // lewat saveHomeQueryImmediate(), kalau tidak semua hasil APPLY hilang saat refresh.
+  const persistState = (isEditor) => {
+    try {
+      if (isEditor) StateManager.save();
+      else StateManager.saveHomeQueryImmediate();
+    } catch (e) {
+      console.warn("[persistState] gagal menyimpan", e);
+    }
   };
 
   // 1. Initial Navigation
@@ -178,10 +193,20 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
 
   bindClick("btnClearForm", () => {
-    StateManager.clearHomeQuery();
-    UIRenderer.renderMatchGrid();
-    document.getElementById("resultsPanel")?.classList.add("hidden");
-    document.getElementById("predictPanel")?.classList.add("hidden");
+    UIRenderer.showConfirm("Reset seluruh isi B1-B8 & Top Goals G1-G16?", () => {
+      StateManager.clearHomeQuery();
+      UIRenderer.renderMatchGrid();
+      document.getElementById("resultsPanel")?.classList.add("hidden");
+      document.getElementById("predictPanel")?.classList.add("hidden");
+      // Bersihkan juga panel turunan agar tidak menampilkan hasil dari data lama
+      const bo = document.getElementById("baganOutput");
+      if (bo) bo.innerHTML = `<div style="color:#ff0;">Form dikosongkan — isi B1-B8 lalu klik <strong>GENERATE BAGAN</strong>.</div>`;
+      const wi = document.getElementById("whatIfOutput");
+      if (wi) wi.innerHTML = `Isi HOME, AWAY &amp; skor (0-20) lalu klik <strong style="color:#0f0;">LIHAT TOP GOALS</strong>.`;
+      const to = document.getElementById("tiktokSyncOutput");
+      if (to) to.innerHTML = `Form dikosongkan — isi ulang B1-B8 &amp; Top Goals G1-G16 lalu Generate.`;
+      try { Toast.show("Form direset.", "success"); } catch (_) {}
+    });
   });
 
   // 5. Predict Execution — WE10 Hybrid v7 200x AUTO ensemble (non-blocking bulk)
@@ -225,11 +250,17 @@ document.addEventListener("DOMContentLoaded", async () => {
             throw new Error("PredictionService mengembalikan hasil kosong.");
           }
 
+          // FIX BUG (kritikal): dashboard single-predict TIDAK pernah dirender sebelumnya.
+          // Akibatnya tabel "SKOR & PEMENANG PER MATCH" dan "GLOBAL TOP GOALS" (G1-G16)
+          // tidak pernah muncul di panel PREDICT. Render dulu, baru tempel box 200x di bawahnya.
+          predictOutput.innerHTML = "";
+          UIRenderer.renderPredictionDashboard(predictions, predictOutput);
+
            // Tampilkan SINGLE sebagai preview tipis, tapi HASIL UTAMA adalah 200x rata-rata (stabil)
            // Hapus banner lama agar tidak dikira 1 data = final
            const singleNote = document.createElement("div");
            singleNote.style.cssText = "background:#332200;border:1px dashed #ff0;color:#ffcc66;padding:6px;margin-bottom:8px;font-size:0.6rem;text-align:center;";
-           singleNote.innerHTML = `⚠️ Di atas adalah <strong>SAMPLE TUNGGAL 1x</strong> (contoh: 1:0 Sweden — Linderoth 10% kebetulan kepilih). <strong>HASIL STABIL ada di bawah 200x rata-rata</strong> — stabil tidak berpacu 1 data.`;
+           singleNote.innerHTML = `⚠️ Tabel di <strong>BAWAH</strong> ini adalah <strong>SAMPLE TUNGGAL 1x</strong> (contoh: 1:0 Sweden — Linderoth 10% kebetulan kepilih). <strong>HASIL STABIL ada di kotak biru 200x rata-rata di bagian paling bawah</strong> — stabil, tidak berpacu pada 1 data.`;
            predictOutput.insertBefore(singleNote, predictOutput.firstChild);
 
            // === AUTO 200x ENSEMBLE — PRIMARY HASIL (200x pertandingan, rata-rata) ===
@@ -328,7 +359,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                         else StateManager.homeQuery.matches[idx].score = scoreStr;
                         if(ds?.matches?.[idx]) ds.matches[idx].score = scoreStr;
                       });
-                      UIRenderer.renderMatchGrid(); StateManager.save();
+                      UIRenderer.renderMatchGrid(); persistState(StateManager.activeMemoryId !== null);
                       const b=document.getElementById("btnApplyAvgScores"); if(b){b.textContent="✓ APPLIED"; b.disabled=true;}
                     });
                     document.getElementById("btnApplyConsistentScorers")?.addEventListener("click", ()=>{
@@ -350,7 +381,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                       });
                       if(isEditor && ds?.topGoals && ds.topGoals.length<16) while(ds.topGoals.length<16) ds.topGoals.push({country:"",player:"",goals:""});
                       if(!isEditor && StateManager.homeQuery.topGoals.length<16) while(StateManager.homeQuery.topGoals.length<16) StateManager.homeQuery.topGoals.push({country:"",player:"",goals:""});
-                      UIRenderer.renderMatchGrid(); StateManager.save();
+                      UIRenderer.renderMatchGrid(); persistState(StateManager.activeMemoryId !== null);
                       const b=document.getElementById("btnApplyConsistentScorers"); if(b){b.textContent="✓ APPLIED"; b.disabled=true;}
                     });
                   },0);
@@ -385,8 +416,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                   }
                 });
                 UIRenderer.renderMatchGrid();
-                if (!isEditor) StateManager.save();
-                else StateManager.save();
+                persistState(isEditor);
                 return filledScores;
               };
               const doFillGoals = () => {
@@ -432,8 +462,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                   while (StateManager.homeQuery.topGoals.length < 16) StateManager.homeQuery.topGoals.push({ country: "", player: "", goals: "" });
                 }
                 UIRenderer.renderMatchGrid();
-                if (!isEditor) StateManager.save();
-                else StateManager.save();
+                persistState(isEditor);
                 return filledGoals;
               };
 
@@ -488,9 +517,38 @@ document.addEventListener("DOMContentLoaded", async () => {
   let currentAttachment = null;
   let abortController = null;
 
+  // FIX BUG: Toast sebelumnya hanya console.log — user tidak pernah melihat pesan
+  // ("File terlalu besar", "Chats Imported", dll). Sekarang benar-benar ditampilkan.
   const Toast = {
-    show(message) {
+    container: null,
+    ensureContainer() {
+      if (this.container && document.body.contains(this.container)) return this.container;
+      const el = document.createElement("div");
+      el.id = "we10ToastContainer";
+      el.style.cssText = "position:fixed;right:14px;bottom:14px;z-index:99999;display:flex;flex-direction:column;gap:8px;max-width:min(90vw,380px);pointer-events:none;";
+      document.body.appendChild(el);
+      this.container = el;
+      return el;
+    },
+    show(message, type = "info") {
       console.log("[TOAST]", message);
+      try {
+        const host = this.ensureContainer();
+        const colors = {
+          info: { bg: "#001a33", border: "#0ff", fg: "#0ff" },
+          success: { bg: "#002a00", border: "#0f0", fg: "#0f0" },
+          error: { bg: "#330000", border: "#f55", fg: "#ffaaaa" }
+        }[type] || { bg: "#001a33", border: "#0ff", fg: "#0ff" };
+        const item = document.createElement("div");
+        item.style.cssText = `background:${colors.bg};border:1px solid ${colors.border};color:${colors.fg};padding:8px 12px;font-family:var(--font-mono);font-size:0.7rem;box-shadow:0 4px 12px rgba(0,0,0,.6);opacity:0;transition:opacity .25s ease;`;
+        item.textContent = String(message ?? "");
+        host.appendChild(item);
+        requestAnimationFrame(() => { item.style.opacity = "1"; });
+        setTimeout(() => {
+          item.style.opacity = "0";
+          setTimeout(() => item.remove(), 300);
+        }, 3200);
+      } catch (_) { /* fallback diam-diam */ }
     }
   };
 
@@ -959,19 +1017,37 @@ document.addEventListener("DOMContentLoaded", async () => {
   });
 
   importChatsFile?.addEventListener("change", (e) => {
-    const file = e.target.files[0];
+    const file = e.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
     reader.onload = (event) => {
       try {
         const importedData = JSON.parse(event.target.result);
-        sessionManager.sessions = { ...sessionManager.sessions, ...importedData };
+        if (!importedData || typeof importedData !== "object" || Array.isArray(importedData)) {
+          throw new Error("Format file tidak dikenal (harus objek sesi).");
+        }
+        // Validasi tiap sesi: minimal punya id + messages array
+        const clean = {};
+        for (const [k, v] of Object.entries(importedData)) {
+          if (!v || typeof v !== "object") continue;
+          clean[k] = {
+            id: k,
+            title: typeof v.title === "string" ? v.title : "New Chat",
+            messages: Array.isArray(v.messages) ? v.messages : [],
+            createdAt: v.createdAt || Date.now(),
+            updatedAt: v.updatedAt || Date.now()
+          };
+        }
+        sessionManager.sessions = { ...sessionManager.sessions, ...clean };
+        if (!sessionManager.sessions[sessionManager.currentId]) {
+          sessionManager.currentId = Object.keys(sessionManager.sessions)[0] || sessionManager.createNewSession();
+        }
         sessionManager.save();
-        Toast.show("Chats Imported Successfully!");
+        Toast.show(`Chats Imported Successfully! (${Object.keys(clean).length} sesi)`, "success");
         renderSidebar();
         renderChatWindow();
       } catch (err) {
-        Toast.show("Error parsing JSON file");
+        Toast.show(`Error parsing JSON file: ${err?.message || "format tidak valid"}`, "error");
       }
     };
     reader.readAsText(file);
@@ -1021,14 +1097,14 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   if (aiChatFile) {
     aiChatFile.addEventListener("change", e => {
-      const file = e.target.files[0];
+      const file = e.target.files?.[0];
       if (!file) return;
 
       const MAX_FILE_MB = 4;
       const MAX_FILE_SIZE = MAX_FILE_MB * 1024 * 1024;
 
       if (file.size > MAX_FILE_SIZE) {
-        Toast.show(`File terlalu besar. Maksimal ${MAX_FILE_MB}MB.`);
+        Toast.show(`File terlalu besar. Maksimal ${MAX_FILE_MB}MB.`, "error");
         aiChatFile.value = "";
         return;
       }
@@ -1059,7 +1135,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       };
 
       reader.onerror = () => {
-        Toast.show("Gagal membaca file.");
+        Toast.show("Gagal membaca file.", "error");
         aiChatFile.value = "";
       };
 
@@ -1090,8 +1166,10 @@ document.addEventListener("DOMContentLoaded", async () => {
     const indicator = document.getElementById("offlineIndicator");
     if (indicator) indicator.style.display = isOnline ? "none" : "block";
     if (aiChatInput) {
-      aiChatInput.disabled = !isOnline;
-      aiChatInput.placeholder = isOnline ? "Message AI..." : "Offline mode - Chat disabled";
+      // FIX BUG: input dimatikan total saat offline → user tidak bisa mengetik/menyiapkan
+      // pesan. Sekarang input tetap aktif (hanya tombol kirim yang dinonaktifkan).
+      aiChatInput.disabled = false;
+      aiChatInput.placeholder = isOnline ? "Message AI..." : "Offline — kirim dinonaktifkan sementara";
     }
     if (btnSendAiChat) btnSendAiChat.disabled = !isOnline;
     if (btnUploadAiChat) btnUploadAiChat.disabled = !isOnline;
@@ -1125,43 +1203,100 @@ document.addEventListener("DOMContentLoaded", async () => {
   // === BAGAN RNG SYNC TIKTOK LIVE ===
   const baganSeedInput = document.getElementById("baganSeedInput");
   const baganOutput = document.getElementById("baganOutput");
+  // Render 1 kartu pertandingan di dalam bagan
+  function baganMatchCard(m) {
+    const esc = (s) => Security.escapeHtml(String(s ?? ""));
+    const homeName = m.home ? `${m.home.flag ? m.home.flag + " " : ""}${m.home.name}` : "BYE";
+    const awayName = m.away ? `${m.away.flag ? m.away.flag + " " : ""}${m.away.name}` : "BYE";
+    const homeWin = m.winner && m.home && m.winner.code === m.home.code && m.winner.name === m.home.name;
+    const awayWin = m.winner && m.away && m.winner.code === m.away.code && m.winner.name === m.away.name;
+    const scoreTxt = m.score ? `${m.score.home}:${m.score.away}` : "-";
+    const row = (side, name, isWin) => `<div style="display:flex;justify-content:space-between;gap:6px;padding:3px 6px;
+        background:${isWin ? "#0a2a0a" : "transparent"};border-left:3px solid ${isWin ? "#0f0" : "transparent"};
+        font-weight:${isWin ? "bold" : "normal"};color:${isWin ? "#0f0" : "#ddd"};">
+        <span>${esc(name)}</span>${isWin ? "<span>✓</span>" : ""}
+      </div>`;
+    return `<div style="background:#0d0d0d;border:1px solid ${homeWin || awayWin ? "#0f0" : "#0ff"};min-width:170px;margin-bottom:6px;">
+      <div style="background:#111;font-family:var(--font-retro);font-size:0.5rem;color:#0ff;padding:3px 6px;border-bottom:1px solid #333;display:flex;justify-content:space-between;">
+        <span>${esc(m.label)}</span><span style="color:#ff0;">${esc(scoreTxt)}</span>
+      </div>
+      ${row("home", homeName, homeWin)}
+      ${row("away", awayName, awayWin)}
+      ${m.reason && m.reason !== "Menunggu hasil" ? `<div style="font-size:0.5rem;color:#888;padding:2px 6px;border-top:1px solid #222;">${esc(m.reason)}</div>` : ""}
+    </div>`;
+  }
+
   function renderBagan() {
     if (!baganOutput) return;
     const seedRaw = baganSeedInput?.value?.trim() || BaganRngService.getUrlSeed() || "";
     if (baganSeedInput && BaganRngService.getUrlSeed() && !baganSeedInput.value) baganSeedInput.value = BaganRngService.getUrlSeed();
-    // Ambil tim dari StateManager (B1-B8) atau homeQuery
+
+    // Ambil baris B1-B8 dari StateManager (editor) atau homeQuery
     const isEditor = StateManager.activeMemoryId !== null;
     const activeMem = isEditor ? StateManager.db.memories[StateManager.activeMemoryId] : null;
     const dataSource = isEditor && activeMem?.games?.[StateManager.activeGameIndex] ? activeMem.games[StateManager.activeGameIndex] : StateManager.homeQuery;
-    const teamCodes = [];
-    const teamNames = [];
-    (dataSource?.matches || []).forEach(m => {
-      const h = (m?.home || "").trim(), a = (m?.away || "").trim();
-      if (h) { teamCodes.push(h); teamNames.push(h); }
-      if (a) { teamCodes.push(a); teamNames.push(a); }
-    });
-    // unique, ambil 8 pertama unik
-    const uniq = [...new Set(teamCodes.map(c => Security.sanitizeInput(c).toUpperCase()))].filter(Boolean).slice(0, 8);
-    const uniqNames = uniq; // pakai kode sebagai nama untuk bagan (bisa di-resolve ke flag)
-    if (uniq.length < 2) {
-      baganOutput.innerHTML = `<div style="color:#ff0;">Isi B1-B8 minimal 2 tim untuk generate bagan. Seed TikTok: <code style="color:#0ff;">${Security.escapeHtml(seedRaw || "(kosong → default 0x12345678)")}</code></div>`;
+    const matchRows = (dataSource?.matches || []).slice(0, 8);
+    const filled = matchRows.filter(m => (m?.home || "").trim() || (m?.away || "").trim());
+
+    if (filled.length === 0) {
+      baganOutput.innerHTML = `<div style="color:#ff0;">Isi B1-B8 minimal 1 pertandingan untuk generate tabel bagan. Seed TikTok: <code style="color:#0ff;">${Security.escapeHtml(seedRaw || "(kosong → default 0x12345678)")}</code></div>`;
       return;
     }
-    const res = BaganRngService.generateBracket(uniq, seedRaw);
+
+    const res = BaganRngService.generateBracketFromMatches(matchRows, seedRaw);
     if (res.error) { baganOutput.innerHTML = `<div style="color:#f55;">${Security.escapeHtml(res.error)}</div>`; return; }
-    const qHtml = res.quarters.map((q, i) => {
-      return `<div style="background:#111;border:1px solid #0ff;padding:8px;min-width:140px;text-align:center;">
-        <div style="font-size:0.6rem;color:#888;">${q.seedRef}</div>
-        <div style="font-weight:bold;color:#fff;">${Security.escapeHtml(q.home)}</div>
-        <div style="color:#888;">vs</div>
-        <div style="font-weight:bold;color:#fff;">${Security.escapeHtml(q.away)}</div>
-      </div>`;
+
+    // === TABEL SCHEDULE ROUND 1 (B1-B8) ===
+    const scheduleRows = res.rounds[0].matches.map((m) => {
+      const hName = m.home ? `${m.home.flag ? m.home.flag + " " : ""}${m.home.name}` : "-";
+      const aName = m.away ? `${m.away.flag ? m.away.flag + " " : ""}${m.away.name}` : "-";
+      const sc = m.score ? `${m.score.home}:${m.score.away}` : "-";
+      const winName = m.winner ? m.winner.name : "";
+      return `<tr>
+        <td style="padding:4px 6px;font-family:var(--font-retro);font-size:0.55rem;color:#0ff;text-align:center;">${Security.escapeHtml(m.label)}</td>
+        <td style="padding:4px 6px;text-align:right;">${Security.escapeHtml(hName)}</td>
+        <td style="padding:4px 6px;text-align:center;font-weight:bold;color:${sc === "-" ? "#888" : "#0f0"};">${Security.escapeHtml(sc)}</td>
+        <td style="padding:4px 6px;">${Security.escapeHtml(aName)}</td>
+        <td style="padding:4px 6px;font-size:0.6rem;color:${winName ? "#ff0" : "#888"};">${winName ? "→ " + Security.escapeHtml(winName) : "-"}</td>
+      </tr>`;
     }).join("");
+
+    // === BAGAN KNOCKOUT (per round = 1 kolom) ===
+    const roundsHtml = res.rounds.map(r => `
+      <div style="display:flex;flex-direction:column;justify-content:space-around;min-width:180px;">
+        <div style="font-family:var(--font-retro);font-size:0.55rem;color:#ff0;text-align:center;border:1px solid #ff0;background:#221a00;padding:3px;margin-bottom:6px;">${Security.escapeHtml(r.name)}</div>
+        ${r.matches.map(baganMatchCard).join("")}
+      </div>
+    `).join(`<div style="display:flex;align-items:center;color:#0ff;font-size:1rem;">▶</div>`);
+
+    const championHtml = res.champion
+      ? `<div style="margin-top:8px;background:#001a00;border:2px solid #0f0;padding:8px;text-align:center;">
+           <div style="font-family:var(--font-retro);font-size:0.6rem;color:#0f0;">🏆 JUARA (deterministik, seed sama = juara sama)</div>
+           <div style="font-size:1.1rem;font-weight:bold;color:#fff;margin-top:4px;">${Security.escapeHtml(res.champion.flag || "")} ${Security.escapeHtml(res.champion.name)}</div>
+         </div>`
+      : `<div style="margin-top:8px;background:#1a1a1a;border:1px solid #555;padding:6px;text-align:center;font-size:0.65rem;color:#888;">Juara belum bisa ditentukan — lengkapi nama HOME &amp; AWAY di B1-B8.</div>`;
+
+    const participantsHtml = res.participants.map(p =>
+      `<span style="background:#002a2a;border:1px solid #0ff;padding:2px 5px;margin:2px;display:inline-block;font-size:0.6rem;">${Security.escapeHtml(p.flag || "")} ${Security.escapeHtml(p.name)}</span>`
+    ).join("");
+
     baganOutput.innerHTML = `
       <div style="margin-bottom:8px;"><strong style="color:#0ff;">Seed TikTok:</strong> <code style="background:#000;padding:2px 6px;border:1px solid #0ff;color:#0ff;">${Security.escapeHtml(res.tiktokSeedRaw || "(default)")}</code> → <span style="color:#888;">${Security.escapeHtml(res.source)}</span> → <code style="background:#001a00;padding:2px 6px;border:1px solid #0f0;color:#0f0;">0x${res.seed.toString(16).toUpperCase()}</code> <span style="font-size:0.6rem;color:#888;">(sama persis di overlay TikTok jika seed sama)</span></div>
-      <div style="display:flex;gap:8px;overflow-x:auto;padding:6px;background:#000;border:1px solid #333;">${qHtml}</div>
+
+      <div style="font-family:var(--font-retro);font-size:0.6rem;color:#ff0;margin-bottom:4px;">📋 TABEL SCHEDULE ROUND 1 (B1-B8)</div>
+      <div style="overflow-x:auto;background:#000;border:1px solid #333;">
+        <table class="result-table" style="font-size:0.65rem;width:100%;">
+          <thead><tr><th>B#</th><th style="text-align:right;">HOME</th><th>SKOR</th><th>AWAY</th><th>LOLOS</th></tr></thead>
+          <tbody>${scheduleRows}</tbody>
+        </table>
+      </div>
+
+      <div style="font-family:var(--font-retro);font-size:0.6rem;color:#ff0;margin:10px 0 4px;">🌳 BAGAN KNOCKOUT (R1 → R2 → SEMI → FINAL)</div>
+      <div style="display:flex;gap:6px;overflow-x:auto;align-items:stretch;padding:6px;background:#000;border:1px solid #333;">${roundsHtml}</div>
+      ${championHtml}
+
       <div style="margin-top:8px;background:#001a1a;border:1px solid #0ff;padding:6px;font-size:0.65rem;">
-        <strong>Urutan acak (shuffled):</strong> ${res.shuffled.map(c=>`<span style="background:#002a2a;border:1px solid #333;padding:2px 4px;margin:2px;display:inline-block;">${Security.escapeHtml(c)}</span>`).join("")}
+        <strong>Peserta (${res.participants.length}):</strong> ${participantsHtml}
         <div style="margin-top:4px;color:#888;">Proof: ${Security.escapeHtml(res.proof.lcg)} → ${Security.escapeHtml(res.proof.shuffle)} — Seed sama = bracket sama 100%.</div>
         <div style="color:#ff0;">Untuk sync: copy seed dari overlay TikTok Live → paste di input ini → GENERATE BAGAN. Atau buka link: <code>${Security.escapeHtml(window.location.origin + window.location.pathname + "?tiktok_seed=" + encodeURIComponent(res.tiktokSeedRaw || res.seed))}</code></div>
       </div>
@@ -1227,11 +1362,31 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
   } catch(e){ console.warn("[whatIf] init error", e); }
 
-  // Auto-render jika ada seed di URL atau setelah predict
-  if (BaganRngService.getUrlSeed()) setTimeout(renderBagan, 300);
-  // Hook: setelah predict, auto-update bagan
+  // Auto-render: kalau ada seed di URL ATAU B1-B8 sudah terisi (restore dari localStorage)
+  // FIX BUG: sebelumnya bagan hanya dirender kalau ada ?tiktok_seed= di URL, sehingga
+  // tabel bagan terlihat kosong meski data B1-B8 sudah tersimpan.
+  const baganHasData = () => {
+    try {
+      const isEd = StateManager.activeMemoryId !== null;
+      const mem = isEd ? StateManager.db.memories[StateManager.activeMemoryId] : null;
+      const ds = isEd && mem?.games?.[StateManager.activeGameIndex] ? mem.games[StateManager.activeGameIndex] : StateManager.homeQuery;
+      return (ds?.matches || []).some(m => (m?.home || "").trim() || (m?.away || "").trim());
+    } catch (_) { return false; }
+  };
+  if (BaganRngService.getUrlSeed() || baganHasData()) setTimeout(renderBagan, 300);
+  // Hook: setelah predict / perubahan data, auto-update bagan
   const origPredictBtn = document.getElementById("btnPredict");
-  if (origPredictBtn) origPredictBtn.addEventListener("click", () => setTimeout(renderBagan, 800));
+  if (origPredictBtn) origPredictBtn.addEventListener("click", () => setTimeout(renderBagan, 1200));
+  // Re-render bagan setiap kali grid B1-B8 di-render ulang (import / apply / toggle B8)
+  if (typeof UIRenderer.renderMatchGrid === "function" && !UIRenderer.__baganHooked) {
+    const origRenderGrid = UIRenderer.renderMatchGrid.bind(UIRenderer);
+    UIRenderer.renderMatchGrid = function (...args) {
+      const out = origRenderGrid(...args);
+      try { if (typeof renderBagan === "function" && baganHasData()) renderBagan(); } catch (_) {}
+      return out;
+    };
+    UIRenderer.__baganHooked = true;
+  }
 
   // === TIKTOK SAVE SYNC — .p2s / .pnach GENERATOR (ROBUST zstd + honest UX) ===
   let templateP2sBuffer = null;
@@ -1531,6 +1686,47 @@ document.addEventListener("DOMContentLoaded", async () => {
         </div>`;
     }
   });
+
+  // === DEMO DATA (opt-in: ?demo=1) ===
+  // Memudahkan pengecekan cepat bahwa tabel bagan & top goals benar-benar ter-render.
+  // Hanya mengisi kalau form masih kosong dan tidak menimpa data yang sudah tersimpan.
+  try {
+    const u = new URL(window.location.href);
+    if (u.searchParams.get("demo") === "1") {
+      const ds = (StateManager.activeMemoryId !== null && StateManager.db.memories[StateManager.activeMemoryId]?.games?.[StateManager.activeGameIndex])
+        ? StateManager.db.memories[StateManager.activeMemoryId].games[StateManager.activeGameIndex]
+        : StateManager.homeQuery;
+      const isEmpty = !(ds.matches || []).some(m => (m?.home || "").trim() || (m?.away || "").trim());
+      if (isEmpty) {
+        const demo = [
+          { home: "Czech", away: "Portugal", score: "3:2" },
+          { home: "Chile", away: "France", score: "1:4" },
+          { home: "England", away: "Wales", score: "5:0" },
+          { home: "Brazil", away: "Argentina", score: "2:2" },
+          { home: "Spain", away: "Italy", score: "1:0" },
+          { home: "Germany", away: "Holland", score: "3:1" },
+          { home: "Japan", away: "Korea", score: "0:0" },
+          { home: "Togo", away: "Sweden", score: "2:3" }
+        ];
+        demo.forEach((d, i) => {
+          if (!ds.matches[i]) ds.matches[i] = { home: "", score: "", away: "", enabled: i < 7 };
+          ds.matches[i].home = d.home;
+          ds.matches[i].score = d.score;
+          ds.matches[i].away = d.away;
+          if (i === 7) { ds.matches[7].enabled = true; ds.b8Enabled = true; }
+        });
+        StateManager.saveHomeQueryImmediate();
+        UIRenderer.renderMatchGrid();
+        setTimeout(() => {
+          if (typeof renderBagan === "function") renderBagan();
+          document.getElementById("baganRngPanel")?.scrollIntoView({ behavior: "smooth", block: "start" });
+        }, 200);
+        Toast?.show("Demo B1-B8 terisi. Klik PREDICT atau lihat tabel BAGAN di bawah.", "success");
+      }
+    }
+  } catch (e) {
+    console.warn("[demo] gagal mengisi data contoh", e);
+  }
 
   renderSidebar();
   renderChatWindow();
