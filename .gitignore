@@ -20,3 +20,6 @@ coverage/
 
 *.log
 .DS_Store
+
+# artefak verifikasi audit (dihasilkan, tidak ikut repo)
+audit-verification.html
