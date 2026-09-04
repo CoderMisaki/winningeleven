@@ -432,7 +432,29 @@ function sampleScoreline(distribution, rng) {
 // 6. KONAMI TOP SCORER — WE10 Full Roster + Historical Evidence (no 60/30/10)
 // ============================================================
 // Historical scorer map: scans StateManager.db topGoals for Bayesian smoothing
+// FIX PERF: fungsi ini dipanggil ulang untuk SETIAP iterasi bulk (200x × 8 match = 1600x).
+// Tanpa cache, tiap pemanggilan mengulang seluruh memori → O(1600 × game × 16).
+// Sekarang di-memoize berdasarkan "sidik jari" database yang murah dihitung.
+let _histScorerCache = { key: null, value: null };
+
+function datasetFingerprint() {
+  const memories = StateManager.db?.memories || {};
+  let games = 0;
+  let stamp = "";
+  for (const key of Object.keys(memories)) {
+    const mem = memories[key];
+    if (!mem || !Array.isArray(mem.games)) continue;
+    games += mem.games.length;
+    stamp += `${key}:${mem.games.length}:${mem.lastUpdate || ""};`;
+  }
+  return `${games}|${stamp.length}|${stamp.slice(-256)}`;
+}
+
 function getHistoricalScorerMap() {
+  const fp = datasetFingerprint();
+  if (_histScorerCache.key === fp && _histScorerCache.value) {
+    return _histScorerCache.value;
+  }
   const map = new Map(); // key: "lowerName|CODE" -> { goals, appearances, teamCode, player }
   const memories = StateManager.db?.memories || {};
   let totalGames = 0;
@@ -454,7 +476,15 @@ function getHistoricalScorerMap() {
       }
     }
   }
-  return { map, totalGames };
+  const value = { map, totalGames };
+  _histScorerCache = { key: fp, value };
+  return value;
+}
+
+/** Buang cache histori pencetak gol (dipanggil setelah import/ubah database). */
+export function invalidateHistoricalScorerCache() {
+  _histScorerCache = { key: null, value: null };
+  _datasetCache = { key: null, value: null, ts: 0 };
 }
 
 export function generateTopScorersBulkFast(homeCode, awayCode, predictedHome, predictedAway, seed) {
@@ -685,9 +715,20 @@ export function generateTopScorers(homeCode, awayCode, xgHome, xgAway, opts = {}
       // Contoh TOG Adebayor: weight 84 / total ~442 = 19% * xG 1.2 → prob anytime ~11% → 110x/1000 wajar
       const baseXg = teamCode===homeCode? xgHome : xgAway;
       const histInfo = histMap.get(name.toLowerCase()+"|"+teamCode); // FIX PERF: reuse histMap (dulu getHistoricalScorerMap() dipanggil per pemain = O(pemain × memori))
-      const histBoost = adjWeight !== baseWeight ? ` + histBoost ${((adjWeight-baseWeight)/baseWeight*100).toFixed(1)}% (${histInfo?.goals||0} gol/${histInfo?.appearances||0} app)` : "";
+      // FIX BUG: label "histBoost" sebelumnya ikut menghitung boost posisi (DF ×2.2 / DMF-CMF ×1.15),
+      // sehingga tertulis "histBoost 116.7% (0 gol/0 app)" pada pemain yang tidak punya histori sama sekali.
+      // Pisahkan keduanya biar bukti validasinya jujur.
+      const posBoostFactor = (["CB","SB","SW","WB"].includes(pos) ? 2.2 : ["DMF","CMF"].includes(pos) ? 1.15 : 1);
+      const afterPosWeight = Math.round(baseWeight * posBoostFactor);
+      const histDelta = adjWeight - afterPosWeight;
+      const boostParts = [];
+      if (posBoostFactor !== 1) boostParts.push(`posBoost ×${posBoostFactor} (${pos})`);
+      if (Math.abs(histDelta) >= 0.5 && histInfo) {
+        boostParts.push(`histBoost ${histDelta > 0 ? "+" : ""}${((histDelta / (afterPosWeight || 1)) * 100).toFixed(1)}% (${histInfo.goals} gol/${histInfo.appearances} app)`);
+      }
+      const boostLabel = boostParts.length ? ` [base ${Math.round(baseWeight)} → ${Math.round(adjWeight)}${boostParts.length ? " — " + boostParts.join(", ") : ""}]` : "";
       const reasonParts = [];
-      reasonParts.push(`Weight ${Math.round(adjWeight)}${histBoost} / total ${Math.round(totalW)} = ${pickProb.toFixed(1)}% pick`);
+      reasonParts.push(`Weight ${Math.round(adjWeight)}${boostLabel} / total ${Math.round(totalW)} = ${pickProb.toFixed(1)}% pick`);
       if (matchGoals > 0) reasonParts.push(`cetak ${matchGoals} gol di scoreline ${hasPredicted ? `${opts.predictedHome}:${opts.predictedAway}` : `~xG ${baseXg.toFixed(2)}`} (alokasi LCG seed ${baseSeed.toString(16)})`);
       reasonParts.push(`Monte-Carlo ${numSims}x: ${cnt} gol → xG ${avg.toFixed(3)} • prob anytime ${(probAnytime*100).toFixed(1)}% • share ${share.toFixed(1)}%`);
       if (pos.startsWith('CF') || pos==='FW' || pos==='ST' || pos==='WG') reasonParts.push('CF/WF posisi depan weight 65-96 paling sering dipilih engine (bukan dummy)');

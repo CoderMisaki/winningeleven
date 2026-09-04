@@ -5,11 +5,15 @@
   "description": "WE10 Memory Research System - Winning Eleven",
   "main": "index.js",
   "scripts": {
-    "dev": "vite --host --port 3000 --open",
+    "dev": "vite --host 0.0.0.0 --port 3000 --open",
     "dev:static": "npx --yes serve . -l 3000 -o",
-    "preview": "vite preview --port 4173",
+    "build": "vite build",
+    "preview": "vite preview --host 0.0.0.0 --port 4173",
     "start": "npx --yes serve . -l 3000",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "node tests/logic.test.mjs && node tests/konami_pairing_test.mjs && node tests/smoke.test.mjs",
+    "test:logic": "node tests/logic.test.mjs",
+    "test:p2s": "node tests/konami_pairing_test.mjs",
+    "test:ui": "node tests/smoke.test.mjs"
   },
   "dependencies": {
     "@google/genai": "^2.12.0",
@@ -17,6 +21,7 @@
     "fzstd": "^0.1.1"
   },
   "devDependencies": {
+    "jsdom": "^30.0.1",
     "serve": "^14.2.0",
     "vite": "^5.4.0"
   },

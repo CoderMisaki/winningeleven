@@ -81,7 +81,13 @@ function calculateScorePoints(qScore, tScore) {
   return 0;
 }
 export const MATCH_WEIGHTS = [25, 20, 18, 15, 10, 7, 5, 3]; // B8 weight 3 (collapsible)
-const GOALS_MAX_SCORE = 7 * 10; // 70
+// FIX BUG: skema topGoals sekarang G1-G16 (16 baris), bukan 7.
+// Konstanta lama GOALS_MAX_SCORE = 7*10 tidak pernah dipakai dan menyesatkan.
+export const TOP_GOALS_COUNT = 16;
+// Poin maksimal per baris top goal: Negara 3 + Pemain 2 + Jumlah Gol 5 = 10
+const GOAL_PTS_COUNTRY = 3;
+const GOAL_PTS_PLAYER = 2;
+const GOAL_PTS_GOALS = 5;
 
 export const SimilarityCalculator = {
   calculate(queryGame, targetGame) {
@@ -201,38 +207,42 @@ export const SimilarityCalculator = {
       }
     }
 
-    // Evaluate Top Goals: 7 goals
-    for (let i = 0; i < 7; i++) {
+    // Evaluate Top Goals: G1-G16 (FIX: dulu hanya 0..6 sehingga G8-G16 tidak pernah dihitung)
+    for (let i = 0; i < TOP_GOALS_COUNT; i++) {
       const qGoal = queryGame.topGoals ? queryGame.topGoals[i] : null;
       const tGoal = targetGame.topGoals ? targetGame.topGoals[i] : null;
-      if (!qGoal || !tGoal) continue;
-
+      if (!qGoal) continue;
       if (!qGoal.country && !qGoal.player && !qGoal.goals) continue;
+      if (!tGoal) {
+        // Baris target tidak ada → tidak ada yang cocok, tapi tetap hitung sebagai peluang
+        explanations.push(`❌ Top Goal #${i + 1} tidak ada di target`);
+        continue;
+      }
 
       let goalPts = 0;
       let maxGoalPts = 0;
       let details = [];
 
       if (qGoal.country) {
-          maxGoalPts += 3;
+          maxGoalPts += GOAL_PTS_COUNTRY;
           if (normalizeCountry(qGoal.country) === normalizeCountry(tGoal.country)) {
-             goalPts += 3;
+             goalPts += GOAL_PTS_COUNTRY;
              details.push('Negara');
           }
       }
 
       if (qGoal.player) {
-          maxGoalPts += 2;
+          maxGoalPts += GOAL_PTS_PLAYER;
           if (fuzzyMatchString(qGoal.player, tGoal.player)) {
-             goalPts += 2;
+             goalPts += GOAL_PTS_PLAYER;
              details.push('Pemain');
           }
       }
 
       if (qGoal.goals) {
-          maxGoalPts += 5;
+          maxGoalPts += GOAL_PTS_GOALS;
           if (qGoal.goals.trim() === (tGoal.goals || "").trim()) {
-             goalPts += 5;
+             goalPts += GOAL_PTS_GOALS;
              details.push('Jumlah Goal');
           }
       }

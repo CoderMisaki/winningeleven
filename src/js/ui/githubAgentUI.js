@@ -1,6 +1,7 @@
 // src/js/ui/githubAgentUI.js
 
 import { GitHubAgentEngine } from "../services/githubAgent.js";
+import { Security } from "../utils/security.js";
 import { BrowserAgentOrchestrator } from "../services/agentOrchestrator.js";
 import { AgentPersistence } from "../services/agentPersistence.js";
 
@@ -28,14 +29,17 @@ export const GitHubAgentUI = {
       statusBox.textContent = "Mengambil daftar repositori...";
       try {
         const repos = await activeEngine.listUserRepos();
-        repoSelect.innerHTML = repos.map(r => `<option value="${r.full_name}">${r.full_name}</option>`).join("");
+        repoSelect.innerHTML = (Array.isArray(repos) ? repos : [])
+          .filter(r => r && r.full_name)
+          .map(r => `<option value="${Security.escapeHtml(r.full_name)}">${Security.escapeHtml(r.full_name)}</option>`)
+          .join("");
         repoSelect.disabled = false;
         btnRunTask.disabled = false;
         statusBox.textContent = `Terhubung ke GitHub. Siap menjalankan task.`;
 
         await this.checkPendingCheckpoints(repoSelect.value);
       } catch (err) {
-        statusBox.textContent = `Error: ${err.message}`;
+        statusBox.textContent = `Error: ${err?.message || String(err)}`;
       }
     });
 
@@ -63,9 +67,9 @@ export const GitHubAgentUI = {
           (contentChunk) => this.appendContent(contentChunk)
         );
 
-        statusBox.innerHTML = `✅ <strong>Selesai!</strong> Pull Request: <a href="${pr.html_url}" target="_blank" style="color: #00ff66;">${pr.html_url}</a>`;
+        statusBox.innerHTML = `✅ <strong>Selesai!</strong> Pull Request: <a href="${Security.escapeHtml(pr.html_url || "#")}" target="_blank" rel="noopener noreferrer" style="color: #00ff66;">${Security.escapeHtml(pr.html_url || "")}</a>`;
       } catch (err) {
-        statusBox.innerHTML = `❌ <strong>Gagal:</strong> ${err.message}`;
+        statusBox.innerHTML = `❌ <strong>Gagal:</strong> ${Security.escapeHtml(err?.message || String(err))}`;
         await this.checkPendingCheckpoints(repoFullName);
       } finally {
         btnRunTask.disabled = false;
@@ -117,7 +121,7 @@ export const GitHubAgentUI = {
       banner.style.display = "block";
       banner.innerHTML = `
         <div class="resume-banner">
-          <strong>Task Terhenti Ditemukan:</strong> "${active.userPrompt.slice(0, 70)}..."
+          <strong>Task Terhenti Ditemukan:</strong> "${Security.escapeHtml(String(active.userPrompt || "(tanpa judul)").slice(0, 70))}..."
           <div style="margin-top: 8px; display: flex; gap: 8px;">
             <button id="btnResumeTask" class="btn btn-primary" style="padding: 5px 10px; font-size: 0.65rem;">▶ RESUME TASK OTOMATIS</button>
             <button id="btnDiscardTask" class="btn" style="padding: 5px 10px; font-size: 0.65rem; color: #ff5555;">Hapus Task</button>
@@ -139,9 +143,9 @@ export const GitHubAgentUI = {
             (rChunk) => this.appendReasoning(rChunk),
             (cChunk) => this.appendContent(cChunk)
           );
-          statusBox.innerHTML = `✅ <strong>Selesai:</strong> PR berhasil dibuat: <a href="${pr.html_url}" target="_blank" style="color: #00ff66;">${pr.html_url}</a>`;
+          statusBox.innerHTML = `✅ <strong>Selesai:</strong> PR berhasil dibuat: <a href="${Security.escapeHtml(pr.html_url || "#")}" target="_blank" rel="noopener noreferrer" style="color: #00ff66;">${Security.escapeHtml(pr.html_url || "")}</a>`;
         } catch (e) {
-          statusBox.innerHTML = `❌ Gagal saat resume: ${e.message}`;
+          statusBox.innerHTML = `❌ Gagal saat resume: ${Security.escapeHtml(e?.message || String(e))}`;
           await this.checkPendingCheckpoints(repoFullName);
         }
       });

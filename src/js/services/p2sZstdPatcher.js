@@ -36,6 +36,57 @@ function readU32LE(buf, off) { return (buf[off] | (buf[off + 1] << 8) | (buf[off
 function writeU16LE(buf, off, v) { buf[off] = v & 0xFF; buf[off + 1] = (v >>> 8) & 0xFF; }
 function writeU32LE(buf, off, v) { buf[off] = v & 0xFF; buf[off + 1] = (v >>> 8) & 0xFF; buf[off + 2] = (v >>> 16) & 0xFF; buf[off + 3] = (v >>> 24) & 0xFF; }
 
+/**
+ * Baca Central Directory (PK\x01\x02) lewat EOCD (PK\x05\x06).
+ * Dipakai sebagai sumber kebenaran untuk crc / compSize / uncompSize / method,
+ * terutama ketika local header memakai data-descriptor (general purpose flag bit 3)
+ * sehingga compSize di local header = 0.
+ */
+function readCentralDirectory(u8) {
+  const central = new Map();
+  const len = u8.length;
+  // Cari EOCD dari belakang (bisa ada komentar maksimal 65535 byte)
+  let eocd = -1;
+  for (let i = len - 22; i >= Math.max(0, len - 22 - 65535); i--) {
+    if (u8[i] === 0x50 && u8[i + 1] === 0x4B && u8[i + 2] === 0x05 && u8[i + 3] === 0x06) { eocd = i; break; }
+  }
+  if (eocd < 0) return central;
+  const totalEntries = readU16LE(u8, eocd + 10);
+  const centralSize = readU32LE(u8, eocd + 12);
+  let pos = readU32LE(u8, eocd + 16);
+  if (pos + centralSize > len || centralSize === 0) {
+    // Offset tidak valid (ZIP64 / korup) — scan mundur dari EOCD
+    pos = eocd - 1;
+    while (pos > 0 && !(u8[pos] === 0x50 && u8[pos + 1] === 0x4B && u8[pos + 2] === 0x01 && u8[pos + 3] === 0x02)) pos--;
+    if (pos <= 0) return central;
+  }
+  let count = 0;
+  while (pos + 46 <= len && count < (totalEntries || 0xffff)) {
+    if (!(u8[pos] === 0x50 && u8[pos + 1] === 0x4B && u8[pos + 2] === 0x01 && u8[pos + 3] === 0x02)) {
+      // Coba signature berikutnya (ada padding / korupsi minor)
+      let next = -1;
+      for (let i = pos + 1; i < Math.min(len - 3, pos + 4096); i++) {
+        if (u8[i] === 0x50 && u8[i + 1] === 0x4B && u8[i + 2] === 0x01 && u8[i + 3] === 0x02) { next = i; break; }
+      }
+      if (next < 0) break;
+      pos = next;
+    }
+    const method = readU16LE(u8, pos + 10);
+    const crc = readU32LE(u8, pos + 16);
+    const compSize = readU32LE(u8, pos + 20);
+    const uncompSize = readU32LE(u8, pos + 24);
+    const nameLen = readU16LE(u8, pos + 28);
+    const extraLen = readU16LE(u8, pos + 30);
+    const commentLen = readU16LE(u8, pos + 32);
+    const localOffset = readU32LE(u8, pos + 42);
+    const name = new TextDecoder().decode(u8.slice(pos + 46, pos + 46 + nameLen));
+    central.set(name, { name, method, crc, compSize, uncompSize, localOffset });
+    pos += 46 + nameLen + extraLen + commentLen;
+    count++;
+  }
+  return central;
+}
+
 function parseZipEntries(u8) {
   const entries = [];
   let pos = 0;
@@ -81,6 +132,27 @@ function parseZipEntries(u8) {
       }
     }
     pos++;
+  }
+
+  // Rekonsiliasi dengan Central Directory: kalau local header memakai data descriptor
+  // (flag bit 3) maka compSize/crc/uncompSize di local header = 0 → ambil dari CD.
+  try {
+    const central = readCentralDirectory(u8);
+    if (central.size > 0) {
+      for (const e of entries) {
+        const cd = central.get(e.name);
+        if (!cd) continue;
+        if ((e.flag & 0x08) !== 0 || e.compSize === 0) {
+          e.compSize = cd.compSize || e.compSize;
+          e.uncompSize = cd.uncompSize || e.uncompSize;
+          if (!e.crc) e.crc = cd.crc;
+          const dataStart = e.localHeaderOffset + 30 + e.nameBytes.length + e.extraBytes.length;
+          e.data = u8.slice(dataStart, dataStart + e.compSize);
+        }
+      }
+    }
+  } catch (err) {
+    console.warn("[p2sZstd] central directory reconcile failed:", err?.message || err);
   }
   return entries;
 }

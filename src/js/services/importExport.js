@@ -183,8 +183,18 @@ export const ImportExportService = {
             }
           });
 
-          if (!game.topGoals || game.topGoals.length !== 7) {
-            throw new Error(`Game ${game.gameNumber} harus memiliki tepat 7 topGoals.`);
+          // FIX BUG: skema topGoals sekarang G1-G16. Validasi lama mewajibkan tepat 7,
+          // sehingga file hasil EXPORT sendiri selalu ditolak saat di-IMPORT kembali.
+          if (!game.topGoals || !Array.isArray(game.topGoals)) {
+            throw new Error(`Game ${game.gameNumber} harus memiliki array topGoals (G1-G16).`);
+          }
+          if (game.topGoals.length < 7 || game.topGoals.length > 16) {
+            throw new Error(`Game ${game.gameNumber} harus memiliki 7 sampai 16 topGoals (G1-G16), ditemukan ${game.topGoals.length}.`);
+          }
+          // Normalisasi ke 16 baris (migrasi data lama 7 baris → 16)
+          if (game.topGoals.length < 16) {
+            const old = game.topGoals;
+            game.topGoals = Array.from({ length: 16 }, (_, i) => old[i] || { country: "", player: "", goals: "" });
           }
           game.topGoals.forEach(g => {
   const goalsRaw = typeof g.goals === "string"
