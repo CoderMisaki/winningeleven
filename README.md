@@ -1,6 +1,8 @@
 # Winning Eleven 10 - WE10 Memory Research System
 
-> Sistem analisa & sinkronisasi skor **Winning Eleven 10 (WE10 / SLPM-66374)** agar hasil simulasi di PCSX2 bisa **100% sama persis dengan Live TikTok**.
+> Sistem analisa & sinkronisasi skor **Winning Eleven 10 (WE10 / SLPM-66374)**: fitur sync menulis skor & Top Goals ke save state PCSX2 (lewat patch `.p2s`/`.pnach`) supaya sama dengan yang tampil di Live TikTok.
+
+> **Catatan model prediksi (v7):** prediksi skor/pencetak gol memakai model level-pemain (`playerScoring.js` + `playerAttributes.js`). Atribut pemain = **derived/estimated**, bukan hasil decode ROM. RNG = LCG deterministik implementasi sendiri, **bukan** replika RNG WE10. Rincian & status data: [`PLAYER_MODEL_README.md`](PLAYER_MODEL_README.md).
 
 Web ini bisa generate file `.p2s` (Save State) dan `.pnach` (Cheats) supaya skor `Konami Cup - Schedule Table Round 1 Match 1~8` + `Top Goals` di game kamu sama dengan yang tampil di live TikTok.
 
@@ -24,8 +26,8 @@ Web ini bisa generate file `.p2s` (Save State) dan `.pnach` (Cheats) supaya skor
 | Fitur | Keterangan |
 |-------|------------|
 | **Matching Center** | Cari kecocokan data histori pertandingan |
-| **Predict** | Prediksi skor pakai model Hybrid + Poisson (rating, H2H, form) |
-| **What If** | Simulasi manual `Home 2 : 1 Away` -> lihat Top Goals otomatis (pakai RNG asli `FUN_0016e8d8`) |
+| **Predict** | Prediksi skor pakai **Player Model** (atribut per pemain, derived/estimated) + **Team Model** (teamRatings.js, estimasi) + Match/Goal Event Model (`playerScoring.js`). Skor & pencetak gol lahir dari event yang sama |
+| **What If** | Simulasi manual `Home 2 : 1 Away` -> lihat Top Goals otomatis dari **match engine level-pemain** (`playerScoring.js`). RNG = LCG deterministik (implementasi sendiri), **bukan** replika RNG ROM |
 | **TikTok Save Sync** | **FITUR UTAMA:** Generate `.p2s` / `.pnach` biar skor game 100% sinkron dengan live TikTok |
 | **RNG Bagan** | Generate bagan/bracket deterministik pakai seed yang sama dengan overlay TikTok |
 

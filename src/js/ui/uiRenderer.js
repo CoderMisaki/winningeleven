@@ -8,6 +8,21 @@ import { createBulkRunner } from "../services/bulkRunner.js";
 import { toTitleCase } from "../utils/format.js";
 import { teamsDB } from "../data/teams.js";
 
+/**
+ * Sumber data aktif saat INI (fresh) — dipakai handler grid supaya tidak
+ * memegang objek basi setelah reset/import/toggle editor.
+ */
+export function resolveActiveDataSource() {
+  const isEditor = StateManager.activeMemoryId !== null;
+  const mem = isEditor ? StateManager.db.memories[StateManager.activeMemoryId] : null;
+  const game = isEditor && mem && Array.isArray(mem.games) ? mem.games[StateManager.activeGameIndex] : null;
+  if (game && Array.isArray(game.matches)) {
+    if (!Array.isArray(game.topGoals)) game.topGoals = Array.from({ length: 16 }, () => ({ country: "", player: "", goals: "" }));
+    return game;
+  }
+  return StateManager.homeQuery;
+}
+
 export const UIRenderer = {
   showAlert(message) {
     const modal = document.getElementById("confirmModal");
@@ -184,7 +199,7 @@ export const UIRenderer = {
               <tbody>${globalRows}</tbody>
             </table>
           </div>
-          <div style="font-size:0.55rem;color:#555;margin-top:6px;">* Tabel B1-B8 skor X:X & G1-G16 konsisten: skor X:X dari <strong>pure sim MC 200 (top prob)</strong>, GOL = <strong>matchGoals integer</strong> hasil alokasi LCG 1664525 tepat sebanyak homeGoals+awayGoals ke pemain CF/WF/OMF (GK terfilter) — hanya pemain dari tim yang main di B1-B8, jumlah gol pemain tidak melebihi total gol tim. Hover baris untuk lihat alasan.</div>
+          <div style="font-size:0.55rem;color:#555;margin-top:6px;">* Tabel B1-B8 skor X:X & G1-G16 konsisten: skor X:X dan GOL lahir dari <strong>match engine level-pemain</strong> (<code>playerScoring.js</code>) — jumlah chance ditentukan kekuatan tim, tiap chance diundi kualitasnya, pemain penembak dipilih dari role posisi × atribut × form, lalu shot-nya diuji terhadap defense lawan (GOAL/MISS). Tidak ada alokasi nama acak dan tidak ada pemain dummy; hanya pemain dari tim yang bertanding di B1-B8, dan gol pemain tidak melebihi total gol tim. Hover baris untuk lihat alasan.</div>
         `;
         dashboard.appendChild(summaryCard);
         // === BULK BOX — 100/1000x sampling seperti game asli (Adebayor 100x/1000) ===
@@ -241,7 +256,7 @@ export const UIRenderer = {
                       const globalRows = res.globalRank.slice(0,10).map((pl,idx)=>{
                         const badge = idx<3 ? ["🥇","🥈","🥉"][idx] : "#"+(idx+1);
                         const proofShort = pl.proof ? `<div style="font-size:0.55rem;color:#0ff;font-family:var(--font-mono);">${Security.escapeHtml(pl.proof)}</div>` : "";
-                        return `<tr><td style="padding:4px;">${badge}</td><td style="padding:4px;text-align:center;">${Security.escapeHtml(pl.flag||"")}</td><td style="padding:4px;"><strong>${Security.escapeHtml(pl.name)}</strong> [${Security.escapeHtml(pl.pos)}] w${pl.weight}/${pl.totalWeight||"?"}=${pl.pickProb||"?"}%<br><span style="font-size:0.6rem;color:#aaa;">${Security.escapeHtml(pl.teamName)} (${pl.teamCode})</span>${proofShort}</td><td style="padding:4px;text-align:center;color:#0f0;font-weight:bold;">${pl.hits}x / ${n}</td><td style="padding:4px;text-align:center;">${pl.freqPct}%<br><span style="font-size:0.6rem;color:#888;">${pl.totalGoals} gol total — avg ${pl.avgGoals}</span></td></tr>`;
+                        return `<tr><td style="padding:4px;">${badge}</td><td style="padding:4px;text-align:center;">${Security.escapeHtml(pl.flag||"")}</td><td style="padding:4px;"><strong>${Security.escapeHtml(pl.name)}</strong> [${Security.escapeHtml(pl.pos)}]${pl.finishing != null ? ` finishing ${pl.finishing}` : ""}${pl.pickProb != null ? ` • dipilih ${pl.pickProb}%/chance` : ""}<br><span style="font-size:0.6rem;color:#aaa;">${Security.escapeHtml(pl.teamName)} (${pl.teamCode})</span>${proofShort}</td><td style="padding:4px;text-align:center;color:#0f0;font-weight:bold;">${pl.hits}x / ${n}</td><td style="padding:4px;text-align:center;">${pl.freqPct}%<br><span style="font-size:0.6rem;color:#888;">${pl.totalGoals} gol total — avg ${pl.avgGoals}</span></td></tr>`;
                       }).join("") || "<tr><td colspan=5 style='padding:8px;text-align:center;'>Tidak ada scorer</td></tr>";
                       const scoreRows = res.scoreRank.map(s=> `<span style="background:#1a1a1a;border:1px solid #444;padding:3px 6px;margin:2px;display:inline-block;font-family:var(--font-mono);">${Security.escapeHtml(s.scoreline)}: <strong style="color:#0ff;">${s.count}x</strong> (${s.pct}%)</span>`).join("");
                       const perMatchHtml = res.perMatch.map(pm=>{
@@ -325,29 +340,35 @@ export const UIRenderer = {
         </div>`;
       }).join("");
 
-      // --- Top Scorers HTML — Score-Consistent: matchGoals + alasan kenapa di atas ---
+      // --- Top Scorers HTML — PLAYER MODEL (Player • Team • Goals • Probability • Position) ---
+      // Setiap baris berasal dari event match engine (playerScoring.js): nama pemain
+      // wajib ada di roster 57 tim, tidak ada dummy, tidak ada daftar bintang manual.
       let topScorersHtml = `<div style="font-size:0.7rem;color:#888;padding:6px;">Belum ada data scorer.</div>`;
       if (Array.isArray(pred.topScorers) && pred.topScorers.length) {
         topScorersHtml = pred.topScorers.map((pl, idx) => {
           const rankBadge = idx === 0 ? "🥇" : idx === 1 ? "🥈" : idx === 2 ? "🥉" : `#${idx+1}`;
-          const matchBadge = pl.matchGoals > 0 ? `<span style="background:#0f0;color:#000;padding:1px 4px;border-radius:2px;font-size:0.6rem;margin-left:4px;">${pl.matchGoals} GOL di ${pred.homeGoals}:${pred.awayGoals}</span>` : `<span style="background:#333;color:#888;padding:1px 4px;border-radius:2px;font-size:0.6rem;margin-left:4px;">0 di ${pred.homeGoals}:${pred.awayGoals}</span>`;
-          const reason = pl.reason || `Weight ${pl.weight} • ${pl.pos}`;
+          const goals = pl.matchGoals != null ? pl.matchGoals : (pl.goals || 0);
+          const prob = pl.probability != null ? pl.probability : pl.prob;
+          const matchBadge = goals > 0
+            ? `<span style="background:#0f0;color:#000;padding:1px 4px;border-radius:2px;font-size:0.6rem;margin-left:4px;">${goals} GOL di ${pred.homeGoals}:${pred.awayGoals}</span>`
+            : `<span style="background:#333;color:#888;padding:1px 4px;border-radius:2px;font-size:0.6rem;margin-left:4px;">0 gol di ${pred.homeGoals}:${pred.awayGoals}</span>`;
+          const reason = pl.reason || `${pl.pos} • finishing ${pl.finishing ?? "?"}`;
           const proofMath = pl.proofMath || "";
-          const pickProb = pl.pickProb != null ? `${pl.pickProb}%` : "";
           return `
-            <div class="top-scorer-item" title="${Security.escapeHtml(reason)} — ${Security.escapeHtml(proofMath)}" style="display:flex;justify-content:space-between;align-items:center;background:${pl.matchGoals>0?'#1a2a1a':'#1a1a1a'};border:1px solid ${pl.matchGoals>0?'#0f0':'#444'};padding:6px 8px;border-radius:3px;">
+            <div class="top-scorer-item" title="${Security.escapeHtml(reason)} — ${Security.escapeHtml(proofMath)}" style="display:flex;justify-content:space-between;align-items:center;background:${goals>0?'#1a2a1a':'#1a1a1a'};border:1px solid ${goals>0?'#0f0':'#444'};padding:6px 8px;border-radius:3px;">
               <div style="display:flex;gap:6px;align-items:center;">
                 <span style="font-size:0.7rem;min-width:22px;">${rankBadge}</span>
                 <span style="font-size:1rem;">${Security.escapeHtml(pl.flag||"")}</span>
                 <div>
-                  <div style="font-weight:bold;font-size:0.8rem;color:#fff;">${Security.escapeHtml(pl.name)} <span style="font-weight:normal;color:#0ff;font-size:0.65rem;">[${Security.escapeHtml(pl.pos)} • ${Security.escapeHtml(pl.teamCode)} ${pickProb ? `• pick ${pickProb}` : ""}]</span>${matchBadge}</div>
-                  <div style="font-size:0.6rem;color:#aaa;">${Security.escapeHtml(pl.teamName)} — <span style="color:#ff0;">${Security.escapeHtml(reason)}</span></div>
-                  ${proofMath ? `<div style="font-size:0.55rem;color:#0ff;margin-top:2px;font-family:var(--font-mono);">📐 ${Security.escapeHtml(proofMath)}${pl.baseWeight && pl.baseWeight!==pl.weight ? ` (base ${pl.baseWeight} → adj ${pl.weight})` : ""}</div>` : ""}
+                  <div style="font-weight:bold;font-size:0.8rem;color:#fff;">${Security.escapeHtml(pl.name)} <span style="font-weight:normal;color:#0ff;font-size:0.65rem;">[POS ${Security.escapeHtml(pl.pos)}]</span>${matchBadge}</div>
+                  <div style="font-size:0.6rem;color:#aaa;">TEAM ${Security.escapeHtml(pl.teamName)} (${Security.escapeHtml(pl.teamCode)}) — <span style="color:#ff0;">${Security.escapeHtml(reason)}</span></div>
+                  ${proofMath ? `<div style="font-size:0.55rem;color:#0ff;margin-top:2px;font-family:var(--font-mono);">📐 ${Security.escapeHtml(proofMath)}</div>` : ""}
                 </div>
               </div>
-              <div style="text-align:right;">
-                <div style="font-family:var(--font-retro);font-size:0.7rem;color:#0f0;">${pl.prob}% <span style="color:#888;">ANYTIME</span></div>
-                <div style="font-size:0.65rem;color:#ccc;">xG ${pl.expectedGoals} • share ${pl.scoringShare}% • w ${pl.weight} <span style="color:#888;">/ tot ${pl.totalWeight || "?"}</span></div>
+              <div style="text-align:right;min-width:118px;">
+                <div style="font-family:var(--font-retro);font-size:0.7rem;color:#0f0;">GOL ${goals}</div>
+                <div style="font-size:0.65rem;color:#ccc;">PROB ${prob != null ? prob : "?"}% anytime</div>
+                <div style="font-size:0.6rem;color:#888;">xG ${pl.expectedGoals} • finishing ${pl.finishing ?? "?"}</div>
               </div>
             </div>
           `;
@@ -464,7 +485,7 @@ export const UIRenderer = {
           <div>Stability: <strong style="color:${pred.stability.level==="HIGH"?"#0f0":pred.stability.level==="MEDIUM"?"#ff0":pred.stability.level==="LOW"?"#f55":"#888"};">${pred.stability.level} (${pred.stability.score}/100)</strong> — ${Security.escapeHtml(pred.stability.level==="LOW" ? "Treat exact score as uncertain" : "Single scoreline dominates")}</div>
         </div>
 
-        <div class="pred-section-title">MOST LIKELY SCORELINES — PURE SIM DISTRIBUTION (MC ${PREDICTOR_CONFIG?.PURE_SIM?.PROBS_SIMS || 200})</div>
+        <div class="pred-section-title">MOST LIKELY SCORELINES — PLAYER-LEVEL EVENT SIM (MC ${PREDICTOR_CONFIG?.PURE_SIM?.PROBS_SIMS || 400})</div>
         <div class="pred-scores-grid">${scorelinesHtml}</div>
 
         ${pred.rngProof ? `
@@ -480,7 +501,7 @@ export const UIRenderer = {
             <strong style="color:#ff0;">AUDIT ROM SLPM_663.74 (jujur, 2026-08-30):</strong><br>
             RNG = Numerical Recipes LCG 1664525 — <strong>keputusan implementasi deterministik, BUKAN replika RNG WE10</strong> (konstanta RNG standar NR/glibc/MSVC/Borland/MT19937 = 0 hits di ROM)<br>
             FUN_0016e8d8 = ceiling-div helper (div/mflo) • FUN_00216ef0 = table lookup 0x3C2100+idx*8 • 003bd800 = pointer table — keduanya BUKAN RNG<br>
-            Ability = teamRatings.js (estimasi 57 tim) + form history • probs/markets/xG/scorelines semua dari ${PREDICTOR_CONFIG?.PURE_SIM?.PROBS_SIMS || 200} MC sim yang sama → konsisten
+            Team Model = teamRatings.js (estimasi 57 tim) + form tim • Player Model = playerAttributes.js (derived/estimated) • probs/markets/xG/scorelines/top-scorer semua dari satu jalur event yang sama → konsisten
           </div>
           <div style="margin-top:4px;color:#0f0;">✅ Skor tidak monoton karena tiap fixture punya seed unik (hash home|away|xG|MODEL_VERSION). Bulk 100/1000x pakai seed per iterasi → variasi antar iterasi.</div>
         </div>` : ""}
@@ -507,9 +528,13 @@ export const UIRenderer = {
   renderMatchGrid() {
     const isEditor = StateManager.activeMemoryId !== null;
     const activeMem = isEditor ? StateManager.db.memories[StateManager.activeMemoryId] : null;
-    const dataSource = isEditor && activeMem?.games?.[StateManager.activeGameIndex]
-      ? activeMem.games[StateManager.activeGameIndex]
-      : StateManager.homeQuery;
+    // FIX BUG B8 STUCK: handler grid di-bind sekali (dataset.uiInit) dan dulu
+    // meng-capture objek `dataSource` saat itu. Setelah RESET FORM,
+    // StateManager.homeQuery diganti objek BARU (clearHomeQuery), sehingga
+    // handler "B8 [+] ADD MATCH" membaca flag di objek basi → tombol tidak
+    // pernah menampilkan B8 dan harus refresh dulu. Sekarang semua handler
+    // memakai resolveActiveDataSource() agar selalu membaca state terkini.
+    const dataSource = resolveActiveDataSource();
 
     const p1Input = document.getElementById("p1Input");
     if (p1Input) {
@@ -642,7 +667,8 @@ export const UIRenderer = {
         const btnToggleB8 = b8Wrap.querySelector("#btnToggleB8");
         if (btnToggleB8) {
           btnToggleB8.addEventListener("click", () => {
-            const cur = StateManager.isB8Enabled(dataSource);
+            const live = resolveActiveDataSource();
+            const cur = StateManager.isB8Enabled(live);
             StateManager.setB8Enabled(!cur);
             UIRenderer.renderMatchGrid();
           });
@@ -704,7 +730,12 @@ export const UIRenderer = {
         b8Wrap.innerHTML = `<button class="btn" id="btnToggleB8" style="font-size:0.6rem;padding:6px 10px;">B8 [+] ADD MATCH</button>`;
         matchGridForm.parentNode.insertBefore(b8Wrap, matchGridForm.nextSibling);
         const btn = b8Wrap.querySelector("#btnToggleB8");
-        if (btn) btn.addEventListener("click", () => { const cur = StateManager.isB8Enabled(dataSource); StateManager.setB8Enabled(!cur); UIRenderer.renderMatchGrid(); });
+        if (btn) btn.addEventListener("click", () => {
+          const live = resolveActiveDataSource();
+          const cur = StateManager.isB8Enabled(live);
+          StateManager.setB8Enabled(!cur);
+          UIRenderer.renderMatchGrid();
+        });
       }
 
       const rowEls = matchGridForm.querySelectorAll(".match-row-item");

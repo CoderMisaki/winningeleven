@@ -1,6 +1,7 @@
 import { StateManager } from "./state/appState.js";
 import { NavigationManager } from "./ui/navigation.js";
 import { PredictionService, PREDICTOR_CONFIG } from "./services/predictor.js";
+import { runWalkForwardBacktest } from "./services/backtestEngine.js";
 import { UIRenderer } from "./ui/uiRenderer.js";
 import { MatchingEngine } from "./services/matchingEngine.js";
 import { ImportExportService } from "./services/importExport.js";
@@ -143,18 +144,33 @@ document.addEventListener("DOMContentLoaded", async () => {
         StateManager.save();
         UIRenderer.renderDatabaseModal();
       } else if (btn.classList.contains("btn-backtest-mem")) {
-        const res = PredictionService.runWalkForwardBacktest(id);
+        let res;
+        try {
+          res = runWalkForwardBacktest(id);
+        } catch (e) {
+          res = { error: `Backtest gagal: ${e?.message || e}` };
+        }
         if (res.error) {
           UIRenderer.showAlert(res.error);
         } else {
-          const msg = `HASIL WALK-FORWARD BACKTEST (MEMORY ${id}):\n\n` +
-            `Total Matches Evaluated: ${res.totalTested}\n` +
-            `1X2 Hit Rate: ${res.result1X2Accuracy.toFixed(1)}%\n` +
-            `Exact Score Accuracy: ${res.exactScoreAccuracy.toFixed(1)}%\n` +
-            `Top-3 Scoreline Hit Rate: ${res.top3ScoreHitRate.toFixed(1)}%\n` +
-            `Top-5 Scoreline Hit Rate: ${res.top5ScoreHitRate.toFixed(1)}%\n` +
-            `MAE Goals: ${res.maeHomeGoals.toFixed(2)} (H) / ${res.maeAwayGoals.toFixed(2)} (A)\n` +
-            `Brier Score: ${res.meanBrierScore.toFixed(3)} | LogLoss: ${res.meanLogLoss.toFixed(3)}`;
+          const cmp = res.modelComparison || {};
+          const p = cmp.playerAttribute, l = cmp.legacyWeight, d = cmp.delta;
+          const msg = `HASIL WALK-FORWARD BACKTEST (MEMORY ${id}) — NO LEAKAGE\n\n` +
+            `Total Matches Evaluated: ${res.totalTested}\n\n` +
+            `— MODEL PEMAIN (player-attribute v7) —\n` +
+            `Exact Score Accuracy : ${res.exactScoreAccuracy.toFixed(1)}%\n` +
+            `1X2 Accuracy         : ${res.result1X2Accuracy.toFixed(1)}%\n` +
+            `Top-3 Scoreline Hit  : ${res.top3ScoreHitRate.toFixed(1)}%\n` +
+            `Top-5 Scoreline Hit  : ${res.top5ScoreHitRate.toFixed(1)}%\n` +
+            `MAE Goals            : ${res.maeHomeGoals.toFixed(2)} (H) / ${res.maeAwayGoals.toFixed(2)} (A)\n` +
+            `Top Scorer Hit Rate  : ${res.topScorerHitRate.toFixed(1)}% (${res.topScorerSamples} match ada data topGoals)\n` +
+            `Scorer Distribution  : ${res.scorerDistributionAccuracy.toFixed(1)}% akurat (TVD ${res.scorerDistributionTVD.toFixed(1)}%)\n` +
+            `Brier / LogLoss      : ${res.meanBrierScore.toFixed(3)} / ${res.meanLogLoss.toFixed(3)}\n\n` +
+            (p && l ? `— PEMBANDING MODEL LAMA (position weight, heuristik) —\n` +
+              `Exact ${l.exactScoreAccuracy.toFixed(1)}% | 1X2 ${l.result1X2Accuracy.toFixed(1)}% | Top-3 ${l.top3ScoreHitRate.toFixed(1)}% | Top-5 ${l.top5ScoreHitRate.toFixed(1)}%\n` +
+              `MAE ${l.maeHomeGoals.toFixed(2)}/${l.maeAwayGoals.toFixed(2)} | Top Scorer Hit ${l.topScorerHitRate.toFixed(1)}% | Distribusi ${l.scorerDistributionAccuracy.toFixed(1)}%\n` +
+              `DELTA vs model baru: exact ${d.exactScoreAccuracy >= 0 ? "+" : ""}${d.exactScoreAccuracy.toFixed(1)} | 1X2 ${d.result1X2Accuracy >= 0 ? "+" : ""}${d.result1X2Accuracy.toFixed(1)} | top3 ${d.top3ScoreHitRate >= 0 ? "+" : ""}${d.top3ScoreHitRate.toFixed(1)} | topScorerHit ${d.topScorerHitRate >= 0 ? "+" : ""}${d.topScorerHitRate.toFixed(1)}\n\n` : "") +
+            `Leakage: ${res.leakageAudit}`;
           UIRenderer.showAlert(msg);
         }
       }
@@ -277,7 +293,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                 <div id="auto200Progress" style="background:#000;border:1px solid #333;padding:6px;font-size:0.7rem;color:#0ff;">⏳ Menjalankan 200x prediksi untuk ${validPreds.length} match (${validPreds.length*200} simulasi) — progress 0%...</div>
                 <div style="margin-top:6px;display:flex;gap:8px;flex-wrap:wrap;">
                   <button id="btnCancelAuto200" class="btn" style="background:#330000;border:1px solid #f55;color:#f55;padding:4px 8px;font-size:0.6rem;">BATALKAN</button>
-                  <span style="font-size:0.6rem;color:#888;">Skor stabil = <strong style="color:#0f0;">mode 200x</strong> (paling sering) + <strong style="color:#0ff;">rata-rata 200x</strong> (desimal) + <strong style="color:#ff0;">winrate H/D/A 200x</strong>. Top goals = pemain paling sering cetak 200x (WE10 roster weight, bukan dummy).</span>
+                  <span style="font-size:0.6rem;color:#888;">Skor stabil = <strong style="color:#0f0;">mode 200x</strong> (paling sering) + <strong style="color:#0ff;">rata-rata 200x</strong> (desimal) + <strong style="color:#ff0;">winrate H/D/A 200x</strong>. Top goals = pemain paling sering cetak 200x dari MATCH ENGINE level-pemain (posisi × atribut × form) — bukan undian weight, bukan dummy.</span>
                 </div>
                 <div id="auto200Output" style="margin-top:8px;"></div>
               `;
@@ -319,23 +335,23 @@ document.addEventListener("DOMContentLoaded", async () => {
                   }).join("");
                   const globalHtml = res.globalRank.slice(0,8).map((pl,i)=>{
                     const medal = i===0?"🥇":i===1?"🥈":i===2?"🥉":"#"+(i+1);
-                    return `<tr><td style="padding:4px;">${medal}</td><td style="padding:4px;text-align:center;">${pl.flag||""}</td><td style="padding:4px;"><strong>${pl.name}</strong> [${pl.pos}]<br><span style="font-size:0.6rem;color:#aaa;">${pl.teamName} (${pl.teamCode}) w${pl.weight}/${pl.totalWeight}=${pl.pickProb}%</span><br><span style="font-size:0.55rem;color:#0ff;">${pl.proof}</span></td><td style="padding:4px;text-align:center;color:#0f0;font-weight:bold;">${pl.hits}x/200<br><span style="font-size:0.6rem;color:#888;">${pl.freqPct}% — ${pl.totalGoals} gol total</span></td></tr>`;
+                    return `<tr><td style="padding:4px;">${medal}</td><td style="padding:4px;text-align:center;">${pl.flag||""}</td><td style="padding:4px;"><strong>${pl.name}</strong> [${pl.pos}]<br><span style="font-size:0.6rem;color:#aaa;">${pl.teamName} (${pl.teamCode}) • posisi ${pl.pos}${pl.finishing!=null?` • finishing ${pl.finishing}`:""}${pl.pickProb!=null?` • dipilih ${pl.pickProb}%/chance`:""}</span><br><span style="font-size:0.55rem;color:#0ff;">${pl.proof}</span></td><td style="padding:4px;text-align:center;color:#0f0;font-weight:bold;">${pl.hits}x/200<br><span style="font-size:0.6rem;color:#888;">${pl.freqPct}% — ${pl.totalGoals} gol total</span></td></tr>`;
                   }).join("");
                   const scoreDistHtml = res.scoreRank.slice(0,6).map(s=>`<span style="background:#111;border:1px solid #444;padding:3px 6px;margin:2px;display:inline-block;font-size:0.65rem;">${s.scoreline}: <strong style="color:#0ff;">${s.count}x</strong> (${s.pct}%)</span>`).join("");
                   if(progressEl) progressEl.innerHTML = `<span style="color:#0f0;">✓ Selesai 200x (${res.completed}/${res.total}) — rata-rata winrate & skor dihitung tanpa hang (chunked yield).</span>`;
                   if(outEl) outEl.innerHTML = `
                     <div style="background:#0a1a0a;border:1px solid #0f0;padding:8px;">
-                      <div style="font-weight:bold;color:#0ff;margin-bottom:6px;">📊 HASIL RATA-RATA 200x — SKOR & WINRATE KONSISTEN (WE10 PURE SIM)</div>
+                      <div style="font-weight:bold;color:#0ff;margin-bottom:6px;">📊 HASIL RATA-RATA 200x — SKOR & WINRATE KONSISTEN (PLAYER-LEVEL EVENT SIM)</div>
                       <div style="overflow-x:auto;"><table class="result-table" style="font-size:0.65rem;"><thead><tr><th>B#</th><th>MATCH</th><th>SKOR PALING SERING</th><th>RATA-RATA (200x)</th><th>KONSISTEN MENANG</th><th>TOP SCORER KONSISTEN (200x)</th></tr></thead><tbody>${rowsHtml}</tbody></table></div>
-                      <div style="font-size:0.55rem;color:#888;margin-top:4px;">Skor paling sering = mode 200x. Rata-rata = avg home:away 200x. Menang konsisten = winner dengan winrate tertinggi 200x (bukan dummy — pure sim chances 6±mid*3, shot 18%+0.35*diff, form-aware).</div>
+                      <div style="font-size:0.55rem;color:#888;margin-top:4px;">Skor paling sering = mode 200x (event-level: chance → pemain → shot → goal). Rata-rata = avg home:away 200x. Menang konsisten = winner dengan winrate tertinggi 200x. Kalibrasi skala dari data observasi, bukan angka manual.</div>
                     </div>
                     <div style="background:#111;border:1px solid #ff0;padding:8px;margin-top:8px;">
-                      <div style="font-weight:bold;color:#ff0;margin-bottom:6px;">⚽ GLOBAL TOP GOALS KONSISTEN 200x — KENAPA PEMAIN INI NAIK? (DATA WE10, BUKAN DUMMY)</div>
+                      <div style="font-weight:bold;color:#ff0;margin-bottom:6px;">⚽ GLOBAL TOP GOALS KONSISTEN 200x — KENAPA PEMAIN INI NAIK? (MODEL PEMAIN, BUKAN DUMMY)</div>
                       <div style="overflow-x:auto;"><table class="result-table" style="font-size:0.65rem;"><thead><tr><th>#</th><th>FLAG</th><th>PEMAIN / NEGARA + ALASAN</th><th>KONSISTENSI 200x</th></tr></thead><tbody>${globalHtml}</tbody></table></div>
                       <div style="background:#001a00;border:1px solid #0f0;padding:6px;margin-top:6px;font-size:0.6rem;line-height:1.35;">
                         <strong style="color:#0f0;">Kenapa bisa masuk top goals?</strong> ${res.bulkRngProof.whyFrequent}<br>
-                        <strong style="color:#0ff;">Kenapa naik?</strong> Berat posisi CF/WF 84 → pick 19% paling tinggi → makin sering kepilih di 200x. OMF 66 → 15%, SMF 52 → 12%, DF 10-12 boost 2.2 → 22 → 5%. GK filtered 0% tidak pernah muncul.<br>
-                        <strong style="color:#ff0;">Kenapa dapat skor segitu?</strong> Skor alokasi LCG weight-proportional tepat sebanyak homeGoals+awayGoals per match, tanpa-replacement (anti 3 gol numpuk 1 pemain kecuali 5+ gol).<br>
+                        <strong style="color:#0ff;">Kenapa naik?</strong> Role posisi (CF/ST tertinggi, OMF menengah, DF sangat rendah) × atribut (finishing/positioning/technique) × form historis (shrinkage) menentukan peluang tiap pemain dipilih pada setiap chance. Tidak ada daftar bintang manual dan tidak ada nama dummy.<br>
+                        <strong style="color:#ff0;">Kenapa dapat skor segitu?</strong> Skor = hasil event: setiap chance dipilih pemainnya, lalu tembakannya diuji terhadap defense lawan. Jumlah gol adalah konsekuensi, bukan target yang dibagi-bagi ke nama.<br>
                         <span style="color:#888;">${res.bulkRngProof.auditNote}</span>
                       </div>
                       <div style="margin-top:6px;font-weight:bold;color:#0ff;">🏆 Distribusi Skor Global 200x (mode):</div><div style="display:flex;flex-wrap:wrap;gap:4px;">${scoreDistHtml}</div>
@@ -1336,7 +1352,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         whatIfOut.innerHTML = `<div style="background:#331100;border:1px solid #ff0;color:#ffcc66;padding:8px;">⛔ Isi skor HOME & AWAY (0-20). Contoh: Argentina 2 : 1 Wales</div>`;
         return;
       }
-      whatIfOut.innerHTML = `<div style="text-align:center;padding:12px;color:#0ff;">⏳ Mengalokasikan ${Security.escapeHtml(hRaw)} ${hgRaw}:${agRaw} ${Security.escapeHtml(aRaw)} via NR-LCG 1664525 (deterministik, bukan replika ROM)…</div>`;
+      whatIfOut.innerHTML = `<div style="text-align:center;padding:12px;color:#0ff;">⏳ Mensimulasikan ${Security.escapeHtml(hRaw)} ${hgRaw}:${agRaw} ${Security.escapeHtml(aRaw)} — event chance → pemain → shot (NR-LCG deterministik, bukan replika ROM)…</div>`;
       setTimeout(()=>{
         try {
           const res = PredictionService.whatIf(hRaw, aRaw, hgRaw, agRaw, {});

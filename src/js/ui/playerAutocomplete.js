@@ -16,7 +16,8 @@ Object.keys(WE10_FULL_ROSTER).forEach(code => {
     allPlayers.push({
       name: p.name,
       pos: p.pos,
-      weight: p.weight,
+      // audit 2026-09-19: `weight` dihapus dari roster (heuristik lama).
+      // Rating/atribut pemain ada di data/playerAttributes.js.
       teamCode: code,
       teamName,
       flag,

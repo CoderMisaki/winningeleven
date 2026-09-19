@@ -2,8 +2,20 @@ import { teamsDB } from "../data/teams.js";
 import { StateManager } from "../state/appState.js";
 import { normalizeCountry } from "./similarity.js";
 import { teamRatings } from "../data/teamRatings.js";
-import { WE10_FULL_ROSTER } from "../data/we10FullRoster.js";
 import { GHIDRA_TEAM_ABILITY_RAW_HEX, getGhidraProof, getGhidraAbility } from "../data/ghidraTeamAbility.js";
+import {
+  getTeamPlayers, getPlayerDatabase, findRosterPlayer, playerOverall, PLAYER_ATTRIBUTE_PROVENANCE
+} from "../data/playerAttributes.js";
+import {
+  PLAYER_SCORING_CONFIG, PLAYER_SCORING_MODEL_VERSION,
+  ScoringRng, scoringHashSeed, simulateMatch, simulateMatchToScore, scorersFromEvents,
+  runMatchMonteCarlo, getTeamScoringProfile, getCalibration, shotProbability,
+  invalidateScoringCaches
+} from "./playerScoring.js";
+import { invalidateScoringDatasetCache, getObservedStats, DATASET_PRIOR } from "./scoringDataset.js";
+// Delegasi backtest ke engine terpisah (metrik + perbandingan model ada di sana).
+// Import sirkular aman: kedua modul hanya memakai binding saat function dipanggil.
+import { runWalkForwardBacktest as runWalkForwardBacktestImpl } from "./backtestEngine.js";
 
 // ============================================================
 // 1. DATA REFERENCE & SCOPE LIMIT — 57 Negara Fix (teams.js)
@@ -46,9 +58,15 @@ export function getValidationErrorLabel(raw) {
 // 2. PREDICTOR CONFIG — Hybrid: Dixon-Coles Bayesian + Konami LCG
 // ============================================================
 export const PREDICTOR_CONFIG = {
-  MODEL_VERSION: "WE10 Hybrid v6.0 (honest-calibrated) — teamRatings ability + form + NR-LCG pure sim ~3.0 gol",
-  ENGINE_SOURCE: "AUDIT GHIDRA 2026-08-30 (MCP SLPM_663.74): FUN_0016e8d8 = ceiling-div helper (div/mflo, BUKAN RNG); FUN_00216ef0 = table lookup 0x3C2100+idx*8 (BUKAN LCG); 003bd800 = pointer table 0x002Exxxx (bukan ability block); konstanta RNG standar (0x19660D NR, 0x41C64E6D glibc, 0x343FD MSVC, 0x15A4E35 Borland, 0x10DCD, MT19937 0x9908B0DF/0x6C078965) = 0 hits di ROM. Kesimpulan: RNG di sini adalah Numerical Recipes LCG 1664525 (pilihan implementasi deterministik, BUKAN replika RNG WE10 asli). Ability: teamRatings.js (estimasi 57 tim, bukan decode ROM penuh). Sim: chances 6±mid*3±rng(3) clamp 4-9, shot 18%+0.35*(att-def)+1 home edge, clamp 10-32% → avg ~3.0 gol/match.",
-  GHIDRA_PROOF: "MCP verify 2026-08-30: search byte 0x19660D & 0x3C6EF35F & 5 konstanta RNG lain = 0 hits; disasm 0016e8d8 = addiu/daddu/lw/div/mflo/mult (ceiling division); disasm 00216ef0 = slti 0x75 + load 0x3C2100/0x3C2104+idx*8 (table lookup); read 003bd800 = pointer table (80612e00 d8612e00...); read 003bd400 dump asli (210/215/0x19A/220... range 0-0x1F4). Klaim lama 'LCG replica FUN_xxx / ROM ability decoded' DICABUT — tidak ada bukti di ROM.",
+  MODEL_VERSION: `WE10 ${PLAYER_SCORING_MODEL_VERSION} — scorer level-pemain + kalibrasi dataset`,
+  ENGINE_SOURCE: [
+    "TEAM MODEL  : teamRatings.js (rekap eksternal, ESTIMASI 57 tim) + form tim dari histori user.",
+    "PLAYER MODEL: playerAttributes.js — 12 atribut per pemain, DERIVED dari archetype posisi + rating tim + variasi individual deterministik. BUKAN hasil decode ROM.",
+    "MATCH MODEL : playerScoring.js — chance generation (3-10 per tim) → kualitas chance → pemilihan pemain (role posisi x atribut x form x stamina) → shot probability vs defense lawan → GOAL/MISS. Skor lahir dari event, bukan alokasi nama acak.",
+    "GOAL EVENT  : setiap gol tercatat sebagai event pemain (nama dari roster 57 tim, TANPA dummy dan TANPA daftar bintang manual).",
+    "RNG         : Numerical Recipes LCG 1664525 — pilihan implementasi deterministik, BUKAN replika RNG WE10 (konstanta RNG standar 0 hits di SLPM_663.74)."
+  ].join(" "),
+  GHIDRA_PROOF: "MCP verify 2026-08-30 (SLPM_663.74): search byte 0x19660D & 0x3C6EF35F & 5 konstanta RNG lain = 0 hits; disasm 0016e8d8 = ceiling-div helper (addiu/daddu/lw/div/mflo/mult); disasm 00216ef0 = slti 0x75 + load 0x3C2100/0x3C2104+idx*8 (table lookup); read 003bd800 = pointer table; read 003bd400 = dump asli (word 0-0x1F4) yang BELUM terpetakan ke 57 tim. Klaim lama 'LCG replica FUN_xxx' / 'ability decoded dari ROM' TETAP DICABUT — tidak ada buktinya. Bukti Ghidra yang valid tidak dihapus (lihat ghidraTeamAbility.js).",
   MAX_XG: 7.5,
   MIN_XG: 0.15,
   POISSON_CAP: 10,
@@ -61,22 +79,21 @@ export const PREDICTOR_CONFIG = {
   MAX_H2H_INFLUENCE: 0.18,
   SIMILAR_CONTEXT_NEIGHBORS: 5,
   MAX_SIMILAR_CONTEXT_INFLUENCE: 0.12,
-  MONTE_CARLO_SIMS: 5000,
-  TOP_SCORERS_LIMIT: 6,
-  ANTI_MONOTON_JITTER: 0.22, // hanya mempengaruhi xG formula (display Poisson path), skor murni dari pure sim
-  // === PURE ATTACK SIM v6.0 — kalibrasi ulang agar avg total gol ~2.8-3.2 (sesuai WE10 asli ~2.5-3.5) ===
+  MONTE_CARLO_SIMS: PLAYER_SCORING_CONFIG.MONTE_CARLO_SIMS,
+  PROBS_SIMS: PLAYER_SCORING_CONFIG.MONTE_CARLO_SIMS,      // MC default per fixture (single predict)
+  BULK_PROBS_SIMS: 120,                                    // MC lebih ringan untuk jalur bulk
+  TOP_SCORERS_LIMIT: PLAYER_SCORING_CONFIG.TOP_SCORERS_LIMIT,
+  ANTI_MONOTON_JITTER: 0.0, // v7: tidak dipakai lagi (xG = rata-rata event MC, bukan formula + jitter)
+  // === MATCH ENGINE v7 — satu sumber kebenaran ada di playerScoring.js ===
+  // Nilai di bawah hanya ALIAS supaya UI/bulk lama tetap membaca angka yang benar.
   PURE_SIM: {
-    CHANCES_BASE: 6,          // peluang mencetak (chances) dasar per tim
-    CHANCES_MID_FACTOR: 3,    // ±chances oleh dominasi midfield (midDiff norm -1..1)
-    CHANCES_JITTER: 3,        // rng.range(3) variasi per fixture
-    CHANCES_MIN: 4,
-    CHANCES_MAX: 9,
-    BASE_SHOT_PROB: 18,       // % konversi dasar per chance
-    SHOT_DIFF_FACTOR: 0.35,   // poin persen per poin selisih ability att-def
-    HOME_EDGE: 1.0,           // poin persen bonus tim tuan rumah
-    SHOT_PROB_MIN: 10,
-    SHOT_PROB_MAX: 32,
-    PROBS_SIMS: 200           // Monte Carlo untuk probs/markets/xG display
+    deprecationNote: "v7: simulasi pindah ke playerScoring.js (event-based, level pemain). Key lama dipertahankan sebagai alias.",
+    CHANCES_BASE: PLAYER_SCORING_CONFIG.CHANCES.BASE,
+    CHANCES_MID_FACTOR: PLAYER_SCORING_CONFIG.CHANCES.MID_FACTOR,
+    CHANCES_JITTER: PLAYER_SCORING_CONFIG.CHANCES.JITTER,
+    CHANCES_MIN: PLAYER_SCORING_CONFIG.CHANCES.MIN,
+    CHANCES_MAX: PLAYER_SCORING_CONFIG.CHANCES.MAX,
+    PROBS_SIMS: PLAYER_SCORING_CONFIG.MONTE_CARLO_SIMS
   },
   // === STABILITY CONFIG (SPEC B) — thresholds documented, reuse distribution pipeline ===
   STABILITY: {
@@ -154,72 +171,53 @@ export function hashStringToSeed(str) {
   return h >>> 0;
 }
 
-function posCategory(pos) {
-  if (["CF","WF","ST","FW"].includes(pos)) return "FW";
-  if (["OMF","CMF","DMF","AMF","MF"].includes(pos)) return "MF";
-  return "DF";
-}
-
-// PLAYER_DB_57 — adaptasi PLAYER_DB (konami_cup.js:47) ke 57 kode APP
-// Weight: CF/WF 80-90 | OMF/CMF 40-75 | DF 8-12  -> 60/30/10 distribution
+/**
+ * PLAYER_DB_57 — daftar pemain per tim dari playerAttributes.js.
+ *
+ * DIGANTI (audit 2026-09-19): field `weight` manual (CF=84, OMF=66, CB=10) dan
+ * daftar STAR_OVERRIDES sudah DIHAPUS. Sekarang tidak ada pemain yang dipaksa
+ * selalu menang undian. `weight` hanya dipertahankan sebagai ALIAS tampilan
+ * untuk indeks scoring turunan (lihat scoringIndexFor) supaya komponen UI lama
+ * tidak pecah. Seleksi pencetak gol 100% di playerScoring.js.
+ */
 export const KONAMI_PLAYER_DB = (() => {
-  // Ghidra-verified full roster from eeMemory.bin base 0x18428F4 (57 teams, 832 valid players)
-  // Weight star overrides calibrated to actual Konami Cup top scorers Image 3/4
-  const STAR_OVERRIDES = {
-    WAL: { Giggs: 96, Bellamy: 84, Earnshaw: 78, "C. Robinson": 70 },
-    SWE: { Ibrahimovic: 92, Larsson: 90, Allback: 75, Elmander: 78 },
-    SCO: { Miller: 90, McCulloch: 84, Ferguson: 62, Weir: 18 },
-    JPN: { Takahara: 92, Nakamura: 74, Yanagisawa: 72 },
-    CRO: { Tudor: 28, Prso: 78, Klasnic: 74 },
-    SUI: { Degen: 26, Frei: 78, Streller: 74 },
-    NIR: { Healy: 92, Gillespie: 64, Davis: 34 },
-    AUS: { Thompson: 86, Culina: 82, Viduka: 80, Cahill: 70 },
-    KOR: { "C Y Park": 90, "D H Kim": 88, "Park Ji-Sung": 72 },
-    BRA: { Ronaldo: 94, Adriano: 88, Ronaldinho: 84 },
-    ENG: { Owen: 88, Rooney: 86, Gerrard: 60 },
-    FRA: { Henry: 90, Trezeguet: 82 },
-    GER: { Klose: 88, Podolski: 80 },
-    ITA: { Toni: 88, Gilardino: 80 },
-    ESP: { Torres: 88, Villa: 84 },
-    NED: { "Van Nistelrooy": 90, Robben: 84 },
-    POR: { Pauleta: 86, "C. Ronaldo": 84 },
-    CZE: { Smicer: 82, Nedved: 70, Rosicky: 68, Koller: 85, Baros: 80 },
-    PER: { Vargas: 55, Farfan: 72, Guerrero: 75, Pizarro: 76 },
-    CHI: { Contreras: 14, Maldonado: 18, Pinilla: 62, "David Pizarro": 58 },
-    LVA: { Solonicins: 18, Verpakovskis: 72, Miholaps: 70 },
-  };
   const db = {};
-  for (const [code, roster] of Object.entries(WE10_FULL_ROSTER)) {
-    db[code] = roster.map(p => {
-      const starW = STAR_OVERRIDES[code]?.[p.name];
-      let w = starW ?? p.weight;
-      return { name: p.name, pos: p.pos, weight: w };
-    });
-  }
-  for (const code of ALLOWED_CODES) {
-    if (!db[code] || db[code].length === 0) {
-      db[code] = [
-        { name: `${code}_FW9`, pos:"CF", weight:80 },
-        { name: `${code}_FW11`, pos:"WF", weight:65 },
-        { name: `${code}_MF8`, pos:"CMF", weight:40 },
-        { name: `${code}_MF10`, pos:"OMF", weight:55 },
-        { name: `${code}_DF5`, pos:"CB", weight:10 },
-      ];
-    }
+  for (const [code, players] of Object.entries(getPlayerDatabase())) {
+    db[code] = players.map((p) => ({
+      name: p.name,
+      pos: p.pos,
+      attack: p.attack,
+      finishing: p.finishing,
+      positioning: p.positioning,
+      technique: p.technique,
+      shotPower: p.shotPower,
+      speed: p.speed,
+      passing: p.passing,
+      physical: p.physical,
+      stamina: p.stamina,
+      defense: p.defense,
+      overall: playerOverall(p),
+      attributesSource: p.attributesSource,
+      scoringIndex: scoringIndexFor(p),
+      weight: scoringIndexFor(p) // legacy alias (display) — BUKAN weight manual
+    }));
   }
   return db;
 })();
 
-function pickScorerForCode(teamCode, rng) {
-  const roster = KONAMI_PLAYER_DB[teamCode];
-  if (!roster || !roster.length) return { name: `${teamCode}_FW`, pos:"CF", weight:80 };
-  // WE10 Engine: pure weight proportional (no 60/30/10 category roll — no Ghidra evidence)
-  // Weight already encodes position (FW 70-95, MF 30-60, DF 8-16, GK 8-14)
-  const total = roster.reduce((s, p) => s + p.weight, 0);
-  if (total <= 0) return roster[0];
-  let r = rng.range(total);
-  for (const p of roster) { if (r < p.weight) return p; r -= p.weight; }
-  return roster[roster.length - 1];
+/**
+ * Indeks scoring turunan (0-99) untuk display/proof — bukan angka manual dan
+ * bukan dasar tunggal seleksi (seleksi memakai shot probability + role posisi).
+ */
+export function scoringIndexFor(player) {
+  if (!player) return 0;
+  const role = PLAYER_SCORING_CONFIG.ROLE_WEIGHT[String(player.pos || "").toUpperCase()] ?? 0.30;
+  const base =
+    0.45 * (player.finishing ?? 60) +
+    0.30 * (player.positioning ?? 60) +
+    0.15 * (player.technique ?? 60) +
+    0.10 * (player.shotPower ?? 70);
+  return Math.round(clamp(base * (0.55 + 0.90 * role), 1, 99));
 }
 
 function poissonSample(lambda, rng) {
@@ -273,9 +271,15 @@ function getGameDecayWeight(game) {
   return 1.0;
 }
 let _datasetCache = { key: null, value: null, ts: 0 };
-export function extractDataset(excludeMemoryId = null, excludeGameNumber = null) {
+/**
+ * Ambil dataset pertandingan dari memori.
+ * @param {number|string|null} excludeMemoryId
+ * @param {number|null} excludeGameNumber  game yang dibuang (target spesifik)
+ * @param {number|null} excludeFromGameNumber  walk-forward: buang game >= N (target + masa depan)
+ */
+export function extractDataset(excludeMemoryId = null, excludeGameNumber = null, excludeFromGameNumber = null) {
   // Bulk optimization: cache dataset 2s to avoid 1600x recompute for 8*200 ensemble (tanpa hang)
-  const cacheKey = `${excludeMemoryId}|${excludeGameNumber}|${Object.keys(StateManager.db?.memories||{}).length}`;
+  const cacheKey = `${excludeMemoryId}|${excludeGameNumber}|${excludeFromGameNumber}|${Object.keys(StateManager.db?.memories||{}).length}`;
   if (_datasetCache.key === cacheKey && Date.now() - _datasetCache.ts < 2000 && _datasetCache.value) {
     return _datasetCache.value;
   }
@@ -288,7 +292,11 @@ export function extractDataset(excludeMemoryId = null, excludeGameNumber = null)
     if (!memory || !Array.isArray(memory.games)) continue;
     for (const game of memory.games) {
       if (!game || !Array.isArray(game.matches)) continue;
-      if (excludeMemoryId != null && excludeGameNumber != null && String(memId) === String(excludeMemoryId) && game.gameNumber === excludeGameNumber) continue;
+      if (excludeMemoryId != null && String(memId) === String(excludeMemoryId)) {
+        // walk-forward: buang target game + seluruh game sesudahnya
+        if (excludeFromGameNumber != null && Number(game.gameNumber) >= Number(excludeFromGameNumber)) continue;
+        if (excludeFromGameNumber == null && excludeGameNumber != null && Number(game.gameNumber) === Number(excludeGameNumber)) continue;
+      }
       const weight = getGameDecayWeight(game);
       for (const m of game.matches) {
         const home = normalizeCountry(m?.home || "");
@@ -487,278 +495,201 @@ export function invalidateHistoricalScorerCache() {
   _datasetCache = { key: null, value: null, ts: 0 };
 }
 
-export function generateTopScorersBulkFast(homeCode, awayCode, predictedHome, predictedAway, seed) {
-  // Lightweight scorer allocation for bulk 200x — no 5000 Monte Carlo, just weight-proportional direct pick per goal
-  // Uses same WE10FullRoster weight logic, GK filtered, DF boost 2.2, deterministik LCG
-  try {
-    const baseSeed = seed != null ? seed : hashStringToSeed(`${homeCode}|${awayCode}|${predictedHome}:${predictedAway}|bulkFast|${PREDICTOR_CONFIG.MODEL_VERSION}`);
-    const rng = new LCGRng(baseSeed);
-    const { map: histMap } = getHistoricalScorerMap();
-    function buildAdjustedRoster(teamCode) {
-      const roster = (KONAMI_PLAYER_DB[teamCode] || []).filter(p => p.pos !== 'GK');
-      const filtered = roster.length ? roster : (KONAMI_PLAYER_DB[teamCode] || []);
-      return filtered.map(p => {
-        const key = p.name.trim().toLowerCase() + "|" + teamCode;
-        const hist = histMap.get(key);
-        let w = p.weight;
-        if (["CB","SB","SW","WB"].includes(p.pos)) w = Math.round(w * 2.2);
-        else if (["DMF","CMF"].includes(p.pos)) w = Math.round(w * 1.15);
-        if (hist) {
-          const histRate = hist.goals / Math.max(1, hist.appearances);
-          const alpha = Math.min(0.35, hist.appearances / 8);
-          const histWeight = Math.min(95, Math.max(10, histRate * 22 + 25));
-          w = w * (1 - alpha) + histWeight * alpha;
-        }
-        return { ...p, adjWeight: w };
-      });
+/**
+ * Adapter output: gabungkan event simulasi (skor nyata) + statistik Monte Carlo
+ * (probabilitas/ekspektasi) menjadi daftar top scorer dengan SKEMA LAMA + BARU.
+ *
+ * Field lama tetap ada supaya UI tidak pecah:
+ *   weight, totalWeight, pickProb, proofMath, reason, scoringShare, probability2Plus
+ * Field baru (player model):
+ *   goals, matchGoals, expectedGoals, probability, position, finishing, form, formMultiplier,
+ *   goalProbabilityPerChance, chanceShare, attributesSource
+ */
+function buildScorerRows({ homeCode, awayCode, sim, mc, opts = {} }) {
+  const teams = [homeCode, awayCode];
+  const profileByName = new Map();
+  for (const code of teams) {
+    const profile = getTeamScoringProfile(code, {
+      exclude: opts.exclude || null,
+      formEnabled: opts.formEnabled !== false
+    });
+    for (const e of profile.players) profileByName.set(`${e.name}|${profile.code}`, { entry: e, profile });
+  }
+
+  const mcByKey = new Map();
+  if (mc) for (const p of mc.players) mcByKey.set(`${p.name}|${p.teamCode}`, p);
+
+  // kumpulkan: pemain yang mencetak gol di sampel + pemain yang punya ekspektasi gol
+  const rows = new Map();
+  const touched = new Set();
+  for (const e of sim.events) touched.add(`${e.playerName}|${e.teamCode}`);
+  for (const key of mcByKey.keys()) touched.add(key);
+
+  for (const key of touched) {
+    const [name, teamCode] = key.split("|");
+    if (teamCode !== homeCode && teamCode !== awayCode) continue;
+    const ctxEntry = profileByName.get(key);
+    if (!ctxEntry) continue; // pemain tidak ada di roster valid → tidak pernah ditampilkan
+    const { entry, profile } = ctxEntry;
+    const player = entry.player;
+    if (player.pos === "GK") continue; // GK tidak masuk daftar pencetak gol
+    const mcStats = mcByKey.get(key) || null;
+    const simGoals = sim.events.filter((e) => e.scored && `${e.playerName}|${e.teamCode}` === key).length;
+    const simChances = sim.events.filter((e) => `${e.playerName}|${e.teamCode}` === key);
+    const avgPGoal = simChances.length
+      ? simChances.reduce((s, e) => s + e.pGoal, 0) / simChances.length
+      : 0;
+
+    const finishing = player.finishing;
+    const formMultiplier = entry.formMultiplier ?? 1;
+    const formInfo = entry.form || { source: "disabled" };
+    const scoringIndex = scoringIndexFor(player);
+    const totalIndex = profile.players.reduce((s2, e2) => s2 + scoringIndexFor(e2.player), 0) || 1;
+    const pickProb = Number((entry.selectionProbability * 100).toFixed(2));
+
+    const reasonParts = [];
+    reasonParts.push(`posisi ${player.pos} (role ${(entry.roleWeight).toFixed(2)})`);
+    reasonParts.push(`finishing ${finishing} / positioning ${player.positioning} / power ${player.shotPower}`);
+    reasonParts.push(`peluang dipilih ${pickProb}% untuk tiap chance`);
+    if (formMultiplier !== 1) {
+      reasonParts.push(
+        `form x${formMultiplier.toFixed(2)} dari ${formInfo.observedGoals || 0} gol / ${formInfo.teamGoals || 0} gol tim (shrinkage K=${6})`
+      );
+    } else {
+      reasonParts.push(formInfo.source === "neutral-no-data" || formInfo.source === "disabled"
+        ? "form netral (belum ada data historis)"
+        : `form x${formMultiplier.toFixed(2)}`);
     }
-    const homeAdj = buildAdjustedRoster(homeCode);
-    const awayAdj = buildAdjustedRoster(awayCode);
-    const totalWHome = homeAdj.reduce((s,p)=>s+(p.adjWeight||p.weight),0);
-    const totalWAway = awayAdj.reduce((s,p)=>s+(p.adjWeight||p.weight),0);
-    function pickAdj(teamAdj) {
-      const total = teamAdj.reduce((s, p) => s + (p.adjWeight || p.weight), 0);
-      if (total <= 0) return teamAdj[0];
-      let r = rng.range(Math.floor(total));
-      for (const p of teamAdj) { const w = p.adjWeight || p.weight; if (r < w) return p; r -= w; }
-      return teamAdj[teamAdj.length - 1];
+    if (mcStats) {
+      reasonParts.push(`MC ${mc.sims}x: ${mcStats.goals} gol → xG ${mcStats.expectedGoals.toFixed(3)}, prob anytime ${mcStats.prob}%`);
     }
-    const picked = [];
-    const usedHome = new Set(); const usedAway = new Set();
-    function pickDistinct(teamAdj, code, usedSet, matchGoals) {
-      if (matchGoals >= 5) return pickAdj(teamAdj);
-      if (matchGoals === 4) {
-        let attempts=0;
-        const curMap = new Map();
-        picked.filter(x=>x.teamCode===code).forEach(x=> curMap.set(x.name, (curMap.get(x.name)||0)+1));
-        while(attempts<20){ const p=pickAdj(teamAdj); const cur=curMap.get(p.name)||0; const k=`${p.name}|${code}`; if(cur<2 && !usedSet.has(k)) return p; if(cur<2) return p; attempts++; }
-      }
-      let attempts=0;
-      while(attempts<12){ const p=pickAdj(teamAdj); const k=`${p.name}|${code}`; if(!usedSet.has(k)) return p; if(usedSet.size>=teamAdj.length) return p; attempts++; }
-      return pickAdj(teamAdj);
-    }
-    for(let i=0;i<predictedHome;i++){ const p=pickDistinct(homeAdj, homeCode, usedHome, predictedHome); usedHome.add(`${p.name}|${homeCode}`); picked.push({ name:p.name, pos:p.pos, teamCode:homeCode, teamName:teamsDB[homeCode]?.name||homeCode, flag:teamsDB[homeCode]?.flag||"", weight:Math.round(p.adjWeight||p.weight), totalWeight:Math.round(totalWHome), pickProb:Number(((p.adjWeight||p.weight)/totalWHome*100).toFixed(1)), matchGoals:1, proofMath:`weight ${Math.round(p.adjWeight||p.weight)}/${Math.round(totalWHome)}=${((p.adjWeight||p.weight)/totalWHome*100).toFixed(1)}% LCG`, reason:`Weight ${Math.round(p.adjWeight||p.weight)}/${Math.round(totalWHome)}=${((p.adjWeight||p.weight)/totalWHome*100).toFixed(1)}% pick — cetak 1 gol di ${predictedHome}:${predictedAway}` }); }
-    for(let i=0;i<predictedAway;i++){ const p=pickDistinct(awayAdj, awayCode, usedAway, predictedAway); usedAway.add(`${p.name}|${awayCode}`); picked.push({ name:p.name, pos:p.pos, teamCode:awayCode, teamName:teamsDB[awayCode]?.name||awayCode, flag:teamsDB[awayCode]?.flag||"", weight:Math.round(p.adjWeight||p.weight), totalWeight:Math.round(totalWAway), pickProb:Number(((p.adjWeight||p.weight)/totalWAway*100).toFixed(1)), matchGoals:1, proofMath:`weight ${Math.round(p.adjWeight||p.weight)}/${Math.round(totalWAway)}=${((p.adjWeight||p.weight)/totalWAway*100).toFixed(1)}% LCG`, reason:`Weight ${Math.round(p.adjWeight||p.weight)}/${Math.round(totalWAway)}=${((p.adjWeight||p.weight)/totalWAway*100).toFixed(1)}% pick — cetak 1 gol di ${predictedHome}:${predictedAway}` }); }
-    // Merge duplicate picks (if hat-trick allowed for 5+)
-    const merged = new Map();
-    picked.forEach(pl=>{ const k=`${pl.name}|${pl.teamCode}`; const ex=merged.get(k); if(ex) ex.matchGoals+=1; else merged.set(k, {...pl}); });
-    return [...merged.values()].sort((a,b)=>b.matchGoals-a.matchGoals);
-  } catch(e){ console.error("[bulkFast] scorer error", e); return []; }
+    const oppCode = teamCode === homeCode ? awayCode : homeCode;
+    const oppDefense = getTeamScoringProfile(oppCode, { exclude: opts.exclude || null, formEnabled: opts.formEnabled !== false }).defenseIndex;
+    const proofMath = [
+      `P(gol|chance) = 0.30 + 0.006*(finishing-65) + 0.0035*(positioning-65) + 0.0025*(technique-65) + 0.0015*(power-70) + 0.40*(quality-0.5) - 0.008*(defense_lawan-65)`,
+      `→ finishing ${finishing}, defense lawan ${Number.isFinite(oppDefense) ? oppDefense.toFixed(1) : "?"}, rata-rata pGoal di sampel ${(avgPGoal * 100).toFixed(1)}%`,
+      `kalibrasi dataset: ${mc?.calibration?.source || "prior 427 match"} (scale ${mc?.calibration?.scale?.toFixed(3) ?? "?"})`
+    ].join(" | ");
+
+    rows.set(key, {
+      // === field utama (UI baru) ===
+      name, pos: player.pos, position: player.pos,
+      teamCode, teamName: teamsDB[teamCode]?.name || teamCode, flag: teamsDB[teamCode]?.flag || "",
+      goals: simGoals,
+      matchGoals: simGoals,
+      expectedGoals: mcStats ? mcStats.expectedGoals : Number(avgPGoal.toFixed(3)),
+      probability: mcStats ? mcStats.prob : Number((avgPGoal * 100).toFixed(2)),
+      prob: mcStats ? mcStats.prob : Number((avgPGoal * 100).toFixed(2)),
+      probability2Plus: mcStats ? mcStats.probability2Plus : 0,
+      scoringShare: mcStats ? mcStats.scoringShare : 0,
+      goalProbabilityPerChance: mcStats ? mcStats.goalProbabilityPerChance : Number(avgPGoal.toFixed(4)),
+      chanceShare: mcStats ? mcStats.chanceShare : null,
+      finishing, positioning: player.positioning, shotPower: player.shotPower,
+      attack: player.attack, technique: player.technique, speed: player.speed, stamina: player.stamina,
+      overall: playerOverall(player),
+      attributesSource: player.attributesSource,
+      form: formMultiplier,
+      formMultiplier,
+      formSource: formInfo.source,
+      // === alias kompatibilitas UI lama ===
+      weight: scoringIndex,
+      baseWeight: scoringIndex,
+      totalWeight: totalIndex,
+      pickProb,
+      totalGoalsSim: mcStats ? mcStats.goals : simGoals,
+      hits: mcStats ? mcStats.hits : (simGoals > 0 ? 1 : 0),
+      reason: reasonParts.join(" — "),
+      proofMath
+    });
+  }
+  return [...rows.values()];
 }
 
+/**
+ * Bangun daftar top scorer dari hasil simulasi + statistik Monte Carlo.
+ * Dipakai hybridPredict agar MC tidak dihitung dua kali (perf).
+ */
+export function buildTopScorersFromSimulation({ homeCode, awayCode, sim, mc, opts = {} }) {
+  const rows = buildScorerRows({
+    homeCode: String(homeCode).toUpperCase(),
+    awayCode: String(awayCode).toUpperCase(),
+    sim,
+    mc,
+    opts: { exclude: opts.exclude || null, formEnabled: opts.formEnabled !== false }
+  });
+  rows.sort((a, b) =>
+    (b.matchGoals - a.matchGoals) ||
+    (b.expectedGoals - a.expectedGoals) ||
+    (b.probability - a.probability) ||
+    (b.weight - a.weight)
+  );
+  return rows.slice(0, opts.limit || PREDICTOR_CONFIG.TOP_SCORERS_LIMIT);
+}
+
+/**
+ * generateTopScorers — entry point skor & pencetak gol satu fixture.
+ *
+ * Tanpa `predictedHome/predictedAway`: skor DAN scorer datang dari event
+ * simulasi bebas (jalur produksi). Dengan target skor (what-if / apply UI):
+ * memakai simulasi ter-conditioned pada model yang sama.
+ */
 export function generateTopScorers(homeCode, awayCode, xgHome, xgAway, opts = {}) {
   try {
-    // BULK FAST PATH — skip 5000 Monte Carlo for 200x ensemble
-    if (opts.bulkFast && Number.isInteger(opts.predictedHome) && Number.isInteger(opts.predictedAway)) {
-      return generateTopScorersBulkFast(homeCode, awayCode, opts.predictedHome, opts.predictedAway, opts.seed);
-    }
-    const numSims = opts.numSims || PREDICTOR_CONFIG.MONTE_CARLO_SIMS;
-    const deterministic = opts.deterministic !== false;
-    const seedBase = `${homeCode}|${awayCode}|${xgHome.toFixed(2)}|${xgAway.toFixed(2)}|${PREDICTOR_CONFIG.MODEL_VERSION}`;
-    const baseSeed = opts.seed != null ? opts.seed : (deterministic ? hashStringToSeed(seedBase) : (hashStringToSeed(seedBase) ^ (Date.now() & 0xfffffff)));
-    const rng = new LCGRng(baseSeed);
+    homeCode = String(homeCode || "").toUpperCase();
+    awayCode = String(awayCode || "").toUpperCase();
+    const hasTarget = Number.isInteger(opts.predictedHome) && Number.isInteger(opts.predictedAway);
+    const seed = opts.seed != null
+      ? opts.seed >>> 0
+      : scoringHashSeed(`${homeCode}|${awayCode}|${Number(xgHome || 0).toFixed(2)}|${Number(xgAway || 0).toFixed(2)}|scorers|${PREDICTOR_CONFIG.MODEL_VERSION}`);
+    const ctxOpts = {
+      seed,
+      exclude: opts.exclude || null,
+      formEnabled: opts.disableForm !== true && opts.disablePlayerForm !== true,
+      scale: opts.scale
+    };
 
-    const { map: histMap } = getHistoricalScorerMap();
-    function buildAdjustedRoster(teamCode) {
-      const roster = (KONAMI_PLAYER_DB[teamCode] || []).filter(p => p.pos !== 'GK'); // GK never scores in WE10
-      const filtered = roster.length ? roster : (KONAMI_PLAYER_DB[teamCode] || []);
-      return filtered.map(p => {
-        const key = p.name.trim().toLowerCase() + "|" + teamCode;
-        const hist = histMap.get(key);
-        let w = p.weight;
-        // Ghidra WE10 set-piece boost: CB/SB/SW sering cetak via corner/ FK — Image 2 SB Bodnar & CB Gallas cetak 2 gol padahal weight CB 10/SB12. Tanpa boost mereka tidak pernah top (≤3% pick → monoton CF). Boost ×2.2 untuk DF agar distribusi mirip game asli.
-        if (["CB","SB","SW","WB"].includes(p.pos)) w = Math.round(w * 2.2);
-        else if (["DMF","CMF"].includes(p.pos)) w = Math.round(w * 1.15);
-        if (hist) {
-          const histRate = hist.goals / Math.max(1, hist.appearances);
-          const alpha = Math.min(0.35, hist.appearances / 8);
-          const histWeight = Math.min(95, Math.max(10, histRate * 22 + 25));
-          w = w * (1 - alpha) + histWeight * alpha;
-        }
-        return { ...p, adjWeight: w };
-      });
-    }
-    const homeAdj = buildAdjustedRoster(homeCode);
-    const awayAdj = buildAdjustedRoster(awayCode);
-    function pickAdj(teamAdj, rng2) {
-      const total = teamAdj.reduce((s, p) => s + (p.adjWeight || p.weight), 0);
-      if (total <= 0) return teamAdj[0];
-      let r = rng2.range(Math.floor(total));
-      for (const p of teamAdj) {
-        const w = p.adjWeight || p.weight;
-        if (r < w) return p;
-        r -= w;
-      }
-      return teamAdj[teamAdj.length - 1];
-    }
+    const sim = hasTarget
+      ? simulateMatchToScore(homeCode, awayCode, opts.predictedHome, opts.predictedAway, ctxOpts)
+      : simulateMatch(homeCode, awayCode, ctxOpts);
 
-    const goalAcc = new Map();
-    const hitAcc = new Map();
-    const posMap = new Map();
-    const twoPlusAcc = new Map();
-    let totalGoalsAll = 0;
+    const numSims = opts.numSims != null ? opts.numSims : PREDICTOR_CONFIG.MONTE_CARLO_SIMS;
+    const mc = numSims > 0
+      ? runMatchMonteCarlo(homeCode, awayCode, { ...ctxOpts, sims: numSims })
+      : null;
 
-    for (let s = 0; s < numSims; s++) {
-      const gh = poissonSample(xgHome, rng);
-      const ga = poissonSample(xgAway, rng);
-      const scoredThisSim = new Map();
-      for (let i = 0; i < gh; i++) {
-        const p = pickAdj(homeAdj, rng);
-        const k = `${p.name}|${homeCode}`;
-        goalAcc.set(k, (goalAcc.get(k) || 0) + 1);
-        if (!posMap.has(k)) posMap.set(k, p.pos);
-        scoredThisSim.set(k, (scoredThisSim.get(k) || 0) + 1);
-        totalGoalsAll++;
-      }
-      for (let i = 0; i < ga; i++) {
-        const p = pickAdj(awayAdj, rng);
-        const k = `${p.name}|${awayCode}`;
-        goalAcc.set(k, (goalAcc.get(k) || 0) + 1);
-        if (!posMap.has(k)) posMap.set(k, p.pos);
-        scoredThisSim.set(k, (scoredThisSim.get(k) || 0) + 1);
-        totalGoalsAll++;
-      }
-      for (const [k, cnt] of scoredThisSim) {
-        hitAcc.set(k, (hitAcc.get(k) || 0) + 1);
-        if (cnt >= 2) twoPlusAcc.set(k, (twoPlusAcc.get(k) || 0) + 1);
-      }
-    }
-
-    // === SCORE-CONSISTENT ALLOCATION: distribute exactly predicted score if provided ===
-    // FIX AUDIT 2026-08-30: sebelumnya with-replacement → 3 gol bisa numpuk 1 pemain (Schweinsteiger 3 di 1:3, tidak sesuai ranking real 1-1-1). Sekarang tanpa-replacement per match: tiap gol ke pemain berbeda selagi stok masih ada (Fisher-Yates tanpa balik), baru kalau gol > stok pemain boleh duplikat.
-    const hasPredicted = Number.isInteger(opts.predictedHome) && Number.isInteger(opts.predictedAway);
-    const matchMap = new Map(); // key -> goals in the ONE predicted scoreline
-    if (hasPredicted) {
-      const matchRng = new LCGRng((baseSeed ^ 0x6F017) >>> 0);
-      function pickDistinct(teamAdj, code, usedSet, matchGoals, rng) {
-        // WE10 asli: hat-trick Thompson 3 di AUS 7-2 CRI (7 gol) boleh, tapi 4 gol (ECU 3:4) tidak boleh Delgado 3 (harus 2-1-1). Low ≤3 distinct penuh, 4 → max 2 per pemain, ≥5 → boleh 3 via weight.
-        if (matchGoals >= 5) return pickAdj(teamAdj, rng); // 5+ boleh hat-trick
-        if (matchGoals === 4) {
-          // max 2 per pemain untuk 4 gol → Delgado max 2, bukan 3
-          let attempts = 0;
-          while (attempts < 20) {
-            const p = pickAdj(teamAdj, rng);
-            const k = `${p.name}|${code}`;
-            const cur = matchMap.get(k) || 0;
-            if (cur < 2 && !usedSet.has(k)) return p;
-            if (cur < 2) return p; // boleh duplikat kedua kalinya
-            attempts++;
-          }
-        }
-        let attempts = 0;
-        while (attempts < 12) {
-          const p = pickAdj(teamAdj, rng);
-          const k = `${p.name}|${code}`;
-          if (!usedSet.has(k)) return p;
-          if (usedSet.size >= teamAdj.length) return p;
-          attempts++;
-        }
-        return pickAdj(teamAdj, rng);
-      }
-      const usedHome = new Set();
-      for (let i = 0; i < opts.predictedHome; i++) {
-        const p = pickDistinct(homeAdj, homeCode, usedHome, opts.predictedHome, matchRng);
-        const k = `${p.name}|${homeCode}`;
-        usedHome.add(k);
-        matchMap.set(k, (matchMap.get(k) || 0) + 1);
-        if (!posMap.has(k)) posMap.set(k, p.pos);
-      }
-      const usedAway = new Set();
-      for (let i = 0; i < opts.predictedAway; i++) {
-        const p = pickDistinct(awayAdj, awayCode, usedAway, opts.predictedAway, matchRng);
-        const k = `${p.name}|${awayCode}`;
-        usedAway.add(k);
-        matchMap.set(k, (matchMap.get(k) || 0) + 1);
-        if (!posMap.has(k)) posMap.set(k, p.pos);
-      }
-      // ensure goalAcc contains at least those keys for ranking even if Monte Carlo missed
-      for (const [k, cnt] of matchMap) {
-        if (!goalAcc.has(k)) {
-          goalAcc.set(k, Math.max(1, Math.round(cnt * (numSims * 0.0002)))); // tiny seed for sorting, will be overridden by matchGoals priority
-        }
-      }
-    }
-
-    if (totalGoalsAll === 0 && matchMap.size === 0) {
-      const fallback = [];
-      const homeRoster = KONAMI_PLAYER_DB[homeCode] || [];
-      const awayRoster = KONAMI_PLAYER_DB[awayCode] || [];
-      const topHome = [...homeRoster].filter(p=>p.pos!=='GK').sort((a,b)=>b.weight-a.weight)[0] || homeRoster[0];
-      const topAway = [...awayRoster].filter(p=>p.pos!=='GK').sort((a,b)=>b.weight-a.weight)[0] || awayRoster[0];
-      if (topHome) fallback.push({ name: topHome.name, pos: topHome.pos, teamCode: homeCode, teamName: teamsDB[homeCode]?.name || homeCode, flag: teamsDB[homeCode]?.flag || "", expectedGoals: Number((xgHome*0.45).toFixed(3)), prob: Number(((1 - Math.exp(-xgHome*0.6))*100).toFixed(1)), probability2Plus: 0, scoringShare: 45, weight: topHome.weight, matchGoals: hasPredicted ? (matchMap.get(`${topHome.name}|${homeCode}`)||0) : 0, reason: `Top weight ${topHome.weight} di ${homeCode} (${topHome.pos}) — fallback` });
-      if (topAway) fallback.push({ name: topAway.name, pos: topAway.pos, teamCode: awayCode, teamName: teamsDB[awayCode]?.name || awayCode, flag: teamsDB[awayCode]?.flag || "", expectedGoals: Number((xgAway*0.45).toFixed(3)), prob: Number(((1 - Math.exp(-xgAway*0.6))*100).toFixed(1)), probability2Plus: 0, scoringShare: 45, weight: topAway.weight, matchGoals: hasPredicted ? (matchMap.get(`${topAway.name}|${awayCode}`)||0) : 0, reason: `Top weight ${topAway.weight} di ${awayCode} (${topAway.pos}) — fallback` });
-      return fallback.slice(0, PREDICTOR_CONFIG.TOP_SCORERS_LIMIT);
-    }
-
-    // Proof helpers: hitung totalWeight per team untuk bukti matematis kenapa pemain ini dipilih
-    const homeTotalW = homeAdj.reduce((s,p)=>s+(p.adjWeight||p.weight),0);
-    const awayTotalW = awayAdj.reduce((s,p)=>s+(p.adjWeight||p.weight),0);
-    const ranking = [];
-    for (const [key, cnt] of goalAcc.entries()) {
-      const [name, teamCode] = key.split("|");
-      const pos = posMap.get(key) || "CF";
-      const teamName = teamsDB[teamCode]?.name || teamCode;
-      const flag = teamsDB[teamCode]?.flag || "";
-      const avg = cnt / numSims;
-      const hits = hitAcc.get(key) || 0;
-      const probAnytime = (hits / numSims);
-      const prob2Plus = (twoPlusAcc.get(key) || 0) / numSims;
-      const share = totalGoalsAll > 0 ? (cnt / totalGoalsAll) * 100 : 0;
-      const matchGoals = matchMap.get(key) || 0;
-      const baseWeight = (KONAMI_PLAYER_DB[teamCode] || []).find((p)=>p.name===name)?.weight || 0;
-      const adjEntry = (teamCode===homeCode?homeAdj:awayAdj).find(p=>p.name===name);
-      const adjWeight = adjEntry?.adjWeight ?? baseWeight;
-      const totalW = teamCode===homeCode?homeTotalW:awayTotalW;
-      const pickProb = totalW>0 ? (adjWeight/totalW*100) : 0;
-      // — BUKTI VALIDASI LENGKAP: alasan kenapa pemain ini di top —
-      // Rumus WE10 replika: P(pick) = weight / sumWeights tim * (1 - exp(-xG_tim))
-      // Contoh TOG Adebayor: weight 84 / total ~442 = 19% * xG 1.2 → prob anytime ~11% → 110x/1000 wajar
-      const baseXg = teamCode===homeCode? xgHome : xgAway;
-      const histInfo = histMap.get(name.toLowerCase()+"|"+teamCode); // FIX PERF: reuse histMap (dulu getHistoricalScorerMap() dipanggil per pemain = O(pemain × memori))
-      // FIX BUG: label "histBoost" sebelumnya ikut menghitung boost posisi (DF ×2.2 / DMF-CMF ×1.15),
-      // sehingga tertulis "histBoost 116.7% (0 gol/0 app)" pada pemain yang tidak punya histori sama sekali.
-      // Pisahkan keduanya biar bukti validasinya jujur.
-      const posBoostFactor = (["CB","SB","SW","WB"].includes(pos) ? 2.2 : ["DMF","CMF"].includes(pos) ? 1.15 : 1);
-      const afterPosWeight = Math.round(baseWeight * posBoostFactor);
-      const histDelta = adjWeight - afterPosWeight;
-      const boostParts = [];
-      if (posBoostFactor !== 1) boostParts.push(`posBoost ×${posBoostFactor} (${pos})`);
-      if (Math.abs(histDelta) >= 0.5 && histInfo) {
-        boostParts.push(`histBoost ${histDelta > 0 ? "+" : ""}${((histDelta / (afterPosWeight || 1)) * 100).toFixed(1)}% (${histInfo.goals} gol/${histInfo.appearances} app)`);
-      }
-      const boostLabel = boostParts.length ? ` [base ${Math.round(baseWeight)} → ${Math.round(adjWeight)}${boostParts.length ? " — " + boostParts.join(", ") : ""}]` : "";
-      const reasonParts = [];
-      reasonParts.push(`Weight ${Math.round(adjWeight)}${boostLabel} / total ${Math.round(totalW)} = ${pickProb.toFixed(1)}% pick`);
-      if (matchGoals > 0) reasonParts.push(`cetak ${matchGoals} gol di scoreline ${hasPredicted ? `${opts.predictedHome}:${opts.predictedAway}` : `~xG ${baseXg.toFixed(2)}`} (alokasi LCG seed ${baseSeed.toString(16)})`);
-      reasonParts.push(`Monte-Carlo ${numSims}x: ${cnt} gol → xG ${avg.toFixed(3)} • prob anytime ${(probAnytime*100).toFixed(1)}% • share ${share.toFixed(1)}%`);
-      if (pos.startsWith('CF') || pos==='FW' || pos==='ST' || pos==='WG') reasonParts.push('CF/WF posisi depan weight 65-96 paling sering dipilih engine (bukan dummy)');
-      else if (pos.includes('MF') || pos==='OMF' || pos==='CMF' || pos==='SMF' || pos==='DMF') reasonParts.push(`MF/OMF weight ${Math.round(adjWeight)} kontribusi 30% engine`);
-      else if (pos==='GK') reasonParts.push('GK terfilter (tidak seharusnya muncul — bukti valid)');
-      // Proof string matematis
-      const proofMath = `P=${adjWeight}/${Math.round(totalW)}=${pickProb.toFixed(1)}% × poisson(xG ${baseXg.toFixed(2)}) → ${avg.toFixed(3)} xG — seed LCG ${baseSeed} deterministik`;
-      ranking.push({
-        name, pos, teamCode, teamName, flag,
-        expectedGoals: Number(avg.toFixed(3)),
-        prob: Number((probAnytime * 100).toFixed(1)),
-        probability2Plus: Number((prob2Plus * 100).toFixed(1)),
-        scoringShare: Number(share.toFixed(1)),
-        totalGoalsSim: cnt,
-        hits,
-        weight: Math.round(adjWeight),
-        baseWeight: Math.round(baseWeight),
-        totalWeight: Math.round(totalW),
-        pickProb: Number(pickProb.toFixed(1)),
-        matchGoals,
-        reason: reasonParts.join(' — '),
-        proofMath,
-        baseSeed,
-      });
-    }
-    // Primary sort: matchGoals (actual allocation) then expectedGoals then weight — this answers "kenapa di atas"
-    ranking.sort((a,b)=> (b.matchGoals - a.matchGoals) || (b.expectedGoals - a.expectedGoals) || (b.prob - a.prob) || (b.weight - a.weight));
-    return ranking.slice(0, PREDICTOR_CONFIG.TOP_SCORERS_LIMIT);
+    const rows = buildScorerRows({ homeCode, awayCode, sim, mc, opts });
+    rows.sort((a, b) =>
+      (b.matchGoals - a.matchGoals) ||
+      (b.expectedGoals - a.expectedGoals) ||
+      (b.probability - a.probability) ||
+      (b.weight - a.weight)
+    );
+    return rows.slice(0, opts.limit || PREDICTOR_CONFIG.TOP_SCORERS_LIMIT);
   } catch (e) {
-    console.error("[KONAMI] generateTopScorers error", e);
+    console.error("[playerScoring] generateTopScorers error", e);
+    return [];
+  }
+}
+
+/**
+ * Bulk fast path: alokasi tepat `predictedHome:predictedAway` memakai model
+ * event yang sama (simulateMatchToScore). Tidak ada lagi undian weight.
+ */
+export function generateTopScorersBulkFast(homeCode, awayCode, predictedHome, predictedAway, seed) {
+  try {
+    homeCode = String(homeCode || "").toUpperCase();
+    awayCode = String(awayCode || "").toUpperCase();
+    const useSeed = seed != null
+      ? seed >>> 0
+      : scoringHashSeed(`${homeCode}|${awayCode}|${predictedHome}:${predictedAway}|bulkFast|${PREDICTOR_CONFIG.MODEL_VERSION}`);
+    const sim = simulateMatchToScore(homeCode, awayCode, predictedHome, predictedAway, { seed: useSeed });
+    const rows = buildScorerRows({ homeCode, awayCode, sim, mc: null, opts: {} });
+    return rows
+      .filter((r) => r.matchGoals > 0)
+      .sort((a, b) => b.matchGoals - a.matchGoals || b.expectedGoals - a.expectedGoals)
+      .map((r) => ({ ...r, seed: useSeed }));
+  } catch (e) {
+    console.error("[bulkFast] scorer error", e);
     return [];
   }
 }
@@ -775,63 +706,15 @@ function getCalibratedRating(code) { return teamRatings[code] || null; }
 function buildKeyIndicators() { return null; }
 
 // ============================================================
-// 7B. PURE ATTACK SIM HELPERS v6.0 — satu model untuk skor, probs, markets, xG
-//     Form (history) sekarang BENAR-BENAR mempengaruhi skor via effectiveAbilities.
-//     RNG: Numerical Recipes LCG (pilihan implementasi deterministik — BUKAN replika RNG WE10,
-//     konstanta RNG asli tidak ditemukan di SLPM_663.74, lihat GHIDRA_PROOF).
+// 7B. (dihapus) ADAPTER LAMA effectiveAbilities / pureMatchSample / pureProbsAndMarkets
 // ============================================================
-export function effectiveAbilities(strength, rating) {
-  // Form factor = rasio strength aktual vs prior (1.0 = tanpa history / performa sesuai rating).
-  // attRatio > 1 → tim mencetak lebih banyak dari ekspektasi rating → ability naik (maks ±12%).
-  const attRatio = strength.priorAtt > 0 ? strength.att / strength.priorAtt : 1;
-  const defRatio = strength.priorDef > 0 ? strength.def / strength.priorDef : 1;
-  return {
-    att: clamp(Math.round(rating.attack * (0.75 + 0.25 * attRatio)), 40, 99),
-    def: clamp(Math.round(rating.defense * (1.25 - 0.25 * defRatio)), 40, 99)
-  };
-}
-export function pureMatchSample(rng, midDiffNorm, hAb, aAb) {
-  const cfg = PREDICTOR_CONFIG.PURE_SIM;
-  const midShift = Math.round(midDiffNorm * cfg.CHANCES_MID_FACTOR);
-  const homeChances = clamp(cfg.CHANCES_BASE + midShift + rng.range(cfg.CHANCES_JITTER), cfg.CHANCES_MIN, cfg.CHANCES_MAX);
-  const awayChances = clamp(cfg.CHANCES_BASE - midShift + rng.range(cfg.CHANCES_JITTER), cfg.CHANCES_MIN, cfg.CHANCES_MAX);
-  let home = 0, away = 0;
-  for (let i = 0; i < homeChances; i++) {
-    const base = cfg.BASE_SHOT_PROB + (hAb.att - aAb.def) * cfg.SHOT_DIFF_FACTOR + cfg.HOME_EDGE;
-    if (rng.range(100) < clamp(base, cfg.SHOT_PROB_MIN, cfg.SHOT_PROB_MAX)) home++;
-  }
-  for (let i = 0; i < awayChances; i++) {
-    const base = cfg.BASE_SHOT_PROB + (aAb.att - hAb.def) * cfg.SHOT_DIFF_FACTOR;
-    if (rng.range(100) < clamp(base, cfg.SHOT_PROB_MIN, cfg.SHOT_PROB_MAX)) away++;
-  }
-  return { home: Math.min(10, home), away: Math.min(10, away), homeChances, awayChances };
-}
-function pureProbsAndMarkets(seed, midDiffNorm, hAb, aAb, sims) {
-  const n = sims || PREDICTOR_CONFIG.PURE_SIM.PROBS_SIMS;
-  let wH = 0, wD = 0, wA = 0, over25 = 0, btts = 0, sumH = 0, sumA = 0;
-  const scoreMap = new Map();
-  for (let iter = 0; iter < n; iter++) {
-    const rng = new LCGRng((seed ^ Math.imul(iter + 1, 0x9e3779b9)) >>> 0);
-    const s = pureMatchSample(rng, midDiffNorm, hAb, aAb);
-    if (s.home > s.away) wH++; else if (s.away > s.home) wA++; else wD++;
-    if (s.home + s.away >= 3) over25++;
-    if (s.home > 0 && s.away > 0) btts++;
-    sumH += s.home; sumA += s.away;
-    const key = s.home + ":" + s.away;
-    scoreMap.set(key, (scoreMap.get(key) || 0) + 1);
-  }
-  const dist = [...scoreMap.entries()]
-    .map(([k, c]) => { const [hh, aa] = k.split(":").map(Number); return { home: hh, away: aa, prob: c / n }; })
-    .sort((x, y) => y.prob - x.prob);
-  const over25P = over25 / n;
-  return {
-    probs: { home: wH / n, draw: wD / n, away: wA / n },
-    markets: { over25: over25P, under25: 1 - over25P, btts: btts / n },
-    dist,
-    avgHome: Number((sumH / n).toFixed(2)),
-    avgAway: Number((sumA / n).toFixed(2))
-  };
-}
+// Audit 2026-09-19: ketiga fungsi itu adalah sisa jalur "ability tim + undian
+// weight" — setelah scoring pindah ke event level-pemain, tidak ada lagi
+// konsumennya (bulkRunner sekarang memanggil simulateMatch langsung).
+// Menghapusnya membuat tidak ada lagi jalan alternatif yang bisa memilih
+// pencetak gol tanpa atribut pemain. Jalur resmi:
+//   simulateMatch() / simulateMatchToScore() / runMatchMonteCarlo()
+// di src/js/services/playerScoring.js.
 
 // ============================================================
 // 8. HYBRID PREDICT — Bayesian + Konami Monte-Carlo
@@ -845,7 +728,10 @@ export function hybridPredict(homeCode, awayCode, excludeMemoryId = null, exclud
     throw new Error(`HOME dan AWAY tidak boleh sama: ${homeCode} vs ${awayCode}`);
   }
 
-  const { matches, stats, globalAttack } = extractDataset(excludeMemoryId, excludeGameNumber);
+  const walkForward = opts.walkForward === true;
+  const { matches, stats, globalAttack } = walkForward
+    ? extractDataset(excludeMemoryId, null, excludeGameNumber)
+    : extractDataset(excludeMemoryId, excludeGameNumber);
   let h = calculateTeamStrength(homeCode, stats, globalAttack);
   let a = calculateTeamStrength(awayCode, stats, globalAttack);
   // SPEC P ablation: disableForm → ratings only (no history weight)
@@ -881,7 +767,17 @@ export function hybridPredict(homeCode, awayCode, excludeMemoryId = null, exclud
     modelParts.push(`Context(${Math.round(simWeight*100)}%)`);
   } else if (opts.disableContext) { modelParts.push("Context:OFF"); }
 
-  // --- xG JITTER: variasi formula-xG antar fixture (skor final tetap dari pure sim) ---
+  // --- SKALA KONVERSI TIM (TEAM MODEL) -------------------------------------
+  // xG tim di atas dicampur dengan form tim + H2H + similar context. Rasio
+  // xG_final terhadap baseline model (tanpa form/H2H/context) dipakai sebagai
+  // pengali skala konversi. Ini HANYA memengaruhi peluang gol tim — BUKAN
+  // pemilihan pemain (nama pencetak gol murni dari playerScoring.js).
+  const xgBaselineHome = globalAttack * h.priorAtt * a.priorDef * PREDICTOR_CONFIG.GLOBAL_HOME_ADVANTAGE * tacticalFactorHome;
+  const xgBaselineAway = globalAttack * a.priorAtt * h.priorDef * PREDICTOR_CONFIG.AWAY_FACTOR * tacticalFactorAway;
+  const ratioHome = xgBaselineHome > 0 ? xgHome / xgBaselineHome : 1;
+  const ratioAway = xgBaselineAway > 0 ? xgAway / xgBaselineAway : 1;
+
+  // Variasi antar-fixture pada skala konversi (bukan penentu nama pemain).
   let jitterHome = 0, jitterAway = 0;
   if (!opts.disableVariance) {
     const jitterSeed = hashStringToSeed(`${homeCode}|${awayCode}|jitter|${PREDICTOR_CONFIG.MODEL_VERSION}`);
@@ -889,68 +785,87 @@ export function hybridPredict(homeCode, awayCode, excludeMemoryId = null, exclud
     const jitterRange = PREDICTOR_CONFIG.ANTI_MONOTON_JITTER * 2;
     jitterHome = (jitterRng.nextFloat() - 0.5) * jitterRange;
     jitterAway = (jitterRng.nextFloat() - 0.5) * jitterRange;
-    xgHome = clamp(xgHome + jitterHome, PREDICTOR_CONFIG.MIN_XG, PREDICTOR_CONFIG.MAX_XG);
-    xgAway = clamp(xgAway + jitterAway, PREDICTOR_CONFIG.MIN_XG, PREDICTOR_CONFIG.MAX_XG);
   } else {
     modelParts.push("Variance:OFF");
   }
+  const teamScaleHome = clamp(ratioHome * (1 + jitterHome), 0.75, 1.35);
+  const teamScaleAway = clamp(ratioAway * (1 + jitterAway), 0.75, 1.35);
 
   const distResult = generateBivariateDistribution(xgHome, xgAway);
 
-  // — Sample scoreline ANTI-MONOTON v4.4: bukan selalu topScore (penyebab monoton 1-2/2-1 terus).
-  // Logika: single predict pakai pure sim deterministik per fixture (seed = fixture hash), bulk pakai seed per iterasi.
-  // Catatan audit: RNG = NR-LCG 1664525 (implementasi sendiri) — konstanta RNG asli WE10 tidak ditemukan di SLPM_663.74 (search 0 hits), jadi ini BUKAN replika ROM.
-  let chosenScore;
+  // — MATCH ENGINE v7 (player-level, event-based) -----------------------------
+  // Skor & pencetak gol lahir dari SATU proses yang sama: chance → pemain →
+  // shot → goal/miss. Tidak ada "tentukan skor dulu, pilih nama belakangan".
+  let chosenScore = null;
   let rngProof = null;
-  let pureScorelineDist = null; // for stability: pure Monte Carlo scoreline distribution (v6.0: dipakai juga untuk distribution/markets/xG)
-  if (opts.sample === true) {
-    // BULK mode — satu sampel pure sim + override probs/markets/xG dari MC yang sama (konsisten dengan path produksi)
-    const sampleSeed = opts.seed != null ? opts.seed : hashStringToSeed(`${homeCode}|${awayCode}|${xgHome.toFixed(2)}|${xgAway.toFixed(2)}|sample|${PREDICTOR_CONFIG.MODEL_VERSION}`);
-    const sampleRng = new LCGRng(sampleSeed);
-    const midDiffNormB = (h.mid - a.mid);
-    const hAbB = effectiveAbilities(h, getGhidraAbility(homeCode));
-    const aAbB = effectiveAbilities(a, getGhidraAbility(awayCode));
-    const smpB = pureMatchSample(sampleRng, midDiffNormB, hAbB, aAbB);
-    chosenScore = { home: smpB.home, away: smpB.away, prob: 0 };
-    const mcB = pureProbsAndMarkets(sampleSeed, midDiffNormB, hAbB, aAbB);
-    distResult.probs = mcB.probs;
-    distResult.markets = mcB.markets;
-    distResult.distribution = mcB.dist;
-    pureScorelineDist = mcB.dist;
-    xgHome = mcB.avgHome; xgAway = mcB.avgAway;
-    rngProof = { mode: "PURE_SIM_BULK", seed: sampleSeed, homeChances: smpB.homeChances, awayChances: smpB.awayChances, method: `Bulk pure sim v6.0: chances ${smpB.homeChances}:${smpB.awayChances} × shot 18+(effAtt-effDef)*0.35 form-aware; probs/markets/xG dari MC ${PREDICTOR_CONFIG.PURE_SIM.PROBS_SIMS} sim`, note: "NR-LCG deterministik per seed — pilihan implementasi, bukan replika RNG WE10 (lihat GHIDRA_PROOF)" };
-  } else if (opts.sample === false) {
-    // LEGACY test path: Poisson topScore deterministic — TIDAK dipakai produksi/backtest (v6.0 backtest = path default)
-    chosenScore = distResult.topScore;
-    rngProof = { mode: "TOP_ONLY", method: "Poisson topScore deterministic", note: "sample:false → legacy test path (Poisson). Produksi & backtest v6.0 memakai path default (pure sim)." };
-  } else {
-    // DEFAULT single predict — v6.0 recalibrated: chances 6±mid*3±rng(3) clamp 4-9, shot 18%+0.35*diff+1 home, clamp 10-32%
-    // Target avg total gol ~2.8-3.2 (WE10 asli ~2.5-3.5). probs/markets/xG/distribution SEMUA dari MC 200 sim yang sama → konsisten.
-    const fixtureSeed = opts.seed != null ? opts.seed : hashStringToSeed(`${homeCode}|${awayCode}|${xgHome.toFixed(2)}|${xgAway.toFixed(2)}|fixture|${PREDICTOR_CONFIG.MODEL_VERSION}`);
-    const fRng = new LCGRng(fixtureSeed);
-    const midDiffNorm = (h.mid - a.mid);
-    const hAb = effectiveAbilities(h, getGhidraAbility(homeCode));
-    const aAb = effectiveAbilities(a, getGhidraAbility(awayCode));
-    const smp = pureMatchSample(fRng, midDiffNorm, hAb, aAb);
-    chosenScore = { home: smp.home, away: smp.away, prob: 0 };
-    const mc = pureProbsAndMarkets(fixtureSeed, midDiffNorm, hAb, aAb);
-    distResult.probs = mc.probs;
-    distResult.markets = mc.markets;          // FIX: markets nyata dari MC (dulu hardcoded 50%/45%)
-    distResult.distribution = mc.dist;        // FIX: distribution konsisten dengan skor pure (dulu Poisson mismatch)
-    pureScorelineDist = mc.dist;
-    xgHome = mc.avgHome; xgAway = mc.avgAway; // FIX: xG display = expected goals MC (dulu formula tak terkalibrasi 3.5-4.2)
-    const top5 = mc.dist.slice(0, 5).map(s => `${s.home}:${s.away} ${(s.prob * 100).toFixed(1)}%`);
-    rngProof = {
-      mode: "PURE_ATTACK_SIM_V6",
+  let pureScorelineDist = null;
+  let playerScorers = null;
+  // Kontrak anti-leakage:
+  //  - default      : buang HANYA game target (perilaku lama, untuk preview UI)
+  //  - walkForward  : buang game target + semua game sesudahnya (backtest)
+  const excludeCtx = (excludeMemoryId != null && excludeGameNumber != null)
+    ? (walkForward
+      ? { memoryId: excludeMemoryId, fromGameNumber: excludeGameNumber }
+      : { memoryId: excludeMemoryId, gameNumber: excludeGameNumber })
+    : null;
+  // disableForm = matikan form tim + form pemain; disablePlayerForm = hanya form pemain
+  const formEnabled = opts.disableForm !== true && opts.disablePlayerForm !== true;
+  try {
+    const fixtureSeed = opts.seed != null
+      ? opts.seed >>> 0
+      : scoringHashSeed(`${homeCode}|${awayCode}|${xgHome.toFixed(2)}|${xgAway.toFixed(2)}|fixture|${PREDICTOR_CONFIG.MODEL_VERSION}`);
+    const sim = simulateMatch(homeCode, awayCode, {
       seed: fixtureSeed,
-      jitterHome: Number(jitterHome.toFixed(3)), jitterAway: Number(jitterAway.toFixed(3)),
-      top5, chosen: `${chosenScore.home}:${chosenScore.away}`,
-      homeChances: smp.homeChances, awayChances: smp.awayChances,
-      effAbilities: { home: hAb, away: aAb },
-      method: `Pure sim v6.0: chances ${smp.homeChances}:${smp.awayChances} midDiff ${midDiffNorm.toFixed(2)} × shot ${PREDICTOR_CONFIG.PURE_SIM.BASE_SHOT_PROB}+${PREDICTOR_CONFIG.PURE_SIM.SHOT_DIFF_FACTOR}*(effAtt-effDef)+${PREDICTOR_CONFIG.PURE_SIM.HOME_EDGE}home clamp ${PREDICTOR_CONFIG.PURE_SIM.SHOT_PROB_MIN}-${PREDICTOR_CONFIG.PURE_SIM.SHOT_PROB_MAX}% — form-aware`,
-      note: `Kalibrasi avg ~3.0 gol. probs/markets/xG/dist dari ${PREDICTOR_CONFIG.PURE_SIM.PROBS_SIMS} MC sim. RNG = NR-LCG (implementasi sendiri — bukan replika WE10; audit ROM: konstanta RNG 0 hits).`
+      exclude: excludeCtx,
+      formEnabled,
+      homeScale: teamScaleHome,
+      awayScale: teamScaleAway
+    });
+    const sims = opts.probsSims != null
+      ? opts.probsSims
+      : (opts.sample === true ? PREDICTOR_CONFIG.BULK_PROBS_SIMS : PREDICTOR_CONFIG.PROBS_SIMS);
+    const mc = runMatchMonteCarlo(homeCode, awayCode, {
+      seed: fixtureSeed,
+      exclude: excludeCtx,
+      formEnabled,
+      homeScale: teamScaleHome,
+      awayScale: teamScaleAway,
+      sims
+    });
+    chosenScore = { home: sim.homeGoals, away: sim.awayGoals, prob: 0 };
+    distResult.probs = mc.probs;
+    distResult.markets = mc.markets;
+    distResult.distribution = mc.distribution;
+    pureScorelineDist = mc.distribution;
+    xgHome = mc.avgHome;
+    xgAway = mc.avgAway;
+    playerScorers = buildTopScorersFromSimulation({ homeCode, awayCode, sim, mc, opts: { exclude: excludeCtx, formEnabled, limit: opts.scorerLimit } });
+    rngProof = {
+      mode: opts.sample === true ? "PLAYER_EVENT_SIM_BULK" : "PLAYER_EVENT_SIM_V7",
+      seed: fixtureSeed,
+      chosen: `${chosenScore.home}:${chosenScore.away}`,
+      homeChances: sim.homeChances,
+      awayChances: sim.awayChances,
+      teamScale: { home: Number(teamScaleHome.toFixed(3)), away: Number(teamScaleAway.toFixed(3)) },
+      calibration: mc.calibration,
+      top5: mc.distribution.slice(0, 5).map((d) => `${d.home}:${d.away} ${(d.prob * 100).toFixed(1)}%`),
+      method: `Event-based player sim: ${sim.homeChances + sim.awayChances} chance → pemilihan pemain (role posisi x atribut x form) → shot probability (finishing/positioning vs defense lawan) → goal/miss. probs/markets/xG dari MC ${sims} sim.`,
+      note: "RNG = NR-LCG 1664525 (implementasi deterministik, BUKAN replika RNG WE10 — konstanta RNG asli 0 hits di ROM). Atribut pemain derived/estimated, bukan decode ROM."
+    };
+  } catch (engineErr) {
+    // Fallback aman: Poisson topScore. TIDAK membuat nama pemain dummy —
+    // daftar scorer dibiarkan kosong bila engine gagal.
+    console.error("[predictor] player match engine failed, fallback Poisson", engineErr);
+    chosenScore = distResult.topScore;
+    pureScorelineDist = distResult.distribution;
+    playerScorers = [];
+    rngProof = {
+      mode: "POISSON_FALLBACK",
+      chosen: `${chosenScore.home}:${chosenScore.away}`,
+      note: `Engine pemain gagal (${engineErr?.message || engineErr}). Scorer dikosongkan — tidak ada nama dummy.`
     };
   }
+
   // === STABILITY (SPEC A/B) — reuse pureScorelineDist if available, else Poisson distribution ===
   const stabilitySource = pureScorelineDist || distResult.distribution;
   const stability = analyzePredictionStability(stabilitySource, { sampleCount: pureScorelineDist ? 200 : distResult.distribution.length });
@@ -1031,18 +946,17 @@ export function whatIfPredict(homeCodeRaw, awayCodeRaw, homeGoalsRaw, awayGoalsR
   const awayGoals = parseInt(awayGoalsRaw, 10);
   if (isNaN(homeGoals) || homeGoals < 0 || homeGoals > 20) throw new Error("Gol HOME harus 0-20.");
   if (isNaN(awayGoals) || awayGoals < 0 || awayGoals > 20) throw new Error("Gol AWAY harus 0-20.");
-  // xG display konsisten dengan model produksi: rata-rata gol dari pure sim MC (form-aware)
-  const { matches, stats, globalAttack } = extractDataset(null, null);
-  const h = calculateTeamStrength(homeCode, stats, globalAttack);
-  const a = calculateTeamStrength(awayCode, stats, globalAttack);
-  const midDiff = h.mid - a.mid;
-  const hAb = effectiveAbilities(h, getGhidraAbility(homeCode));
-  const aAb = effectiveAbilities(a, getGhidraAbility(awayCode));
-  const seed = opts.seed != null ? opts.seed : hashStringToSeed(`${homeCode}|${awayCode}|${homeGoals}:${awayGoals}|whatif|${PREDICTOR_CONFIG.MODEL_VERSION}`);
-  const mcW = pureProbsAndMarkets(seed, midDiff, hAb, aAb);
-  const xgHome = mcW.avgHome, xgAway = mcW.avgAway;
-  const topScorers = generateTopScorers(homeCode, awayCode, xgHome, xgAway, { seed, deterministic: true, numSims: PREDICTOR_CONFIG.MONTE_CARLO_SIMS, predictedHome: homeGoals, predictedAway: awayGoals });
-  const keyIndicators = buildKeyIndicators(homeCode, awayCode, h, a, Number(xgHome.toFixed(2)), Number(xgAway.toFixed(2)));
+
+  const seed = opts.seed != null
+    ? opts.seed >>> 0
+    : scoringHashSeed(`${homeCode}|${awayCode}|${homeGoals}:${awayGoals}|whatif|${PREDICTOR_CONFIG.MODEL_VERSION}`);
+
+  // Skor sudah ditentukan user → simulasi ter-conditioned, memakai model event
+  // yang sama (chance → pemain → shot probability → goal). Bukan undian nama.
+  const sim = simulateMatchToScore(homeCode, awayCode, homeGoals, awayGoals, { seed });
+  const mc = runMatchMonteCarlo(homeCode, awayCode, { seed, sims: PREDICTOR_CONFIG.PROBS_SIMS });
+  const topScorers = buildTopScorersFromSimulation({ homeCode, awayCode, sim, mc, opts: {} });
+  const xgHome = mc.avgHome, xgAway = mc.avgAway;
   const winner = homeGoals > awayGoals ? (teamsDB[homeCode]?.name || homeCode) : awayGoals > homeGoals ? (teamsDB[awayCode]?.name || awayCode) : "DRAW";
   return {
     homeCode, awayCode,
@@ -1050,15 +964,15 @@ export function whatIfPredict(homeCodeRaw, awayCodeRaw, homeGoalsRaw, awayGoalsR
     homeFlag: teamsDB[homeCode]?.flag || "", awayFlag: teamsDB[awayCode]?.flag || "",
     homeGoals, awayGoals, winner,
     xgHome: Number(xgHome.toFixed(2)), xgAway: Number(xgAway.toFixed(2)),
-    probs: mcW.probs, markets: mcW.markets,
-    topScorers, keyIndicators,
+    probs: mc.probs, markets: mc.markets,
+    topScorers, keyIndicators: null,
     whatIfMeta: {
       mode: "WHAT_IF_MANUAL_SCORE",
-      seed, seedHex: "0x"+seed.toString(16).toUpperCase(),
+      seed, seedHex: "0x" + seed.toString(16).toUpperCase(),
       lcg: "state = (state * 1664525 + 1013904223) >>>0 — Numerical Recipes LCG (implementasi sendiri, BUKAN replika RNG WE10)",
-      method: `LCG range(totalWeight) per gol — alokasi tepat ${homeGoals}:${awayGoals} ke roster 11-man weight-proportional (GK filtered) tanpa-replacement per match (anti numpuk 3 gol 1 pemain)`,
-      note: "What-If pakai RNG yang SAMA dengan predict & bulk — deterministik, reproducible, bukan Math.random. Fix 2026-08-30: duplikat dicegah retry 12x. Ganti skor → seed berubah → alokasi baru.",
-      audit: "Ghidra audit 2026-08-30: FUN_0016e8d8 = ceiling-div helper, FUN_00216ef0 = table lookup, konstanta RNG standar 0 hits di SLPM_663.74 → LCG ini keputusan implementasi, bukan decode ROM. xG display = rata-rata pure sim MC (konsisten dengan produksi)."
+      method: `Event-based conditioned allocation: ${sim.homeChances + sim.awayChances} chance disimulasikan (level pemain), lalu ${homeGoals + awayGoals} chance dipilih sebagai gol dengan bobot P(gol|pemain,chance) — skor tepat ${homeGoals}:${awayGoals}, nama pemain tetap dari model atribut.`,
+      note: "Deterministik & reproducible (bukan Math.random). Ganti skor → seed berubah → event baru. Pemain yang tidak ada di roster tim tidak akan pernah muncul.",
+      audit: "Audit 2026-09-19: RNG = implementasi LCG, konstanta RNG ROM 0 hits; atribut pemain derived/estimated (bukan decode ROM). xG display = rata-rata MC model yang sama."
     }
   };
 }
@@ -1183,63 +1097,12 @@ export const PredictionService = {
     // Proxy untuk UI WHAT IF — biar reusable via PredictionService
     return whatIfPredict(homeRaw, awayRaw, hgRaw, agRaw, opts);
   },
-  runWalkForwardBacktest(memoryId = 1) {
-    try {
-      const memory = StateManager.db?.memories?.[memoryId];
-      if (!memory || !Array.isArray(memory.games) || memory.games.length < 2) {
-        return { error: "Minimal 2 games pada memory database diperlukan untuk backtest valid." };
-      }
-      let totalTested = 0, exactHits = 0, result1X2Hits = 0, top3Hits = 0, top5Hits = 0, topScorerHits = 0, topScorerTotal = 0;
-      let sumAbsErrHome = 0, sumAbsErrAway = 0, sumBrier = 0, sumLogLoss = 0;
-      for (let gIdx = 1; gIdx < memory.games.length; gIdx++) {
-        const targetGame = memory.games[gIdx];
-        if (!targetGame || !Array.isArray(targetGame.matches)) continue;
-        for (const m of targetGame.matches) {
-          const hCode = normalizeCountry(m?.home || "");
-          const aCode = normalizeCountry(m?.away || "");
-          const actual = parseScore(m?.score || "");
-          if (!hCode || !aCode || !actual || !teamsDB[hCode] || !teamsDB[aCode]) continue;
-          if (!ALLOWED_CODE_SET.has(hCode) || !ALLOWED_CODE_SET.has(aCode)) continue;
-          let pred;
-          // v6.0: backtest memakai path default produksi (pure sim) — dulu sample:false (Poisson topScore) mengukur model yang TIDAK dipakai user
-          try { pred = hybridPredict(hCode, aCode, memoryId, targetGame.gameNumber, { deterministic: true }); } catch (_) { continue; }
-          totalTested++;
-          if (pred.homeGoals === actual.home && pred.awayGoals === actual.away) exactHits++;
-          const actual1X2 = actual.home > actual.away ? "HOME" : (actual.away > actual.home ? "AWAY" : "DRAW");
-          const pred1X2 = pred.probs.home > Math.max(pred.probs.draw, pred.probs.away) ? "HOME" : (pred.probs.away > Math.max(pred.probs.home, pred.probs.draw) ? "AWAY" : "DRAW");
-          if (actual1X2 === pred1X2) result1X2Hits++;
-          if (pred.distribution.slice(0,3).some((s)=>s.home===actual.home && s.away===actual.away)) top3Hits++;
-          if (pred.distribution.slice(0,5).some((s)=>s.home===actual.home && s.away===actual.away)) top5Hits++;
-          sumAbsErrHome += Math.abs(pred.homeGoals - actual.home);
-          sumAbsErrAway += Math.abs(pred.awayGoals - actual.away);
-          const oH = actual1X2==="HOME"?1:0, oD = actual1X2==="DRAW"?1:0, oA = actual1X2==="AWAY"?1:0;
-          sumBrier += (Math.pow(pred.probs.home - oH,2)+Math.pow(pred.probs.draw - oD,2)+Math.pow(pred.probs.away - oA,2))/3;
-          const actualProb = actual1X2==="HOME"?pred.probs.home : actual1X2==="DRAW"?pred.probs.draw : pred.probs.away;
-          sumLogLoss += -Math.log(Math.max(0.01, actualProb));
-          const actualTop = (targetGame.topGoals || []).filter(g=>g.player && g.country).map(g=> normalizeCountry(g.country) + ":" + g.player.trim().toLowerCase());
-          if (actualTop.length > 0) {
-            const predTop3 = pred.topScorers.slice(0,3).map(p=> p.teamCode.toLowerCase()+":"+p.name.trim().toLowerCase());
-            topScorerTotal++;
-            if (actualTop.some(at => predTop3.some(pt => pt.includes(at.split(":")[1]) || at.includes(pt.split(":")[1])))) topScorerHits++;
-          }
-        }
-      }
-      if (totalTested === 0) return { error: "Tidak ada pertandingan valid (57-fix) terisi skor untuk backtest." };
-      return {
-        totalTested,
-        exactScoreAccuracy: (exactHits / totalTested) * 100,
-        result1X2Accuracy: (result1X2Hits / totalTested) * 100,
-        top3ScoreHitRate: (top3Hits / totalTested) * 100,
-        top5ScoreHitRate: (top5Hits / totalTested) * 100,
-        topScorerHitRate: topScorerTotal > 0 ? (topScorerHits / topScorerTotal * 100) : 0,
-        topScorerSamples: topScorerTotal,
-        maeHomeGoals: sumAbsErrHome / totalTested,
-        maeAwayGoals: sumAbsErrAway / totalTested,
-        meanBrierScore: sumBrier / totalTested,
-        meanLogLoss: sumLogLoss / totalTested,
-      };
-    } catch (e) {
-      return { error: `Backtest gagal: ${e?.message || String(e)}` };
-    }
+  /**
+   * Walk-forward backtest — delegasi ke backtestEngine.js (v7).
+   * Metrik: exact score, 1X2, top-3/top-5 scoreline, MAE H/A, top scorer hit
+   * rate, scorer distribution accuracy + perbandingan model lama vs baru.
+   */
+  runWalkForwardBacktest(memoryId = 1, opts = {}) {
+    return runWalkForwardBacktestImpl(memoryId, opts);
   },
 };
