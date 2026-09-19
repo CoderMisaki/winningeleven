@@ -389,6 +389,38 @@ check("tiktok json generator produces output", () => {
   return "ok";
 });
 
+// === REGRESSION BUG B8: setelah RESET FORM, tombol B8 [+] ADD MATCH harus tetap berfungsi ===
+check("B8 toggle tetap berfungsi setelah RESET FORM (bug lama: stuck sampai refresh)", () => {
+  const b8Row = () => $$("#matchGridForm .match-row-item")[7];
+  const toggleBtn = () => $("#btnToggleB8");
+  const rowVisible = () => {
+    const r = b8Row();
+    if (!r) throw new Error("row B8 tidak ada");
+    return r.style.display !== "none";
+  };
+
+  // 1) reset form (butuh konfirmasi modal)
+  $("#btnClearForm")?.click();
+  $("#btnConfirmYes")?.click();
+
+  // 2) state setelah reset: B8 tidak aktif
+  if (stateMod.StateManager.homeQuery.b8Enabled === true) throw new Error("b8Enabled masih true setelah reset");
+
+  // 3) klik toggle → B8 harus MUNCUL tanpa refresh
+  toggleBtn()?.click();
+  if (!rowVisible()) throw new Error("B8 tetap tersembunyi setelah toggle (bug lama)");
+  if (!/HIDE/.test(toggleBtn()?.textContent || "")) throw new Error("label tombol tidak berubah: " + toggleBtn()?.textContent);
+
+  // 4) klik toggle lagi → B8 harus tersembunyi kembali (toggle dua arah)
+  toggleBtn()?.click();
+  if (rowVisible()) throw new Error("B8 tidak bisa disembunyikan lagi");
+
+  // 5) aktifkan lagi supaya state akhir konsisten, lalu pastikan masih bisa
+  toggleBtn()?.click();
+  if (!rowVisible()) throw new Error("toggle ketiga gagal (state tidak konsisten)");
+  return "toggle B8 OK setelah reset (tanpa refresh)";
+});
+
 console.log("\n===== SMOKE TEST RESULTS =====");
 let fails = 0;
 for (const r of results) {

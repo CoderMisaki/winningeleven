@@ -10,10 +10,12 @@
     "build": "vite build",
     "preview": "vite preview --host 0.0.0.0 --port 4173",
     "start": "npx --yes serve . -l 3000",
-    "test": "node tests/logic.test.mjs && node tests/konami_pairing_test.mjs && node tests/smoke.test.mjs",
+    "test": "node tests/logic.test.mjs && node tests/playerScoring.test.mjs && node tests/konami_pairing_test.mjs && node tests/smoke.test.mjs",
     "test:logic": "node tests/logic.test.mjs",
+    "test:scoring": "node tests/playerScoring.test.mjs",
     "test:p2s": "node tests/konami_pairing_test.mjs",
-    "test:ui": "node tests/smoke.test.mjs"
+    "test:ui": "node tests/smoke.test.mjs",
+    "backtest": "node tools/backtest.mjs"
   },
   "dependencies": {
     "@google/genai": "^2.12.0",

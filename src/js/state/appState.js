@@ -312,7 +312,18 @@ export const StateManager = {
     }
   },
   clearHomeQuery() {
-    this.homeQuery = makeEmptyQuery();
+    // FIX BUG B8 STUCK: dulu objek homeQuery DIGANTI objek baru sehingga semua
+    // referensi lama (handler grid yang sudah ter-bind, view lain) jadi basi.
+    // Sekarang objek yang sama dibersihkan in-place agar referensi tetap valid.
+    const empty = makeEmptyQuery();
+    if (this.homeQuery && typeof this.homeQuery === "object") {
+      Object.keys(empty).forEach((key) => { this.homeQuery[key] = empty[key]; });
+      Object.keys(this.homeQuery).forEach((key) => {
+        if (!(key in empty)) delete this.homeQuery[key];
+      });
+    } else {
+      this.homeQuery = empty;
+    }
     try { localStorage.removeItem(HOME_QUERY_KEY); } catch (_) {}
     // Also trigger save to ensure cleared state persisted as empty
     this.saveHomeQueryImmediate();
