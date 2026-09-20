@@ -209,6 +209,7 @@ function makeAccumulator(label) {
     sumAbsErrHome: 0, sumAbsErrAway: 0, sumBrier: 0, sumLogLoss: 0,
     scorerMatches: 0, scorerHits: 0, topScorerExact: 0,
     predShare: new Map(), obsShare: new Map(),
+    eceBins: Array.from({ length: 10 }, () => ({ count: 0, correct: 0, confSum: 0 })),
     details: []
   };
 }
@@ -229,6 +230,13 @@ function accumulate(acc, actual, pred, actualScorers, opts = {}) {
   acc.sumBrier += (Math.pow(pred.probs.home - oH, 2) + Math.pow(pred.probs.draw - oD, 2) + Math.pow(pred.probs.away - oA, 2)) / 3;
   const actualProb = actual1X2 === "HOME" ? pred.probs.home : actual1X2 === "DRAW" ? pred.probs.draw : pred.probs.away;
   acc.sumLogLoss += -Math.log(Math.max(0.01, actualProb));
+
+  // Expected Calibration Error (ECE) untuk probabilitas 1X2
+  const maxProb = Math.max(pred.probs.home, pred.probs.draw, pred.probs.away);
+  const bIdx = Math.min(9, Math.max(0, Math.floor(maxProb * 10)));
+  acc.eceBins[bIdx].count++;
+  acc.eceBins[bIdx].confSum += maxProb;
+  if (actual1X2 === pred1X2) acc.eceBins[bIdx].correct++;
 
   // ---- scorer metrics ----
   if (actualScorers.length) {
@@ -280,6 +288,13 @@ function scorerDistributionAccuracy(acc) {
 function finalize(acc) {
   const tested = acc.tested || 1;
   const dist = scorerDistributionAccuracy(acc);
+  let ece = 0;
+  for (const b of acc.eceBins) {
+    if (b.count === 0) continue;
+    const binAcc = b.correct / b.count;
+    const binConf = b.confSum / b.count;
+    ece += (b.count / tested) * Math.abs(binAcc - binConf);
+  }
   return {
     label: acc.label,
     totalTested: acc.tested,
@@ -297,6 +312,7 @@ function finalize(acc) {
     scorerDistributionAccuracy: dist.accuracy,
     scorerDistributionTVD: dist.tvd,
     scorerDistributionSamples: dist.samples,
+    calibrationError: ece * 100,
     details: acc.details
   };
 }
@@ -353,7 +369,13 @@ export function runWalkForwardBacktest(memoryId = 1, opts = {}) {
       // ---- MODEL BARU (player-attribute) ----
       let pred = null;
       try {
-        pred = hybridPredict(hCode, aCode, memoryId, targetGame.gameNumber, { deterministic: true, walkForward: true, ...opts.modelOpts });
+        const hybridOpts = {
+          deterministic: true,
+          walkForward: true,
+          ...opts,
+          ...opts.modelOpts
+        };
+        pred = hybridPredict(hCode, aCode, memoryId, targetGame.gameNumber, hybridOpts);
       } catch (e) { continue; }
       accumulate(playerAcc, actual, { ...pred, topScorers: pred.topScorers || [] }, actualScorers, {
         collectDetails: opts.collectDetails, gameNumber: targetGame.gameNumber, memoryId, home: m.home, away: m.away
@@ -389,7 +411,8 @@ export function runWalkForwardBacktest(memoryId = 1, opts = {}) {
     maeHomeGoals: player.maeHomeGoals - legacy.maeHomeGoals,
     maeAwayGoals: player.maeAwayGoals - legacy.maeAwayGoals,
     topScorerHitRate: player.topScorerHitRate - legacy.topScorerHitRate,
-    scorerDistributionAccuracy: player.scorerDistributionAccuracy - legacy.scorerDistributionAccuracy
+    scorerDistributionAccuracy: player.scorerDistributionAccuracy - legacy.scorerDistributionAccuracy,
+    calibrationError: player.calibrationError - legacy.calibrationError
   };
 
   return {
@@ -409,6 +432,7 @@ export function runWalkForwardBacktest(memoryId = 1, opts = {}) {
     scorerDistributionAccuracy: player.scorerDistributionAccuracy,
     scorerDistributionTVD: player.scorerDistributionTVD,
     scorerDistributionSamples: player.scorerDistributionSamples,
+    calibrationError: player.calibrationError,
     // perbandingan model
     modelComparison: {
       playerAttribute: player,
@@ -467,15 +491,15 @@ export function runWalkForwardBacktestWithOpts(memoryId, opts) {
   return runWalkForwardBacktest(memoryId, opts);
 }
 
-export function runAblationTest(memoryId = 1) {
-  const base = runWalkForwardBacktest(memoryId);
+export function runAblationTest(memoryId = 1, backtestOpts = {}) {
+  const base = runWalkForwardBacktest(memoryId, backtestOpts);
   if (base.error) return base;
   const configs = [
-    { name: "Team ratings only (form OFF, H2H OFF, context OFF)", opts: { disableForm: true, disableH2H: true, disableContext: true, disableVariance: true } },
-    { name: "Team ratings + team form", opts: { disableForm: false, disableH2H: true, disableContext: true, disableVariance: true } },
-    { name: "Team ratings + form + H2H", opts: { disableForm: false, disableH2H: false, disableContext: true, disableVariance: true } },
-    { name: "Team ratings + form + H2H + context", opts: { disableForm: false, disableH2H: false, disableContext: false, disableVariance: true } },
-    { name: "Full model (+ per-fixture conversion variance)", opts: {} }
+    { name: "Team ratings only (form OFF, H2H OFF, context OFF)", opts: { ...backtestOpts, disableForm: true, disableH2H: true, disableContext: true, disableVariance: true } },
+    { name: "Team ratings + team form", opts: { ...backtestOpts, disableForm: false, disableH2H: true, disableContext: true, disableVariance: true } },
+    { name: "Team ratings + form + H2H", opts: { ...backtestOpts, disableForm: false, disableH2H: false, disableContext: true, disableVariance: true } },
+    { name: "Team ratings + form + H2H + context", opts: { ...backtestOpts, disableForm: false, disableH2H: false, disableContext: false, disableVariance: true } },
+    { name: "Full model (+ per-fixture conversion variance)", opts: { ...backtestOpts } }
   ];
   const results = [];
   let prevAcc = null;
@@ -489,7 +513,12 @@ export function runAblationTest(memoryId = 1) {
       exact: Number(acc.toFixed(2)),
       delta: Number(delta.toFixed(2)),
       xg1x2: res.error ? 0 : Number(res.result1X2Accuracy.toFixed(2)),
+      top3: res.error ? 0 : Number(res.top3ScoreHitRate.toFixed(2)),
+      top5: res.error ? 0 : Number(res.top5ScoreHitRate.toFixed(2)),
+      maeHome: res.error ? 0 : Number(res.maeHomeGoals.toFixed(3)),
+      maeAway: res.error ? 0 : Number(res.maeAwayGoals.toFixed(3)),
       topScorerHitRate: res.error ? 0 : Number(res.topScorerHitRate.toFixed(2)),
+      calibrationError: res.error ? 0 : Number(res.calibrationError.toFixed(2)),
       opts: cfg.opts,
       totalTested: res.totalTested || 0
     });
@@ -498,6 +527,6 @@ export function runAblationTest(memoryId = 1) {
     base,
     ablation: results,
     modelComparison: base.modelComparison,
-    note: "Ablation walk-forward (tanpa leakage, deterministik). Model pemain (playerScoring.js) tidak berubah antar konfigurasi — yang berubah hanya informasi tim (form/H2H/context)."
+    note: "Ablation walk-forward (tanpa leakage, deterministik). Model pemain (playerScoring.js) tidak berubah antar konfigurasi — yang diuji adalah kontribusi komponen level-tim (form/H2H/context)."
   };
 }

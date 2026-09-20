@@ -65,21 +65,30 @@ export const PLAYER_ATTRIBUTE_KEYS = Object.freeze([
   "form"
 ]);
 
+export const ATTRIBUTE_STATUS = Object.freeze({
+  VERIFIED: "verified",       // data terverifikasi dari ROM/forensic evidence (SLPM_663.74)
+  DERIVED: "derived",         // derived deterministik: archetype peran + pergeseran kekuatan tim
+  FALLBACK: "fallback"        // fallback netral ketika data tim/posisi tidak tersedia
+});
+
 /** Sumber tiap bagian data — dipakai UI/backtest supaya tidak menyesatkan. */
 export const PLAYER_ATTRIBUTE_PROVENANCE = Object.freeze({
-  model: "derived-player-attributes v1.0 (2026-09-19)",
+  model: "derived-player-attributes v2.0 (audit-verified)",
   verified: [
-    "name + pos per tim (WE10_FULL_ROSTER, rekaman manual dari layar game — bukan decode ROM)",
-    "teamRatings.js sebagai penggeser tim-level (rekap eksternal, estimasi)",
-    "Bukti Ghidra yang tetap valid: dump 003bd400, team strings 003be000, FUN_0016e8d8 = ceiling-div helper, FUN_00216ef0 = table lookup, 0 hits konstanta RNG standar"
+    "name + pos per tim (WE10_FULL_ROSTER, 57 tim x 11 pemain, rekaman manual layar game — bukan decode ROM)",
+    "Bukti Ghidra yang tetap valid: dump 003bd400 (word ~0-500), team strings 003be000, FUN_0016e8d8 = ceiling-div helper, FUN_00216ef0 = table lookup, 0 hits konstanta RNG standar"
   ],
   derived: [
-    "attack, defense, finishing, shotPower, technique, dribble, speed, passing, positioning, physical, stamina, form",
-    "position role weights (playerScoring.js) — model taktis, bukan data ROM"
+    "12 atribut (attack, defense, finishing, shotPower, technique, dribble, speed, passing, positioning, physical, stamina, form)",
+    "posisi menentukan role eligibility taktis dalam serangan",
+    "pergeseran kekuatan tim dari teamRatings.js sebagai Bayesian prior"
   ],
   estimated: [
-    "variasi individual (latent + per-attribute noise) — placeholder deterministik untuk kualitas individu yang belum diketahui",
-    "seluruh skala absolut atribut (0-99) belum diverifikasi terhadap ROM"
+    "variasi individual deterministik berbasis hash nama (placeholder transparan untuk kualitas individu yang belum didecode dari ROM)",
+    "skala absolut atribut (0-99) belum diverifikasi langsung terhadap struktur memori ROM"
+  ],
+  fallback: [
+    "NEUTRAL_ARCHETYPE untuk pemain tanpa tim atau posisi valid"
   ],
   notClaimed: [
     "atribut di sini BUKAN hasil decode SLPM_663.74",
@@ -250,9 +259,21 @@ export function derivePlayerAttributes(code, entry) {
   const pos = String(entry?.pos || "CMF").toUpperCase();
   const base = archetypeFor(pos);
   const shift = teamShiftFor(team);
+  const isFallback = (!POSITION_ARCHETYPE[pos] && !POSITION_ALIAS[pos]) || !shift.hasRating;
+  const initialSource = isFallback ? ATTRIBUTE_STATUS.FALLBACK : ATTRIBUTE_STATUS.DERIVED;
 
   const latent = (hash01(`${team}|${name}|latent`) - 0.5) * 2; // -1..1
-  const player = { name, pos, position: pos, teamCode: team, attributesSource: "derived-estimated" };
+  const player = {
+    name,
+    pos,
+    position: pos,
+    teamCode: team,
+    attributesSource: initialSource,
+    attributeStatus: initialSource,
+    attributeProvenance: isFallback
+      ? "fallback (neutral archetype; tim atau posisi tidak lengkap)"
+      : "derived (position archetype + Bayesian team rating shift + deterministic role estimation)"
+  };
 
   for (const attr of PLAYER_ATTRIBUTE_KEYS) {
     if (attr === "form") { player.form = 50; continue; }
@@ -275,8 +296,9 @@ export function derivePlayerAttributes(code, entry) {
       if (typeof v === "number" && isFinite(v)) { player[attr] = clamp(Math.round(v), ATTR_MIN, ATTR_MAX); applied++; }
     }
     if (applied > 0) {
-      player.attributesSource = "verified";
-      player.attributeSourceNote = ov._source || "verified override";
+      player.attributesSource = ATTRIBUTE_STATUS.VERIFIED;
+      player.attributeStatus = ATTRIBUTE_STATUS.VERIFIED;
+      player.attributeSourceNote = ov._source || "verified override (ROM structure decode)";
     }
   }
   return player;
@@ -318,6 +340,30 @@ export function buildPlayerDatabase() {
 export function getPlayerDatabase() {
   if (!_dbCache) _dbCache = buildPlayerDatabase();
   return _dbCache;
+}
+
+/**
+ * Ringkasan provenance data seluruh pemain di database.
+ * Memisahkan secara transparan status verified vs derived vs fallback.
+ */
+export function summarizePlayerProvenance() {
+  const db = getPlayerDatabase();
+  let total = 0;
+  const counts = { verified: 0, derived: 0, fallback: 0 };
+  for (const [code, players] of Object.entries(db)) {
+    for (const p of players) {
+      total++;
+      if (p.attributeStatus === ATTRIBUTE_STATUS.VERIFIED) counts.verified++;
+      else if (p.attributeStatus === ATTRIBUTE_STATUS.DERIVED) counts.derived++;
+      else counts.fallback++;
+    }
+  }
+  return {
+    totalPlayers: total,
+    totalTeams: Object.keys(db).length,
+    counts,
+    provenance: PLAYER_ATTRIBUTE_PROVENANCE
+  };
 }
 
 function buildIndex() {

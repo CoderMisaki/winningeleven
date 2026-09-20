@@ -5,33 +5,21 @@
  *
  *  ARCHITEKTUR (sesuai target audit)
  *
- *    WE10 roster (nama + posisi)
- *            ↓
- *    Player attributes  (playerAttributes.js — derived/estimated)
- *            ↓
- *    Team strength (rating tim → jumlah & kualitas chance)
- *            ↓
- *    MATCH ENGINE: chance generation
- *            ↓
- *    Player selection (role posisi × atribut × form × stamina)
- *            ↓
- *    Shot probability (finishing/positioning vs defense lawan)
- *            ↓
- *    GOAL / MISS (event per pemain)
- *            ↓
- *    Scorer statistics → skor akhir + top scorers
+ *    team strength → chance volume → chance quality → eligible player selection
+ *    → player attributes → opponent defense → shot probability → goal/miss
  *
  *  Prinsip yang dijaga:
  *   - TIDAK ADA daftar bintang manual / STAR_OVERRIDES.
  *   - TIDAK ADA fallback nama dummy ("BRA_FW9"). Tim tanpa roster → tidak
  *     menghasilkan scorer sama sekali (engine menandai `available: false`).
- *   - Skor TIDAK ditentukan dulu lalu nama dipilih acak: gol lahir dari event
- *     chance → pemain → tembakan. Mode "target skor" hanya dipakai kalau skor
- *     memang sudah ditentukan user (what-if / apply ke UI), dan itupun memakai
- *     bobot probabilities tembakan yang sama (conditioned allocation).
- *   - Semua RNG deterministik (LCG Numerical Recipes, keputusan implementasi —
- *     BUKAN replika RNG WE10; konstanta RNG asli tidak ditemukan di ROM,
- *     lihat catatan audit di ghidraTeamAbility.js / predictor.js).
+ *   - Skor TIDAK ditentukan dulu lalu nama dipilih: gol lahir murni dari event
+ *     chance → penembak terpilih (role + atribut + stamina + form) → shot probability → goal/miss.
+ *   - Posisi hanya menentukan role eligibility/taktis, bukan jaminan gol.
+ *   - Finishing, attack, positioning, technique, shotPower, stamina dan kondisi/form
+ *     memengaruhi probabilitas secara proporsional (tanpa satu atribut mendominasi).
+ *   - Total expected goals level-pemain konsisten secara matematis dengan team-level xG.
+ *   - Semua RNG deterministik: WE10-compatible deterministic simulation (NR-LCG 1664525)
+ *     untuk reproducibility penuh. BUKAN replika RNG WE10 asli (konstanta RNG ROM 0 hits).
  * ============================================================================
  */
 
@@ -40,7 +28,7 @@ import { teamRatings } from "../data/teamRatings.js";
 import { getObservedStats, computeFormMultiplier, DATASET_PRIOR, MIN_CALIBRATION_MATCHES } from "./scoringDataset.js";
 
 // ---------------------------------------------------------------------------
-// 0. RNG deterministik (NR-LCG 1664525 — implementasi, bukan decode ROM)
+// 0. WE10-compatible deterministic simulation (NR-LCG 1664525)
 // ---------------------------------------------------------------------------
 export class ScoringRng {
   constructor(seed) { this.state = (seed >>> 0) || 0x9e3779b9; }
@@ -64,41 +52,44 @@ export const PLAYER_SCORING_MODEL_VERSION = "player-attribute v7.0 (event-based)
 // ---------------------------------------------------------------------------
 export const PLAYER_SCORING_CONFIG = Object.freeze({
   MODEL_VERSION: PLAYER_SCORING_MODEL_VERSION,
+  RNG_LABEL: "WE10-compatible deterministic simulation",
 
   // --- Chance generation (TEAM MODEL) ---
   CHANCES: {
-    BASE: 5.4,          // chance dasar per tim
-    MID_FACTOR: 1.9,    // ± oleh dominasi midfield (midDiffNorm -1..1)
-    EDGE_FACTOR: 0.32,  // ± oleh (attackIndex - defenseIndex)/10
+    BASE: 5.8,          // chance dasar per tim
+    MID_FACTOR: 1.8,    // ± oleh dominasi midfield (midDiffNorm -1..1)
+    EDGE_FACTOR: 0.30,  // ± oleh (attackIndex - defenseIndex)/10
     JITTER: 3,          // rng.range(3)
     MIN: 3,
-    MAX: 10
+    MAX: 11
   },
 
   // --- Kualitas chance (0..1): makin tinggi makin mudah jadi gol ---
-  QUALITY: { BASE: 0.5, EDGE: 0.09, SPREAD: 0.19, MIN: 0.08, MAX: 0.92 },
+  QUALITY: { BASE: 0.50, EDGE: 0.08, SPREAD: 0.18, MIN: 0.08, MAX: 0.92 },
 
-  // --- Bobot peran posisi dalam pemilihan penembak (model taktis) ---
+  // --- Bobot peran posisi dalam pemilihan penembak (model taktis — role eligibility) ---
   ROLE_WEIGHT: {
-    CF: 1.00, ST: 0.95, WG: 0.90, WF: 0.90,
-    OMF: 0.60, AMF: 0.60,
-    SMF: 0.38, CMF: 0.32, DMF: 0.20,
+    CF: 1.00, ST: 0.96, WG: 0.88, WF: 0.88,
+    OMF: 0.65, AMF: 0.65,
+    SMF: 0.42, CMF: 0.35, DMF: 0.22,
     WB: 0.16, SB: 0.13, CB: 0.10, SW: 0.08,
     GK: 0.00            // GK tidak pernah menembak (own-goal/penalti GK di luar scope model)
   },
 
-  // --- Shot probability (PLAYER MODEL) ---
+  // --- Shot probability (PLAYER MODEL) — proporsional & berimbang ---
   SHOT: {
-    BASE: 0.30,
-    FINISHING: 0.0060,     // per poin di atas 65
-    POSITIONING: 0.0035,   // per poin di atas 65
-    TECHNIQUE: 0.0025,     // per poin di atas 65
-    POWER: 0.0015,         // per poin di atas 70
-    QUALITY: 0.40,         // per unit kualitas chance (0..1) di atas 0.5
-    OPP_DEFENSE: 0.0080,   // per poin defense lawan di atas 65
-    FORM: 0.22,            // per unit (formMultiplier - 1)
+    BASE: 0.31,
+    FINISHING: 0.0036,     // per poin di atas 65
+    ATTACK: 0.0024,        // per poin di atas 65
+    POSITIONING: 0.0024,   // per poin di atas 65
+    TECHNIQUE: 0.0020,     // per poin di atas 65
+    POWER: 0.0016,         // per poin di atas 70
+    STAMINA: 0.0010,       // per poin di atas 70
+    QUALITY: 0.35,         // per unit kualitas chance (0..1) di atas 0.5
+    OPP_DEFENSE: 0.0065,   // per poin defense lawan di atas 65
+    FORM: 0.18,            // per unit (formMultiplier - 1)
     MIN: 0.02,
-    MAX: 0.80
+    MAX: 0.85
   },
 
   MONTE_CARLO_SIMS: 400,   // probs/markets/xG + statistik pemain
@@ -109,7 +100,7 @@ export const PLAYER_SCORING_CONFIG = Object.freeze({
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
 // ---------------------------------------------------------------------------
-// 2. KALIBRASI BERBASIS DATASET (bukan tuning manual per pemain)
+// 2. KALIBRASI BERBASIS DATASET (shrinkage Bayesian, bukan tuning manual per pemain)
 // ---------------------------------------------------------------------------
 let _calibrationCache = { key: null, value: null };
 let _referenceConversion = null;
@@ -129,26 +120,30 @@ export function bumpPlayerScoringRevision() {
 
 /**
  * Target skala dari data observasi (rata-rata gol per tim + rasio home).
- * Sampel user < MIN_CALIBRATION_MATCHES → pakai DATASET_PRIOR (427 match
- * Konami Cup yang tersimpan di repo; tetap turunan observasi, bukan angka
- * manual per pemain).
+ * Menggunakan Bayesian shrinkage: transisi mulus dari prior (DATASET_PRIOR)
+ * ke observasi seiring bertambahnya data pertandingan user.
  */
 export function getCalibration(exclude = null) {
   const stats = getObservedStats(exclude);
   const key = stats.excludeKey;
   if (_calibrationCache.key === key && _calibrationCache.value) return _calibrationCache.value;
 
-  const useObserved = stats.matches >= MIN_CALIBRATION_MATCHES && stats.avgGoalsPerTeam > 0;
-  const target = useObserved ? stats.avgGoalsPerTeam : DATASET_PRIOR.avgGoalsPerTeam;
-  const homeShare = useObserved ? stats.homeShare : DATASET_PRIOR.homeShare;
+  const N = stats.matches;
+  const K_CALIB = 16;
+  const target = N > 0 && stats.avgGoalsPerTeam > 0
+    ? (N * stats.avgGoalsPerTeam + K_CALIB * DATASET_PRIOR.avgGoalsPerTeam) / (N + K_CALIB)
+    : DATASET_PRIOR.avgGoalsPerTeam;
+  const homeShare = N > 0 && stats.homeShare > 0
+    ? (N * stats.homeShare + K_CALIB * DATASET_PRIOR.homeShare) / (N + K_CALIB)
+    : DATASET_PRIOR.homeShare;
   const reference = getReferenceGoalsPerTeam();
   const value = {
     scale: clamp(target / (reference || target), 0.55, 1.85),
     targetGoalsPerTeam: target,
     homeShare: clamp(homeShare, 0.40, 0.60),
-    sampleSize: useObserved ? stats.matches : DATASET_PRIOR.sampleSize,
-    calibratedFromData: useObserved,
-    source: useObserved ? `observed: ${stats.matches} matches (database user)` : DATASET_PRIOR.source,
+    sampleSize: N > 0 ? N : DATASET_PRIOR.sampleSize,
+    calibratedFromData: N > 0,
+    source: N > 0 ? `observed: ${N} matches (Bayesian shrinkage K=${K_CALIB})` : DATASET_PRIOR.source,
     referenceConversionPerTeam: reference
   };
   _calibrationCache = { key, value };
@@ -194,12 +189,12 @@ function roleWeightFor(pos) {
 
 /** Keterlibatan pemain dalam serangan (tanpa form) — dasar share prior. */
 function involvementOf(p) {
-  return 0.45 * p.attack + 0.30 * p.positioning + 0.25 * p.technique;
+  return 0.35 * (p.attack || 60) + 0.35 * (p.positioning || 60) + 0.15 * (p.technique || 60) + 0.15 * (p.speed || 60);
 }
 
 function selectionWeightOf(player, entry, formMultiplier = 1) {
-  const staminaFactor = 0.85 + 0.15 * ((player.stamina || 60) / 99);
-  const involvementFactor = 0.45 + 0.55 * (entry.involvement / 100);
+  const staminaFactor = 0.82 + 0.18 * ((player.stamina || 60) / 99);
+  const involvementFactor = 0.40 + 0.60 * (entry.involvement / 100);
   return entry.roleWeight * involvementFactor * staminaFactor * formMultiplier;
 }
 
@@ -297,14 +292,16 @@ export function drawChanceQuality(rng, edge = 0) {
   return clamp(cfg.BASE + cfg.EDGE * edge + spread, cfg.MIN, cfg.MAX);
 }
 
-/** Probabilitas gol untuk SATU pemain pada SATU chance. */
+/** Probabilitas gol untuk SATU pemain pada SATU chance (proporsional per atribut). */
 export function shotProbability(player, { quality = 0.5, oppDefenseIndex = 65, formMultiplier = 1, scale = 1 } = {}) {
   const cfg = PLAYER_SCORING_CONFIG.SHOT;
   let p = cfg.BASE;
   p += cfg.FINISHING * ((player.finishing ?? 60) - 65);
+  p += (cfg.ATTACK ?? 0.0024) * ((player.attack ?? 60) - 65);
   p += cfg.POSITIONING * ((player.positioning ?? 60) - 65);
   p += cfg.TECHNIQUE * ((player.technique ?? 60) - 65);
-  p += cfg.POWER * ((player.shotPower ?? 70) - 70);
+  p += (cfg.POWER ?? 0.0016) * ((player.shotPower ?? 70) - 70);
+  p += (cfg.STAMINA ?? 0.0010) * ((player.stamina ?? 70) - 70);
   p += cfg.QUALITY * (quality - 0.5);
   p -= cfg.OPP_DEFENSE * (oppDefenseIndex - 65);
   p += cfg.FORM * (formMultiplier - 1);
@@ -526,6 +523,7 @@ export function runMatchMonteCarlo(homeCode, awayCode, opts = {}) {
 
   const scoreMap = new Map();
   const playerStats = new Map();
+  const simByScore = new Map();
   let winsH = 0, draws = 0, winsA = 0, over25 = 0, btts = 0, sumH = 0, sumA = 0, totalGoals = 0, chanceTotal = 0;
 
   const bumpPlayer = (key, name, pos, teamCode, scored) => {
@@ -546,6 +544,7 @@ export function runMatchMonteCarlo(homeCode, awayCode, opts = {}) {
     });
     const key = `${sim.homeGoals}:${sim.awayGoals}`;
     scoreMap.set(key, (scoreMap.get(key) || 0) + 1);
+    if (!simByScore.has(key)) simByScore.set(key, sim);
     if (sim.homeGoals > sim.awayGoals) winsH++;
     else if (sim.homeGoals < sim.awayGoals) winsA++;
     else draws++;
@@ -587,6 +586,9 @@ export function runMatchMonteCarlo(homeCode, awayCode, opts = {}) {
     .map(([k, c]) => { const [h, a] = k.split(":").map(Number); return { home: h, away: a, prob: c / sims }; })
     .sort((x, y) => y.prob - x.prob);
 
+  const topScoreKey = distribution[0] ? `${distribution[0].home}:${distribution[0].away}` : "0:0";
+  const modalSim = simByScore.get(topScoreKey) || null;
+
   const over25P = over25 / sims;
   return {
     sims,
@@ -599,7 +601,8 @@ export function runMatchMonteCarlo(homeCode, awayCode, opts = {}) {
     avgTotalGoals: Number((totalGoals / sims).toFixed(3)),
     avgChancesPerTeam: Number((chanceTotal / sims / 2).toFixed(2)),
     players,
-    calibration: ctx.calibration
+    calibration: ctx.calibration,
+    modalSim
   };
 }
 

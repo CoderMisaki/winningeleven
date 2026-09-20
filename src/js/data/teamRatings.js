@@ -72,6 +72,18 @@ const RATING_CODE_TO_APP_CODE = {
   ARB: "KSA"
 };
 
+export const TEAM_RATING_STATUS = Object.freeze({
+  VERIFIED: "verified",
+  OBSERVED: "observed",
+  ESTIMATED: "estimated"
+});
+
+export const TEAM_RATING_PROVENANCE = Object.freeze({
+  status: TEAM_RATING_STATUS.ESTIMATED,
+  note: "teamRatings.js adalah rekap eksternal (estimasi agregat 57 tim), BUKAN hasil decode struktur ROM SLPM_663.74. Bukti Ghidra (003bd400 dump word ~0-500) belum terpetakan satu-satu ke 57 tim. Prior melemah via Bayesian shrinkage seiring bertambahnya observasi gameplay.",
+  sampleSize: 57
+});
+
 export const teamRatings = {};
 
 for (const team of rawTeamRatings) {
@@ -80,6 +92,8 @@ for (const team of rawTeamRatings) {
   teamRatings[appCode] = {
     ...team,
     code: appCode,
-    originalCode: team.code
+    originalCode: team.code,
+    ratingStatus: TEAM_RATING_STATUS.ESTIMATED,
+    ratingSource: "estimated (external UI recap; unverified in ROM)"
   };
 }
