@@ -1,0 +1,409 @@
+<!doctype html>
+<html lang="id">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta
+  http-equiv="Content-Security-Policy"
+  content="
+    default-src 'self';
+    img-src 'self' data: blob:;
+    font-src 'self' https://fonts.gstatic.com data:;
+    style-src 'self' https://fonts.googleapis.com 'unsafe-inline' https://cdnjs.cloudflare.com;
+    script-src 'self' 'unsafe-eval' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com;
+    connect-src 'self' https://api.github.com;
+    worker-src 'self' blob:;
+    media-src 'self' blob: data:;
+    object-src 'none';
+    base-uri 'self';
+    form-action 'self'
+  "
+/>
+    <title>WE10 Memory Research System </title>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Roboto+Mono:wght@400;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="src/css/styles.css" />
+
+    <script src="https://cdn.jsdelivr.net/npm/marked@9.1.2/marked.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.8/purify.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <!-- JSZip removed: robust p2s patcher now uses bundled fzstd+fflate (no CDN) to handle PCSX2 zstd 0x5D -->
+</head>
+  <body>
+    <main class="page-shell">
+      <header class="we10-header">
+        <h1>WE10 MEMORY SYSTEM </h1>
+        <div class="system-sub">RESEARCH & DATASET ENGINE</div>
+      </header>
+
+      <section class="control-panel">
+        <button class="btn" id="btnHomeView">MATCHING CENTER</button>
+        <button class="btn" id="btnOpenDatabase">MEMORY DATABASE</button>
+        <div id="activeViewIndicator" class="view-indicator">MODE: MATCHING CENTER</div>
+      </section>
+
+      <div class="game-screen">
+        <div class="schedule-tab" id="panelTitle">MATCHING INTERFACE</div>
+        
+        <div class="main-board">
+          <div class="editor-nav-bar hidden" id="editorNav">
+            <button class="btn btn-nav" id="btnPrevGame">◀ PREV GAME</button>
+            <div class="game-badge" id="currentGameLabel">
+              GAME <input type="number" id="currentGameInput" value="1" min="1" style="width: 50px; text-align: center; font-family: var(--font-retro); font-size: 0.75rem; background: var(--bg-dark); color: var(--text-light); border: 1px solid var(--border-color);">
+              <span id="totalGamesLabel">/ 1</span>
+            </div>
+            <button class="btn btn-nav" id="btnNextGame">NEXT GAME ▶</button>
+            <button class="btn" id="btnAddGame">+ ADD GAME</button>
+            <button class="btn" id="btnExitEditor" style="background-color: #550000; color: #ff5555; border-color: #ff0000;">EXIT EDITOR</button>
+          </div>
+
+          <div class="dataset-container">
+            <div class="p1-row">
+              <label for="p1Input">P1 METADATA (OPTIONAL):</label>
+              <div class="team-input-wrap" style="flex-grow: 1;">
+                <input type="text" id="p1Input" placeholder="Masukkan Negara P1 (e.g. Spain)" autocomplete="off" />
+                <div class="suggestions-box hidden"></div>
+              </div>
+            </div>
+            
+            <div style="margin: 10px 0; padding: 8px; background: #001a1a; border: 1px solid #0ff;">
+              <div style="font-family: var(--font-retro); font-size: 0.6rem; color: #0ff; margin-bottom: 6px;">IMPORT MATCH RESULTS (cepat)</div>
+              <textarea id="importMatchesTextarea" placeholder="Spain 3:2 England&#10;Germany 1:0 France&#10;Brazil 2:2 Argentina" rows="4" style="width: 100%; padding: 6px; background: #000; color: #0f0; border: 1px solid #555; font-family: var(--font-mono); font-size: 0.75rem; resize: vertical;"></textarea>
+              <div style="display: flex; gap: 8px; align-items: center; margin-top: 6px; flex-wrap: wrap;">
+                <button class="btn" id="btnImportMatches" style="flex: 1; min-width: 140px; background: #003333; border-color: #0ff; color: #0ff;"> IMPORT TO B1-B8</button>
+                <label style="font-size: 0.6rem; color: #aaa; display: flex; align-items: center; gap: 4px;"><input type="checkbox" id="importReplaceAll" /> Replace All (hapus B4-B8 jika hanya import 3)</label>
+                <button class="btn" id="btnClearImport" style="background: #111; border-color: #555; color: #888;">CLEAR</button>
+              </div>
+              <div id="importMatchesErrors" style="margin-top: 6px; font-family: var(--font-mono); font-size: 0.65rem; color: #ff5555; min-height: 16px;"></div>
+              <div style="font-size: 0.55rem; color: #888; margin-top: 4px;">Support format: <code>Spain 3:2 England</code>, <code>Spain3:2England</code>, <code>Spain 3 - 2 England</code> — paste beberapa baris sekaligus.</div>
+            </div>
+
+            <div class="match-grid" id="matchGridForm">
+              </div>
+            <div class="section-title">TOP GOALS</div>
+            <div class="top-goals-grid" id="topGoalsForm">
+              </div>
+          </div>
+
+          <div class="action-footer" id="homeActions">
+            <div class="filter-wrap" style="display: flex; gap: 10px; align-items: center; margin-bottom: 10px;">
+              <label for="minSimilarity" style="font-size: 0.8rem;">Min Similarity (%):</label>
+              <select id="minSimilarity" style="width: 70px; padding: 5px; font-family: 'Press Start 2P', monospace; font-size: 0.8rem; background: #000; color: #0f0; border: 1px solid #0f0;">
+                <option value="0">0</option>
+                <option value="25">25</option>
+                <option value="50">50</option>
+                <option value="75">75</option>
+                <option value="90">90</option>
+                <option value="95">95</option>
+                <option value="100">100</option>
+              </select>
+            </div>
+            <button class="btn btn-primary btn-large" id="btnRunMatch">CARI KECOCOKAN</button>
+            <button class="btn" id="btnPredict">PREDICT</button>
+            <button class="btn" id="btnClearForm">RESET FORM</button>
+          </div>
+        </div>
+      </div>
+
+      <section class="results-panel hidden" id="resultsPanel">
+        <div class="results-header">RESULT OUTPUT</div>
+        <div class="results-body" id="resultsOutput"></div>
+      </section>
+
+      <section class="results-panel hidden" id="predictPanel" style="margin-top: 10px;">
+        <div class="results-header">PREDICT OUTPUT</div>
+        <div class="results-body" id="predictOutput"></div>      </section>
+
+      <section class="game-screen" id="whatIfPanel" style="margin-top: 12px;">
+        <div class="schedule-tab">WHAT IF — Simulasi Skor Manual → Top Goals</div>
+        <div class="main-board">
+          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px;">
+            <div class="team-input-wrap" style="flex:1;min-width:150px;">
+              <input type="text" id="whatIfHome" placeholder="HOME (negara 57-fix)" autocomplete="off" />
+              <div class="suggestions-box hidden"></div>
+            </div>
+            <input type="number" id="whatIfHomeGoals" placeholder="Gol H" min="0" max="20" style="width:85px;padding:8px;background:#000;color:#0f0;border:1px solid #555;font-family:var(--font-mono);" />
+            <span style="color:#0ff;font-weight:bold;">:</span>
+            <input type="number" id="whatIfAwayGoals" placeholder="Gol A" min="0" max="20" style="width:85px;padding:8px;background:#000;color:#0f0;border:1px solid #555;font-family:var(--font-mono);" />
+            <div class="team-input-wrap" style="flex:1;min-width:150px;">
+              <input type="text" id="whatIfAway" placeholder="AWAY (negara 57-fix)" autocomplete="off" />
+              <div class="suggestions-box hidden"></div>
+            </div>
+            <button class="btn btn-primary" id="btnWhatIfRun" style="white-space:nowrap;">LIHAT TOP GOALS</button>
+            <button class="btn" id="btnWhatIfClear" title="Reset">RESET</button>
+          </div>
+          <div style="font-size:0.58rem;color:#888;margin-bottom:8px;line-height:1.4;">Masukkan <strong style="color:#0ff;">negara (57-fix) + skor manual</strong> → sistem alokasikan gol ke pemain pakai <code style="background:#111;padding:1px 4px;border:1px solid #0ff;color:#0ff;">LCGRng 1664525</code> replica Ghidra <code>FUN_0016e8d8 (div/mflo)</code> + <code>FUN_00216ef0 clock-seed</code>. <strong>Tidak pakai Math.random.</strong> Hanya pemain dari 2 negara itu, GK terfilter, weight-proportional (CF 84 / OMF 66 / SMF 52 / CMF 44 / DF 10-12). Deterministik: skor sama + negara sama = hasil sama.</div>
+          <div id="whatIfOutput" style="background:#0a0a0a;border:1px solid #333;padding:10px;min-height:44px;font-family:var(--font-mono);font-size:0.75rem;color:#aaa;">Isi HOME, AWAY & skor (0-20) lalu klik <strong style="color:#0f0;">LIHAT TOP GOALS</strong> — contoh: <em>Argentina 2 : 1 Wales</em> akan jawab <em>Tevez/Sorin/Davies/Riquelme/Crespo</em> sesuai weight & RNG proof.</div>
+        </div>
+      </section>
+
+      <section class="game-screen" id="tiktokSyncPanel" style="margin-top: 15px; border: 2px solid #0ff;">
+        <div class="schedule-tab" style="background:#003333;color:#0ff;">TIKTOK SAVE SYNC — .p2s / .pnach GENERATOR (100% DETERMINISTIK)</div>
+        <div class="main-board">
+          <div style="font-size:0.62rem;color:#ff0;background:#331100;border:1px solid #ff0;padding:6px;margin-bottom:10px;">Masukin <strong>nama negara + skor live</strong> di B1-B8 & Top Goals di atas, lalu Generate. Tidak perlu <code>Enable Cheats</code> lagi — cukup <code>Load State .p2s</code> 1 klik. Template: buat dulu <code>Konami Cup 24 teams 1/24 5★</code> lalu <code>Save State (.p2s)</code> di PCSX2 sebagai <code>template.p2s</code></div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px;">
+            <label class="btn" style="background:#002a00;border:1px solid #0f0;color:#0f0;cursor:pointer;padding:8px;">
+              📁 UPLOAD template.p2s
+              <input type="file" id="templateP2sInput" accept=".p2s,.bin,.gz,.ps2" style="display:none;" />
+            </label>
+            <span id="templateP2sName" style="font-size:0.65rem;color:#888;">Belum ada template — pakai fallback raw ( tetap bisa download pnach )</span>
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
+            <button class="btn btn-primary" id="btnGenerateP2s" style="flex:1;min-width:140px;background:#003333;border-color:#0ff;color:#0ff;">⬇ GENERATE .p2s (PATCHED)</button>
+            <button class="btn" id="btnGeneratePnach" style="flex:1;min-width:140px;background:#331a00;border-color:#ff0;color:#ff0;">⬇ GENERATE .pnach (9337F97)</button>
+            <button class="btn" id="btnDownloadTikTokJson" style="background:#111;border-color:#888;color:#aaa;">⬇ JSON (api/tiktok_live.json)</button>
+          </div>
+          <div id="tiktokSyncOutput" style="background:#0a0a0a;border:1px solid #333;padding:8px;min-height:40px;font-family:var(--font-mono);font-size:0.68rem;color:#aaa;">Isi B1-B8 (home/away) + skor (contoh 2:1) & Top Goals G1-G16 dulu, lalu upload <code>template.p2s</code> (opsional) dan klik GENERATE. File akan patch <code>00401000 goals[48][2]</code> & <code>00401800 top[24]</code> di RAM (<code>Ghidra TikTokHook 00400000</code>).</div>
+        </div>
+      </section>
+
+      <section class="game-screen" id="baganRngPanel" style="margin-top: 15px;">
+        <div class="schedule-tab">RNG BAGAN — SYNC TIKTOK LIVE</div>
+        <div class="main-board">
+          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px;">
+            <input type="text" id="baganSeedInput" placeholder="Seed TikTok Live (copy dari overlay, mis: LIVE123 atau 0xA1B2C3)" style="flex:1;min-width:220px;padding:8px;background:#000;color:#0ff;border:1px solid #0ff;font-family:var(--font-mono);" />
+            <button class="btn btn-primary" id="btnGenerateBagan">GENERATE BAGAN</button>
+            <button class="btn" id="btnSyncBaganFromPredict" title="Ambil 8 tim dari B1-B8">SYNC DARI B1-B8</button>
+            <button class="btn" id="btnCopyBaganLink" title="Copy link dengan seed untuk TikTok overlay">COPY LINK</button>
+          </div>
+          <div style="font-size:0.6rem;color:#888;margin-bottom:8px;">Seed sama → bracket sama di web & overlay TikTok. Ganti seed di TikTok live overlay & paste di sini. RNG: <code style="background:#111;padding:2px 4px;">LCG 1664525 Fisher-Yates</code> (sama dengan predictor). Via URL: <code>?tiktok_seed=LIVE123</code></div>
+          <div id="baganOutput" style="background:#0a0a0a;border:1px solid #333;padding:10px;min-height:40px;font-family:var(--font-mono);font-size:0.75rem;color:#aaa;">Isi B1-B8 dulu atau input seed lalu GENERATE BAGAN.</div>
+        </div>
+      </section>
+
+      <section class="game-screen" id="draftPanel" style="margin-top: 15px; border:2px solid #ff0;">
+        <div class="schedule-tab" style="background:#332200;color:#ff0;">DRAFT PICK — BAN (NO) di ATAS / YES di BAWAH + REKOMENDASI MELAWAN BANDAR</div>
+        <div class="main-board">
+          <div style="font-size:0.62rem;color:#ff0;background:#331100;border:1px solid #ff0;padding:6px;margin-bottom:8px;">
+            Cara pakai: ketik nama di <strong>NO</strong> (max 3) → autocomplete muncul seperti TOP GOALS → Enter. Ketik bandar di <strong>YES-BANDAR</strong> (cuma 1) → system rekom 1 lawan bandar agar kamu menang. Skor WE10 ★★★★★ sadis → 5-10 gol, bukan dummy.
+          </div>
+          <!-- ATAS: NO (BAN) max 3 -->
+          <div style="background:#1a0000;border:1px solid #f55;padding:8px;margin-bottom:10px;">
+            <div style="font-family:var(--font-retro);font-size:0.6rem;color:#f55;margin-bottom:6px;">🚫 ATAS — NO / BAN (max 3) — ketik untuk search</div>
+            <div class="team-input-wrap" style="display:flex;gap:6px;">
+              <div style="flex:1;position:relative;">
+                <input type="text" id="draftBanInput" placeholder="Ketik Naka → Nakamura muncul..." style="width:100%;padding:8px;background:#000;color:#fff;border:1px solid #f55;font-family:var(--font-mono);" autocomplete="off" />
+                <div class="suggestions-box hidden"></div>
+              </div>
+              <button class="btn" id="btnDraftAddBan" style="background:#330000;border:1px solid #f55;color:#f55;white-space:nowrap;">+ BAN</button>
+            </div>
+            <div id="draftBanList" style="min-height:28px;display:flex;flex-wrap:wrap;gap:4px;margin-top:6px;"></div>
+          </div>
+          <!-- BAWAH: YES (Bandar 1 + Kamu 1 + Rekom) -->
+          <div style="background:#000;border:2px solid #0ff;padding:8px;">
+            <div style="font-family:var(--font-retro);font-size:0.6rem;color:#0ff;margin-bottom:6px;">✅ BAWAH — YES (BANDAR 1 + KAMU 1) + REKOMENDASI MELAWAN BANDAR</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
+              <div class="team-input-wrap" style="background:#002a00;border:1px solid #0f0;padding:6px;">
+                <div style="font-size:0.55rem;color:#0f0;margin-bottom:4px;">🎯 BANDAR pilih (cuma 1)</div>
+                <div style="display:flex;gap:6px;">
+                  <div style="flex:1;position:relative;">
+                    <input type="text" id="draftBandarInput" placeholder="Bandar: Taka → Takahara" style="width:100%;padding:6px;background:#000;color:#fff;border:1px solid #0f0;font-family:var(--font-mono);" autocomplete="off" />
+                    <div class="suggestions-box hidden"></div>
+                  </div>
+                  <button class="btn" id="btnDraftAddBandar" style="background:#002a00;border:1px solid #0f0;color:#0f0;">SET</button>
+                </div>
+                <div id="draftBandarList" style="min-height:22px;display:flex;flex-wrap:wrap;gap:4px;margin-top:6px;"></div>
+              </div>
+              <div class="team-input-wrap" style="background:#332200;border:1px solid #ff0;padding:6px;">
+                <div style="font-size:0.55rem;color:#ff0;margin-bottom:4px;">👤 KAMU pilih (cuma 1, tidak boleh NO & tidak satu negara bandar)</div>
+                <div style="display:flex;gap:6px;">
+                  <div style="flex:1;position:relative;">
+                    <input type="text" id="draftYesInput" placeholder="Kamu: ketik untuk search..." style="width:100%;padding:6px;background:#000;color:#fff;border:1px solid #ff0;font-family:var(--font-mono);" autocomplete="off" />
+                    <div class="suggestions-box hidden"></div>
+                  </div>
+                  <button class="btn" id="btnDraftAddYes" style="background:#332200;border:1px solid #ff0;color:#ff0;">SET</button>
+                </div>
+                <div id="draftYesList" style="min-height:22px;display:flex;flex-wrap:wrap;gap:4px;margin-top:6px;"></div>
+              </div>
+            </div>
+            <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:8px;">
+              <button class="btn btn-primary" id="btnDraftRecommend" style="background:#003333;border:1px solid #0ff;color:#0ff;font-weight:bold;flex:1;">🤖 REKOMENDASI MELAWAN BANDAR (1 pemain — adaptif)</button>
+              <button class="btn" id="btnDraftClear" style="background:#111;border:1px solid #888;color:#aaa;">CLEAR ALL</button>
+            </div>
+            <div id="draftRecommendOutput" style="background:#0a0a0a;border:1px solid #333;padding:8px;min-height:40px;font-size:0.68rem;color:#aaa;">Isi <strong>B1-B8</strong> dulu → isi <strong>NO (atas)</strong> max 3 & <strong>BANDAR (bawah kiri)</strong> 1 → klik <strong>REKOMENDASI</strong> → system kasih 1 pemain terbaik untuk melawan bandar (dari B1-B8, bukan dummy, beda negara bandar, pick% tinggi, finishing tinggi, skor sadis ★5).</div>
+          </div>
+          <div style="font-size:0.55rem;color:#888;margin-top:6px;">Pool hanya dari negara di <strong>B1-B8</strong> (WE10 roster 57). Validasi: tidak di NO, beda negara bandar. Rekom adaptif 1 (gap besar) / 1 lawan bandar. Skor sadis 5-10 gol via Xorshift Ghidra + difficulty 5×1.22.</div>
+        </div>
+      </section>
+
+      <section class="game-screen" style="margin-top: 15px;">
+        <div class="schedule-tab">GITHUB LOCAL-AGENT & AUTONOMOUS MEMORY</div>
+        <div class="main-board">
+          <!-- Token & Connection Row -->
+          <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px;">
+            <input type="password" id="ghTokenInput" placeholder="GitHub Personal Access Token (scope: repo)" style="flex: 1; min-width: 250px; padding: 8px; background: #000; color: #fff; border: 1px solid #555; font-family: var(--font-mono);" />
+            <button class="btn btn-primary" id="btnConnectGH">CONNECT GITHUB</button>
+          </div>
+          <!-- Repo Selector -->
+          <div style="margin-bottom: 10px;">
+            <select id="ghRepoSelect" disabled style="width: 100%; padding: 8px; background: #111; color: #0ff; border: 1px solid #555; font-family: var(--font-mono);">
+              <option value="">Pilih Repositori...</option>
+            </select>
+          </div>
+          <!-- Resume Banner Slot -->
+          <div id="resumeBanner" style="display: none;"></div>
+          <!-- Prompt Area -->
+          <div style="margin-bottom: 10px;">
+            <textarea id="agentPromptInput" placeholder="Tuliskan fitur/perubahan yang diinginkan. Contoh: 'Tambahkan validasi input form dan export CSV di folder utils'..." rows="3" style="width: 100%; padding: 8px; background: #000; color: #fff; border: 1px solid #555; font-family: var(--font-mono); font-size: 0.85rem;"></textarea>
+          </div>
+          <button class="btn btn-primary" id="btnRunAgentTask" disabled style="width: 100%;">RUN AGENT & AUTO CREATE PR</button>
+          <!-- Real-time Agent Status Log -->
+          <div id="agentStatusOutput" style="margin-top: 10px; padding: 10px; background: #0a0a0a; border: 1px solid #333; font-family: var(--font-mono); font-size: 0.75rem; min-height: 40px; color: #aaa;">
+            Status: Menunggu instruksi...
+          </div>
+        </div>
+      </section>
+
+      <section class="ai-qa-panel" id="aiQAPanel">
+        <!-- SIDEBAR: CHAT & ERROR LOG MANAGER -->
+        <div id="aiSidebar">
+          <!-- Sidebar Navigation Tabs -->
+          <div class="sidebar-tab-header">
+            <button class="sidebar-tab-btn active" id="tabBtnChats">CHATS</button>
+            <button class="sidebar-tab-btn" id="tabBtnLogs">
+              LOGS <span id="errorLogsBadge" class="error-badge-count" style="display: none;">0</span>
+            </button>
+          </div>
+
+          <!-- TAB 1: SESSIONS -->
+          <div id="sidebarChatsTab" class="sidebar-tab-content">
+            <div style="padding: 10px; border-bottom: 1px solid #333;">
+               <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                  <button class="btn btn-primary" id="btnNewChat" style="flex-grow: 1; margin-right: 5px;">+ New Chat</button>
+                  <button class="btn" id="btnCloseSidebar" style="display: none; padding: 5px 10px; background: #550000; color: #ff5555; border-color: #ff0000;">X</button>
+               </div>
+               <input type="text" id="chatSearchInput" placeholder="Search chats..." style="width: 100%; padding: 5px; font-family: var(--font-retro); font-size: 0.6rem; background: #222; color: #fff; border: 1px solid #555;">
+               <div style="display: flex; gap: 5px; margin-top: 5px;">
+                 <button class="btn btn-menu" id="btnExportChats" style="flex-grow: 1; font-size: 0.5rem; padding: 4px;">Export</button>
+                 <button class="btn btn-menu" id="btnImportChats" style="flex-grow: 1; font-size: 0.5rem; padding: 4px;">Import</button>
+                 <button class="btn btn-menu" id="btnClearChats" style="flex-grow: 1; font-size: 0.5rem; padding: 4px; color: #f55;">Clear</button>
+               </div>
+            </div>
+            <div id="chatSessionList" style="flex-grow: 1; overflow-y: auto; padding: 5px;">
+               <!-- Sessions injected here -->
+            </div>
+          </div>
+
+          <!-- TAB 2: DEDICATED ERROR LOGS -->
+          <div id="sidebarLogsTab" class="sidebar-tab-content" style="display: none;">
+            <div style="padding: 10px; border-bottom: 1px solid #333; display: flex; justify-content: space-between; align-items: center;">
+              <span style="font-family: var(--font-retro); font-size: 0.65rem; color: #ff5555;">SYSTEM ERROR LOGS</span>
+              <button class="btn btn-menu" id="btnClearErrorLogs" style="font-size: 0.5rem; padding: 3px 6px; color: #ff5555;">Clear Logs</button>
+            </div>
+            <div id="errorLogsList" class="error-logs-container">
+              <!-- Error entries injected here -->
+            </div>
+          </div>
+        </div>
+
+        <!-- MAIN CHAT AREA -->
+        <div id="aiMainChat">
+          <!-- Chat Header -->
+          <div style="padding: 10px; border-bottom: 1px solid #555; display: flex; justify-content: space-between; align-items: center; background: #1a1a1a;">
+             <div style="display: flex; align-items: center; gap: 10px;">
+                <button id="btnToggleSidebar">☰</button>
+                <div id="currentChatTitle" style="font-family: var(--font-retro); font-size: 0.8rem; font-weight: bold; color: #fff;">New Chat</div>
+                <div id="offlineIndicator" style="display: none; background: #f55; color: #fff; padding: 2px 5px; font-family: var(--font-retro); font-size: 0.5rem; border-radius: 3px; margin-left: 10px;">OFFLINE</div>
+             </div>
+             <div>
+                <button class="btn btn-menu" id="btnViewBranches" style="font-size: 0.6rem; padding: 4px 8px; display: none;">View Branches</button>
+             </div>
+          </div>
+
+          <!-- Messages Window -->
+          <div id="aiChatWindow" style="flex-grow: 1; overflow-y: auto; padding: 15px; font-family: var(--font-mono); font-size: 0.85rem; display: flex; flex-direction: column; gap: 15px; background: var(--bg-dark);">
+            <div style="color: #aaa; text-align: center; font-size: 0.7rem; margin-top: 20px;">[SYSTEM] AI Assistant Ready. ChatGPT Professional V4 Experience.</div>
+          </div>
+
+          <!-- Attachment Preview -->
+          <div id="aiChatAttachmentPreview" style="display: none; background: #333; padding: 5px 10px; font-size: 0.7rem; color: #fff; border-top: 1px solid #555; align-items: center; justify-content: space-between;"></div>
+
+          <!-- Input Area -->
+          <div style="padding: 10px; background: #1a1a1a; border-top: 1px solid #555; display: flex; flex-direction: column; gap: 5px;">
+            <div class="chat-input-wrapper">
+              <!-- Model Selector -->
+              <select id="aiChatModel" class="chat-mode-select">
+                <!-- Primary Chain -->
+                <option value="gpt-5.6-sol">gpt-5.6-sol</option>
+                <option value="gpt-5.6-terra">gpt-5.6-terra</option>
+                <option value="gpt-5.6-luna">gpt-5.6-luna</option>
+                <!-- Pool Models -->
+                <option value="glm-5.3">glm-5.3</option>
+                <option value="glm-5.2">glm-5.2</option>
+                <option value="kimi-k3">kimi-k3</option>
+                <option value="deepseek-v4-pro">deepseek-v4-pro</option>
+                <option value="deepseek-v4-flash">deepseek-v4-flash</option>
+                <option value="claude-opus-5-thinking">claude-opus-5-thinking</option>
+                <option value="claude-sonnet-5-thinking">claude-sonnet-5-thinking</option>
+                <!-- Auto Fallback -->
+                <option value="auto" selected>⚡ Random / Fallback</option>
+              </select>
+              <!-- Mode Selector -->
+              <select id="aiChatMode" class="chat-mode-select">
+                <option value="normal">Normal</option>
+                <option value="coding">Coding</option>
+                <option value="bola">Bola</option>
+              </select>
+              <textarea id="aiChatInput" class="chat-textarea" placeholder="Message AI..." rows="1" autocomplete="off"></textarea>
+              <div class="chat-action-buttons">
+                <button class="btn" id="btnUploadAiChat" title="Attach File">📎</button>
+                <button class="btn btn-primary" id="btnSendAiChat">SEND</button>
+                <button class="btn" id="btnStopAiChat" style="display: none; background-color: #550000; color: #ff5555; border-color: #ff0000;">STOP</button>
+              </div>
+
+              <!-- Upload Menu -->
+              <div id="aiChatUploadMenu" style="display: none; position: absolute; bottom: 100%; right: 75px; margin-bottom: 5px; background: #222; border: 1px solid #555; padding: 5px; flex-direction: column; gap: 5px; z-index: 100;">
+                 <button class="btn btn-menu" data-type="image" style="font-size: 0.6rem; padding: 5px;">Image</button>
+                 <button class="btn btn-menu" data-type="audio" style="font-size: 0.6rem; padding: 5px;">Audio</button>
+                 <button class="btn btn-menu" data-type="video" style="font-size: 0.6rem; padding: 5px;">Video</button>
+                 <button class="btn btn-menu" data-type="document" style="font-size: 0.6rem; padding: 5px;">Document</button>
+              </div>
+            </div>
+            <div style="display: flex; justify-content: space-between; align-items: center; padding: 0 5px;">
+              <div style="font-size: 0.55rem; color: #888; font-family: var(--font-retro);">
+                Shift+Enter for newline.
+              </div>
+              <div id="contextBudgetIndicator" style="font-size: 0.55rem; color: #888; font-family: var(--font-mono);">
+                Est. Context: 0 / 8192 tokens
+              </div>
+            </div>
+          </div>
+          <input type="file" id="aiChatFile" style="display: none;" />
+          <input type="file" id="importChatsFile" class="hidden" accept=".json" />
+        </div>
+      </section>
+
+    </main>
+
+    <div class="modal-overlay hidden" id="databaseModal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2>MEMORY DATABASE</h2>
+          <button class="close-modal" id="btnCloseModal">X</button>
+        </div>
+        <div class="modal-body" id="databaseModalList">
+          </div>
+      </div>
+    </div>
+
+    <input type="file" id="jsonImportField" class="hidden" accept=".json" />
+
+
+    <div class="modal-overlay hidden" id="confirmModal">
+      <div class="modal-content" style="max-width: 400px; text-align: center;">
+        <div class="modal-header" style="justify-content: center; background-color: #550000;">
+          <h2>KONFIRMASI</h2>
+        </div>
+        <div class="modal-body" style="padding: 20px;">
+          <p id="confirmMessage" style="font-size: 0.9rem; margin-bottom: 20px;"></p>
+          <div style="display: flex; gap: 10px; justify-content: center;">
+            <button class="btn btn-primary" id="btnConfirmYes" style="width: 100px;">Yes</button>
+            <button class="btn" id="btnConfirmNo" style="width: 100px; background-color: #333; color: #fff; border-color: #555;">No</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script type="module" src="src/js/main.js"></script>
+  </body>
+</html>
