@@ -1164,6 +1164,62 @@ body {
   min-width: 420px;
 }
 
+/* ==========================================================================
+   DRAFT PICK — MOBILE FIX (tidak responsif → responsif)
+   ========================================================================== */
+.draft-row {
+  display: flex;
+  gap: 6px;
+  align-items: stretch;
+}
+.draft-row input {
+  font-size: 16px !important; /* iOS: >=16px cegah zoom paksa yang bikin input “mati” */
+  -webkit-appearance: none;
+  appearance: none;
+  touch-action: manipulation;
+}
+.draft-yes-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+#draftPanel .suggestions-box {
+  z-index: 3000;
+  max-height: 220px;
+  -webkit-overflow-scrolling: touch;
+}
+#draftPanel input {
+  min-height: 44px; /* tap target Apple HIG */
+}
+@media (max-width: 650px) {
+  .draft-yes-grid {
+    grid-template-columns: 1fr;
+  }
+  .draft-row {
+    flex-direction: row; /* tetap row, input flex 1 */
+  }
+  #draftPanel .main-board {
+    padding: 8px;
+    overflow: visible; /* biar suggestions tidak kepotong */
+  }
+  #draftPanel input {
+    font-size: 16px !important;
+    padding: 10px 8px !important;
+  }
+  #draftPanel .suggestions-box {
+    max-height: 240px;
+    left: 0;
+    right: 0;
+    z-index: 4000;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.9);
+    -webkit-overflow-scrolling: touch;
+  }
+  #draftPanel .team-input-wrap,
+  #draftPanel .draft-row > div {
+    overflow: visible;
+  }
+}
 @media (max-width: 600px) {
   .section-title { font-size: 0.55rem; }
   .btn-large { min-width: 100%; }

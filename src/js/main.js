@@ -272,9 +272,9 @@ document.addEventListener("DOMContentLoaded", async () => {
            predictOutput.innerHTML = "";
           UIRenderer.renderPredictionDashboard(predictions, predictOutput);
 
-           // BUG FIX: setelah PREDICT, bagan negara skor & top goals tidak muncul
-           // → tampilkan PREVIEW BAGAN PREDIKSI (skor predicted) & TOP GOALS predicted langsung di predict panel
-           //   tanpa harus APPLY dulu, tapi tetap kasih tombol APPLY untuk persist ke B1-B8/G1-G16.
+           // FIX BUG: setelah PREDICT, bagan & top goals harus langsung terlihat
+           // → render PREVIEW BAGAN ke baganOutput + PREVIEW TOP GOALS ke predict panel
+           //   tanpa harus APPLY dulu, tapi tetap kasih tombol APPLY untuk persist.
            try {
              const validForBagan = predictions.filter(p=> !p.error && p.prediction);
              if(validForBagan.length){
@@ -318,12 +318,15 @@ document.addEventListener("DOMContentLoaded", async () => {
                  </div>
                  <div style="font-size:0.55rem;color:#888;margin-top:6px;">Preview ini pakai skor & top scorer dari prediksi 1x (stabilitas lihat kotak biru 200x di bawah). Klik <strong>APPLY SCORES / TOP GOALS</strong> untuk isi B1-B8 & G1-G16 permanen → bagan utama akan otomatis update.</div>
                `;
-               predictOutput.insertBefore(previewWrap, predictOutput.children[1] || null);
-               // Juga trigger re-render bagan utama dengan preview scores (non-persist) → update baganOutput dengan data prediksi
+               // Insert preview as second child (after dashboard header)
+               if(predictOutput.children.length >= 2) predictOutput.insertBefore(previewWrap, predictOutput.children[1]);
+               else predictOutput.appendChild(previewWrap);
+
+               // ===== RENDER BAGAN PREVIEW LANGSUNG KE #baganOutput (NON-PERSIST) =====
+               // User complaint: bagan kosong setelah predict → sekarang bagan langsung keisi skor prediksi
                try{
                  const baganOut = document.getElementById("baganOutput");
                  if(baganOut){
-                   // Build virtual matchRows with predicted scores for bagan
                    const isEd = StateManager.activeMemoryId !== null;
                    const mem = isEd ? StateManager.db.memories[StateManager.activeMemoryId] : null;
                    const ds = isEd && mem?.games?.[StateManager.activeGameIndex] ? mem.games[StateManager.activeGameIndex] : StateManager.homeQuery;
@@ -338,14 +341,39 @@ document.addEventListener("DOMContentLoaded", async () => {
                      };
                    }).filter(Boolean);
                    if(virtualRows.length){
-                     const baganRes = BaganRngService.generateBracketFromMatches(virtualRows, document.getElementById("baganSeedInput")?.value?.trim() || "");
+                     const seedRaw = document.getElementById("baganSeedInput")?.value?.trim() || BaganRngService.getUrlSeed() || "";
+                     const baganRes = BaganRngService.generateBracketFromMatches(virtualRows, seedRaw);
                      if(!baganRes.error){
-                       // Render quick bagan preview tambahan di bawah previewWrap? cukup update indicator
-                       previewWrap.innerHTML += `<div style="margin-top:6px;background:#001a33;border:1px solid #0ff;padding:6px;text-align:center;font-size:0.6rem;color:#0ff;">✅ Bagan preview tersedia — lihat <strong>RNG BAGAN</strong> di bawah atau klik SYNC DARI B1-B8 setelah APPLY untuk hasil identik TikTok.</div>`;
+                       // Directly render bagan preview (reuse renderBagan logic but with virtual data)
+                       // Build HTML similar to renderBagan() but flagged as preview
+                       const scheduleRows = baganRes.rounds[0].matches.map((m) => {
+                         const hName = m.home ? `${m.home.flag ? m.home.flag + " " : ""}${m.home.name}` : "-";
+                         const aName = m.away ? `${m.away.flag ? m.away.flag + " " : ""}${m.away.name}` : "-";
+                         const sc = m.score ? `${m.score.home}:${m.score.away}` : "-";
+                         const winName = m.winner ? m.winner.name : "";
+                         return `<tr><td style="padding:4px 6px;font-family:var(--font-retro);font-size:0.55rem;color:#0ff;text-align:center;">${Security.escapeHtml(m.label)}</td><td style="padding:4px 6px;text-align:right;">${Security.escapeHtml(hName)}</td><td style="padding:4px 6px;text-align:center;font-weight:bold;color:${sc === "-" ? "#888" : "#0f0"};">${Security.escapeHtml(sc)}</td><td style="padding:4px 6px;">${Security.escapeHtml(aName)}</td><td style="padding:4px 6px;font-size:0.6rem;color:${winName ? "#ff0" : "#888"};">${winName ? "→ " + Security.escapeHtml(winName) : "-"}</td></tr>`;
+                       }).join("");
+                       const esc = (s)=> Security.escapeHtml(String(s??""));
+                       const baganMatchCardPreview = (m)=>{
+                         const homeName = m.home ? `${m.home.flag ? m.home.flag + " " : ""}${m.home.name}` : "BYE";
+                         const awayName = m.away ? `${m.away.flag ? m.away.flag + " " : ""}${m.away.name}` : "BYE";
+                         const homeWin = m.winner && m.home && m.winner.code === m.home.code && m.winner.name === m.home.name;
+                         const awayWin = m.winner && m.away && m.winner.code === m.away.code && m.winner.name === m.away.name;
+                         const scoreTxt = m.score ? `${m.score.home}:${m.score.away}` : "-";
+                         const row = (name, isWin)=> `<div style="display:flex;justify-content:space-between;gap:6px;padding:3px 6px;background:${isWin ? "#0a2a0a" : "transparent"};border-left:3px solid ${isWin ? "#0f0" : "transparent"};font-weight:${isWin ? "bold" : "normal"};color:${isWin ? "#0f0" : "#ddd"};"><span>${esc(name)}</span>${isWin ? "<span>✓</span>" : ""}</div>`;
+                         return `<div style="background:#0d0d0d;border:1px solid ${homeWin || awayWin ? "#0f0" : "#0ff"};min-width:170px;margin-bottom:6px;"><div style="background:#111;font-family:var(--font-retro);font-size:0.5rem;color:#0ff;padding:3px 6px;border-bottom:1px solid #333;display:flex;justify-content:space-between;"><span>${esc(m.label)}</span><span style="color:#ff0;">${esc(scoreTxt)}</span></div>${row(homeName, homeWin)}${row(awayName, awayWin)}${m.reason && m.reason !== "Menunggu hasil" ? `<div style="font-size:0.5rem;color:#888;padding:2px 6px;border-top:1px solid #222;">${esc(m.reason)}</div>` : ""}</div>`;
+                       };
+                       const roundsHtml = baganRes.rounds.map(r=> `<div style="display:flex;flex-direction:column;justify-content:space-around;min-width:180px;"><div style="font-family:var(--font-retro);font-size:0.55rem;color:#ff0;text-align:center;border:1px solid #ff0;background:#221a00;padding:3px;margin-bottom:6px;">${esc(r.name)}</div>${r.matches.map(baganMatchCardPreview).join("")}</div>`).join(`<div style="display:flex;align-items:center;color:#0ff;font-size:1rem;">▶</div>`);
+                       const championHtml = baganRes.champion ? `<div style="margin-top:8px;background:#001a00;border:2px solid #0f0;padding:8px;text-align:center;"><div style="font-family:var(--font-retro);font-size:0.6rem;color:#0f0;">🏆 JUARA (preview prediksi)</div><div style="font-size:1.1rem;font-weight:bold;color:#fff;margin-top:4px;">${esc(baganRes.champion.flag || "")} ${esc(baganRes.champion.name)}</div></div>` : `<div style="margin-top:8px;background:#1a1a1a;border:1px solid #555;padding:6px;text-align:center;font-size:0.65rem;color:#888;">Juara belum bisa ditentukan — lengkapi nama HOME &amp; AWAY di B1-B8.</div>`;
+                       const participantsHtml = baganRes.participants.map(p=> `<span style="background:#002a2a;border:1px solid #0ff;padding:2px 5px;margin:2px;display:inline-block;font-size:0.6rem;">${esc(p.flag || "")} ${esc(p.name)}</span>`).join("");
+                       baganOut.innerHTML = `<div style="background:#001a33;border:2px solid #0f0;padding:6px;margin-bottom:8px;text-align:center;font-family:var(--font-retro);font-size:0.6rem;color:#0f0;">✨ PREVIEW BAGAN — otomatis terisi skor prediksi (tanpa APPLY). Klik APPLY untuk permanen.</div>` + `<div style="margin-bottom:8px;"><strong style="color:#0ff;">Seed TikTok:</strong> <code style="background:#000;padding:2px 6px;border:1px solid #0ff;color:#0ff;">${esc(baganRes.tiktokSeedRaw || "(default)")}</code> → <span style="color:#888;">${esc(baganRes.source)}</span> → <code style="background:#001a00;padding:2px 6px;border:1px solid #0f0;color:#0f0;">0x${baganRes.seed.toString(16).toUpperCase()}</code></div>` + `<div style="font-family:var(--font-retro);font-size:0.6rem;color:#ff0;margin-bottom:4px;">📋 TABEL SCHEDULE ROUND 1 (B1-B8) — PREVIEW PREDIKSI</div><div style="overflow-x:auto;background:#000;border:1px solid #333;"><table class="result-table" style="font-size:0.65rem;width:100%;"><thead><tr><th>B#</th><th style="text-align:right;">HOME</th><th>SKOR</th><th>AWAY</th><th>LOLOS</th></tr></thead><tbody>${scheduleRows}</tbody></table></div>` + `<div style="font-family:var(--font-retro);font-size:0.6rem;color:#ff0;margin:10px 0 4px;">🌳 BAGAN KNOCKOUT (R1 → R2 → SEMI → FINAL) — PREVIEW</div><div style="display:flex;gap:6px;overflow-x:auto;align-items:stretch;padding:6px;background:#000;border:1px solid #333;">${roundsHtml}</div>${championHtml}` + `<div style="margin-top:8px;background:#001a1a;border:1px solid #0ff;padding:6px;font-size:0.65rem;"><strong>Peserta (${baganRes.participants.length}):</strong> ${participantsHtml}<div style="margin-top:4px;color:#888;">Preview dari skor prediksi 1x — untuk 200x rata-rata lihat kotak biru di predict. Seed sama = bracket sama 100%.</div></div>`;
+                       // Highlight bagan panel visibility
+                       try{ document.getElementById("baganRngPanel")?.scrollIntoView({behavior:"smooth", block:"nearest"}); }catch(_){}
+                       previewWrap.innerHTML += `<div style="margin-top:6px;background:#001a33;border:2px solid #0f0;padding:6px;text-align:center;font-size:0.6rem;color:#0f0;">✅ Bagan utama di bawah sudah terisi <strong>preview skor prediksi</strong> — scroll ke <strong>RNG BAGAN</strong>. Klik APPLY untuk simpan permanen ke B1-B8.</div>`;
                      }
                    }
                  }
-               }catch(_){}
+               }catch(e){ console.warn("[baganPreviewRender] error", e); }
              }
            }catch(e){ console.warn("[predictBaganPreview] error", e); }
 
@@ -1548,7 +1576,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       const ds = isEd && mem?.games?.[StateManager.activeGameIndex] ? mem.games[StateManager.activeGameIndex] : StateManager.homeQuery;
       return (ds?.matches || []).slice(0,8);
     }
-    // Autocomplete draft HANYA dari B1-B8 pool (bukan 57 dummy) — searchDraftPlayers
+    // Autocomplete draft HANYA dari B1-B8 pool (bukan 57 dummy) — searchDraftPlayers — MOBILE FIX
     async function attachDraftAutocomplete(){
       const { searchDraftPlayers } = await import("./services/draftRecommender.js");
       const attach = (inputEl, btnId)=>{
@@ -1556,39 +1584,62 @@ document.addEventListener("DOMContentLoaded", async () => {
         const wrap = inputEl.parentElement;
         const box = wrap?.querySelector(".suggestions-box");
         if(!box) return;
+        let isBoxClicked = false;
+        // Prevent blur-hidden when tapping suggestion on mobile (touchstart/mousedown)
+        box.addEventListener("mousedown", (e)=>{ isBoxClicked = true; e.preventDefault(); });
+        box.addEventListener("touchstart", (e)=>{ isBoxClicked = true; /* don't preventDefault to allow tap */ }, {passive: true});
         const show = ()=>{
           const q = (inputEl.value||"").trim();
           const matches = getActiveMatchesForDraft();
           if(DraftService.isB18Empty(matches)){
-            box.innerHTML = `<div style="padding:6px;color:#ff0;font-size:0.6rem;">Isi B1-B8 dulu — pool kosong</div>`;
+            box.innerHTML = `<div style="padding:10px;color:#ff0;font-size:0.68rem;">Isi B1-B8 dulu — pool kosong</div>`;
             box.classList.remove("hidden");
             return;
           }
           if(!q){ box.classList.add("hidden"); box.innerHTML=""; return; }
           const results = searchDraftPlayers(q, matches);
-          if(!results.length){ box.innerHTML=`<div style="padding:6px;color:#888;font-size:0.6rem;">Tidak ada dari B1-B8</div>`; box.classList.remove("hidden"); return; }
+          if(!results.length){ box.innerHTML=`<div style="padding:10px;color:#888;font-size:0.68rem;">Tidak ada dari B1-B8 untuk "${Security.escapeHtml(q)}"</div>`; box.classList.remove("hidden"); return; }
           box.innerHTML="";
           results.forEach(p=>{
             const div=document.createElement("div");
             div.className="suggestion-line";
+            // larger tap target for mobile
+            div.style.cssText = "padding:12px 10px;min-height:44px;display:flex;align-items:center;";
             div.textContent=`${p.flag} ${p.name} [${p.pos}] • ${p.teamName}`;
-            div.addEventListener("click", (e)=>{
-              e.stopPropagation();
+            const pick = ()=>{
               inputEl.value=p.name;
               box.classList.add("hidden");
               box.innerHTML="";
+              // focus back to input then trigger add
+              try{ inputEl.focus(); }catch(_){}
               document.getElementById(btnId)?.click();
-            });
+            };
+            div.addEventListener("click", (e)=>{ e.stopPropagation(); pick(); });
+            div.addEventListener("touchend", (e)=>{ e.stopPropagation(); e.preventDefault(); pick(); }, {passive:false});
             box.appendChild(div);
           });
           box.classList.remove("hidden");
         };
-        const hideSoon=()=> setTimeout(()=>{ box.classList.add("hidden"); },180);
+        const hideSoon=()=> setTimeout(()=>{
+          if(isBoxClicked){ isBoxClicked = false; return; }
+          box.classList.add("hidden");
+        },220);
+        // Make input truly focusable on mobile: ensure touch doesn't steal focus
+        inputEl.setAttribute("inputmode","search");
+        inputEl.style.fontSize = "16px";
         inputEl.addEventListener("input", show);
         inputEl.addEventListener("focus", show);
+        // Click/touch on input also shows
+        inputEl.addEventListener("click", show);
+        inputEl.addEventListener("touchstart", ()=>{ setTimeout(show, 50); }, {passive:true});
         inputEl.addEventListener("blur", hideSoon);
         inputEl.addEventListener("keydown", (e)=>{
           if(e.key==="Enter"){ e.preventDefault(); document.getElementById(btnId)?.click(); box.classList.add("hidden");}
+          if(e.key==="Escape"){ box.classList.add("hidden"); }
+        });
+        // Click outside to hide
+        document.addEventListener("click", (e)=>{
+          if(!wrap.contains(e.target) && !box.contains(e.target)) box.classList.add("hidden");
         });
       };
       attach(banInput, "btnDraftAddBan");

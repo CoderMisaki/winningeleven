@@ -105,6 +105,62 @@
         </div>
       </div>
 
+      <!-- DRAFT PICK DIPOISISI DI ATAS BULK (sesuai request mobile: di atas bulk & bagan) -->
+      <section class="game-screen" id="draftPanel" style="margin-top: 15px; border:2px solid #ff0;">
+        <div class="schedule-tab" style="background:#332200;color:#ff0;">DRAFT PICK — BAN (NO) di ATAS / YES di BAWAH + REKOMENDASI MELAWAN BANDAR</div>
+        <div class="main-board">
+          <div style="font-size:0.62rem;color:#ff0;background:#331100;border:1px solid #ff0;padding:6px;margin-bottom:8px;">
+            Cara pakai: ketik nama di <strong>NO</strong> (max 3) → autocomplete muncul seperti TOP GOALS → Enter. Ketik bandar di <strong>YES-BANDAR</strong> (cuma 1) → system rekom 1 lawan bandar agar kamu menang. Skor WE10 ★★★★★ sadis → 5-10 gol, bukan dummy.
+          </div>
+          <!-- ATAS: NO (BAN) max 3 -->
+          <div style="background:#1a0000;border:1px solid #f55;padding:8px;margin-bottom:10px;">
+            <div style="font-family:var(--font-retro);font-size:0.6rem;color:#f55;margin-bottom:6px;">🚫 ATAS — NO / BAN (max 3) — ketik untuk search</div>
+            <div class="draft-row">
+              <div style="flex:1;position:relative;min-width:0;">
+                <input type="text" id="draftBanInput" placeholder="Ketik Naka → Nakamura muncul..." style="width:100%;padding:10px;background:#000;color:#fff;border:1px solid #f55;font-family:var(--font-mono);font-size:16px;" autocomplete="off" inputmode="search" enterkeyhint="search" />
+                <div class="suggestions-box hidden"></div>
+              </div>
+              <button class="btn" id="btnDraftAddBan" style="background:#330000;border:1px solid #f55;color:#f55;white-space:nowrap;min-width:70px;">+ BAN</button>
+            </div>
+            <div id="draftBanList" style="min-height:28px;display:flex;flex-wrap:wrap;gap:4px;margin-top:6px;"></div>
+          </div>
+          <!-- BAWAH: YES (Bandar 1 + Kamu 1 + Rekom) -->
+          <div style="background:#000;border:2px solid #0ff;padding:8px;">
+            <div style="font-family:var(--font-retro);font-size:0.6rem;color:#0ff;margin-bottom:6px;">✅ BAWAH — YES (BANDAR 1 + KAMU 1) + REKOMENDASI MELAWAN BANDAR</div>
+            <div class="draft-yes-grid">
+              <div class="team-input-wrap" style="background:#002a00;border:1px solid #0f0;padding:6px;">
+                <div style="font-size:0.55rem;color:#0f0;margin-bottom:4px;">🎯 BANDAR pilih (cuma 1)</div>
+                <div class="draft-row">
+                  <div style="flex:1;position:relative;min-width:0;">
+                    <input type="text" id="draftBandarInput" placeholder="Bandar: Taka → Takahara" style="width:100%;padding:10px;background:#000;color:#fff;border:1px solid #0f0;font-family:var(--font-mono);font-size:16px;" autocomplete="off" inputmode="search" enterkeyhint="done" />
+                    <div class="suggestions-box hidden"></div>
+                  </div>
+                  <button class="btn" id="btnDraftAddBandar" style="background:#002a00;border:1px solid #0f0;color:#0f0;min-width:55px;">SET</button>
+                </div>
+                <div id="draftBandarList" style="min-height:22px;display:flex;flex-wrap:wrap;gap:4px;margin-top:6px;"></div>
+              </div>
+              <div class="team-input-wrap" style="background:#332200;border:1px solid #ff0;padding:6px;">
+                <div style="font-size:0.55rem;color:#ff0;margin-bottom:4px;">👤 KAMU pilih (cuma 1, tidak boleh NO & tidak satu negara bandar)</div>
+                <div class="draft-row">
+                  <div style="flex:1;position:relative;min-width:0;">
+                    <input type="text" id="draftYesInput" placeholder="Kamu: ketik untuk search..." style="width:100%;padding:10px;background:#000;color:#fff;border:1px solid #ff0;font-family:var(--font-mono);font-size:16px;" autocomplete="off" inputmode="search" enterkeyhint="done" />
+                    <div class="suggestions-box hidden"></div>
+                  </div>
+                  <button class="btn" id="btnDraftAddYes" style="background:#332200;border:1px solid #ff0;color:#ff0;min-width:55px;">SET</button>
+                </div>
+                <div id="draftYesList" style="min-height:22px;display:flex;flex-wrap:wrap;gap:4px;margin-top:6px;"></div>
+              </div>
+            </div>
+            <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:8px;margin-top:8px;">
+              <button class="btn btn-primary" id="btnDraftRecommend" style="background:#003333;border:1px solid #0ff;color:#0ff;font-weight:bold;flex:1;min-height:44px;">🤖 REKOMENDASI MELAWAN BANDAR (1 pemain — adaptif)</button>
+              <button class="btn" id="btnDraftClear" style="background:#111;border:1px solid #888;color:#aaa;min-height:44px;">CLEAR ALL</button>
+            </div>
+            <div id="draftRecommendOutput" style="background:#0a0a0a;border:1px solid #333;padding:8px;min-height:40px;font-size:0.68rem;color:#aaa;">Isi <strong>B1-B8</strong> dulu → isi <strong>NO (atas)</strong> max 3 & <strong>BANDAR (bawah kiri)</strong> 1 → klik <strong>REKOMENDASI</strong> → system kasih 1 pemain terbaik untuk melawan bandar (dari B1-B8, bukan dummy, beda negara bandar, pick% tinggi, finishing tinggi, skor sadis ★5).</div>
+          </div>
+          <div style="font-size:0.55rem;color:#888;margin-top:6px;">Pool hanya dari negara di <strong>B1-B8</strong> (WE10 roster 57). Validasi: tidak di NO, beda negara bandar. Rekom adaptif 1 (gap besar) / 1 lawan bandar. Skor sadis 5-10 gol via Xorshift Ghidra + difficulty 5×1.22.</div>
+        </div>
+      </section>
+
       <section class="results-panel hidden" id="resultsPanel">
         <div class="results-header">RESULT OUTPUT</div>
         <div class="results-body" id="resultsOutput"></div>
@@ -168,61 +224,6 @@
           </div>
           <div style="font-size:0.6rem;color:#888;margin-bottom:8px;">Seed sama → bracket sama di web & overlay TikTok. Ganti seed di TikTok live overlay & paste di sini. RNG: <code style="background:#111;padding:2px 4px;">LCG 1664525 Fisher-Yates</code> (sama dengan predictor). Via URL: <code>?tiktok_seed=LIVE123</code></div>
           <div id="baganOutput" style="background:#0a0a0a;border:1px solid #333;padding:10px;min-height:40px;font-family:var(--font-mono);font-size:0.75rem;color:#aaa;">Isi B1-B8 dulu atau input seed lalu GENERATE BAGAN.</div>
-        </div>
-      </section>
-
-      <section class="game-screen" id="draftPanel" style="margin-top: 15px; border:2px solid #ff0;">
-        <div class="schedule-tab" style="background:#332200;color:#ff0;">DRAFT PICK — BAN (NO) di ATAS / YES di BAWAH + REKOMENDASI MELAWAN BANDAR</div>
-        <div class="main-board">
-          <div style="font-size:0.62rem;color:#ff0;background:#331100;border:1px solid #ff0;padding:6px;margin-bottom:8px;">
-            Cara pakai: ketik nama di <strong>NO</strong> (max 3) → autocomplete muncul seperti TOP GOALS → Enter. Ketik bandar di <strong>YES-BANDAR</strong> (cuma 1) → system rekom 1 lawan bandar agar kamu menang. Skor WE10 ★★★★★ sadis → 5-10 gol, bukan dummy.
-          </div>
-          <!-- ATAS: NO (BAN) max 3 -->
-          <div style="background:#1a0000;border:1px solid #f55;padding:8px;margin-bottom:10px;">
-            <div style="font-family:var(--font-retro);font-size:0.6rem;color:#f55;margin-bottom:6px;">🚫 ATAS — NO / BAN (max 3) — ketik untuk search</div>
-            <div class="team-input-wrap" style="display:flex;gap:6px;">
-              <div style="flex:1;position:relative;">
-                <input type="text" id="draftBanInput" placeholder="Ketik Naka → Nakamura muncul..." style="width:100%;padding:8px;background:#000;color:#fff;border:1px solid #f55;font-family:var(--font-mono);" autocomplete="off" />
-                <div class="suggestions-box hidden"></div>
-              </div>
-              <button class="btn" id="btnDraftAddBan" style="background:#330000;border:1px solid #f55;color:#f55;white-space:nowrap;">+ BAN</button>
-            </div>
-            <div id="draftBanList" style="min-height:28px;display:flex;flex-wrap:wrap;gap:4px;margin-top:6px;"></div>
-          </div>
-          <!-- BAWAH: YES (Bandar 1 + Kamu 1 + Rekom) -->
-          <div style="background:#000;border:2px solid #0ff;padding:8px;">
-            <div style="font-family:var(--font-retro);font-size:0.6rem;color:#0ff;margin-bottom:6px;">✅ BAWAH — YES (BANDAR 1 + KAMU 1) + REKOMENDASI MELAWAN BANDAR</div>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
-              <div class="team-input-wrap" style="background:#002a00;border:1px solid #0f0;padding:6px;">
-                <div style="font-size:0.55rem;color:#0f0;margin-bottom:4px;">🎯 BANDAR pilih (cuma 1)</div>
-                <div style="display:flex;gap:6px;">
-                  <div style="flex:1;position:relative;">
-                    <input type="text" id="draftBandarInput" placeholder="Bandar: Taka → Takahara" style="width:100%;padding:6px;background:#000;color:#fff;border:1px solid #0f0;font-family:var(--font-mono);" autocomplete="off" />
-                    <div class="suggestions-box hidden"></div>
-                  </div>
-                  <button class="btn" id="btnDraftAddBandar" style="background:#002a00;border:1px solid #0f0;color:#0f0;">SET</button>
-                </div>
-                <div id="draftBandarList" style="min-height:22px;display:flex;flex-wrap:wrap;gap:4px;margin-top:6px;"></div>
-              </div>
-              <div class="team-input-wrap" style="background:#332200;border:1px solid #ff0;padding:6px;">
-                <div style="font-size:0.55rem;color:#ff0;margin-bottom:4px;">👤 KAMU pilih (cuma 1, tidak boleh NO & tidak satu negara bandar)</div>
-                <div style="display:flex;gap:6px;">
-                  <div style="flex:1;position:relative;">
-                    <input type="text" id="draftYesInput" placeholder="Kamu: ketik untuk search..." style="width:100%;padding:6px;background:#000;color:#fff;border:1px solid #ff0;font-family:var(--font-mono);" autocomplete="off" />
-                    <div class="suggestions-box hidden"></div>
-                  </div>
-                  <button class="btn" id="btnDraftAddYes" style="background:#332200;border:1px solid #ff0;color:#ff0;">SET</button>
-                </div>
-                <div id="draftYesList" style="min-height:22px;display:flex;flex-wrap:wrap;gap:4px;margin-top:6px;"></div>
-              </div>
-            </div>
-            <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:8px;">
-              <button class="btn btn-primary" id="btnDraftRecommend" style="background:#003333;border:1px solid #0ff;color:#0ff;font-weight:bold;flex:1;">🤖 REKOMENDASI MELAWAN BANDAR (1 pemain — adaptif)</button>
-              <button class="btn" id="btnDraftClear" style="background:#111;border:1px solid #888;color:#aaa;">CLEAR ALL</button>
-            </div>
-            <div id="draftRecommendOutput" style="background:#0a0a0a;border:1px solid #333;padding:8px;min-height:40px;font-size:0.68rem;color:#aaa;">Isi <strong>B1-B8</strong> dulu → isi <strong>NO (atas)</strong> max 3 & <strong>BANDAR (bawah kiri)</strong> 1 → klik <strong>REKOMENDASI</strong> → system kasih 1 pemain terbaik untuk melawan bandar (dari B1-B8, bukan dummy, beda negara bandar, pick% tinggi, finishing tinggi, skor sadis ★5).</div>
-          </div>
-          <div style="font-size:0.55rem;color:#888;margin-top:6px;">Pool hanya dari negara di <strong>B1-B8</strong> (WE10 roster 57). Validasi: tidak di NO, beda negara bandar. Rekom adaptif 1 (gap besar) / 1 lawan bandar. Skor sadis 5-10 gol via Xorshift Ghidra + difficulty 5×1.22.</div>
         </div>
       </section>
 
