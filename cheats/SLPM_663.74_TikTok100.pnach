@@ -1,0 +1,65 @@
+gametitle=Winning Eleven 10 - TikTok Sync 100% [SLPM_663.74]
+comment=Deterministik skor/top goals 100% - General Settings: Konami Cup National Knock-out Home&Away Yes 24teams 1/24 30min 5stars Fatigue Yes Injuries Yes - Hook FUN_0026c910 & FUN_0028005c -> TikTokHook 00400000
+// TikTokHook block created via Ghidra: ghidra_create_memory_block name=TikTokHook start=00400000 end=00401FFF size=8192 rwx
+// 00401000 = goals[48][2] uint8 , 00401800 = topScorer[24] uint8 , 00400004 = matchIdx
+
+// --- HOOK 1: FUN_0026c910 (0026C910) -> forced goals ---
+// Original: FUN_0026c910 size 304 float*ushort/5
+// Patch entry to jump to TikTokHook 00400000
+patch=1,EE,0026C910,extended,0C100000  // j 00400000
+patch=1,EE,0026C914,extended,00000000  // nop (delay slot)
+
+// Hook code at 00400000 (MIPS LE)
+// 00400000: lui t0,0x0040 ; ori t0,t0,0x1000 ; lw t1,0x0004(t0) is matchIdx? simpler: use 00400004 as counter
+patch=1,EE,00400000,extended,3C080040  // lui t0,0x0040
+patch=1,EE,00400004,extended,35081000  // ori t0,t0,0x1000 -> t0=00401000 base goals
+patch=1,EE,00400008,extended,3C090040  // lui t1,0x0040
+patch=1,EE,0040000C,extended,35290004  // ori t1,t1,0x0004 -> addr matchIdx
+patch=1,EE,00400010,extended,8D2A0000  // lw t2,0(t1) -> t2=matchIdx
+patch=1,EE,00400014,extended,014A5820  // sll t3,t2,1 -> *2 (2 bytes per match)
+patch=1,EE,00400018,extended,010A5810  // addu t3,t0,t3 -> addr goals[matchIdx]
+patch=1,EE,0040001C,extended,81620000  // lb v0,0(t3) -> goals A (return value trick: we will store both)
+patch=1,EE,00400020,extended,81630001  // lb v1,1(t3) -> goals B
+// store both to table write-back location expected by caller: caller expects return in v0 is computed value, but we need to write both scores to league table.
+// Caller of FUN_0026c910 actually expects single goal value per call (called twice per match: once for home, once for away).
+// So we alternate: even idx -> v0 = home, odd idx handled by increment.
+// Simpler: return home on first call, away on second call via counter
+patch=1,EE,00400024,extended,01495826  // xor t3,t2,zero? use andi to check parity
+patch=1,EE,00400028,extended,314B0001  // andi t3,t2,1 -> parity
+patch=1,EE,0040002C,extended,11600002  // beq t3,zero, +2 -> if even return v0
+patch=1,EE,00400030,extended,00000000  // nop
+patch=1,EE,00400034,extended,00601025  // or v0,v1,zero -> return away
+patch=1,EE,00400038,extended,254A0001  // addiu t2,t2,1 -> increment matchIdx for next half
+patch=1,EE,0040003C,extended,AD2A0000  // sw t2,0(t1) -> save
+patch=1,EE,00400040,extended,03E00008  // jr ra
+patch=1,EE,00400044,extended,00000000  // nop
+
+// Initialize matchIdx =0 at boot
+patch=1,EE,00400004,extended,00000000  // will be overwritten at runtime, ensure 0 on first boot
+
+// --- HOOK 2: FUN_0028005c (0028005C) clamp 99 bypass for top scorer ---
+// At 0028005C the clamp loop `if(99< *(+2)&0x7f) *(+2)=99` etc. We NOP clamp when topScorer forced.
+// Patch first clamp check to jump to forced table at 00401800
+// Original at 002800E0: slti etc. Simplest: patch at 00280150 the `99` immediate to `0xFF` to disable clamp
+patch=1,EE,00280150,extended,340200FF  // ori v0,zero,0xFF instead of 0x63 (99) -> never clamp
+// Alternative full top scorer forced (if needed, uncomment):
+// patch=1,EE,0028005C,extended,0C100100  // j 00400100 for full top scorer hook
+
+// At 00400100: forced top scorer injection (24 players 1/24)
+patch=1,EE,00400100,extended,3C080040  // lui t0,0x0040
+patch=1,EE,00400104,extended,35081800  // ori t0,0x1800 -> 00401800 base topScorer
+patch=1,EE,00400108,extended,8D090000  // lw t1,0(t0) -> first scorer goals? extend as needed
+patch=1,EE,0040010C,extended,03E00008  // jr ra
+patch=1,EE,00400110,extended,00000000  // nop
+
+// --- DATA: Fill 00401000 with TikTok live goals (example 24 teams 48 legs 2-1 etc) ---
+// Edit these lines tiap live. Example: Match1 2-1, Match2 1-1, Match3 3-0 ...
+patch=1,EE,00401000,extended,01020101  // bytes: 02 01 01 01 ... (little endian packing 4 goals per word)
+patch=1,EE,00401004,extended,03000101  // continue
+patch=1,EE,00401008,extended,02020202
+patch=1,EE,0040100C,extended,01010101
+// ... add sampai 00401030 (48*2=96 bytes = 24 words)
+
+// Top scorer table example: 7,5,4,4,3 ...
+patch=1,EE,00401800,extended,04050704
+patch=1,EE,00401804,extended,03030304

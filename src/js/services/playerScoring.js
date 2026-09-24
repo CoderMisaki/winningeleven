@@ -1,0 +1,672 @@
+/**
+ * ============================================================================
+ *  PLAYER SCORING ENGINE  (player-level, event-based)
+ * ============================================================================
+ *
+ *  ARCHITEKTUR (sesuai target audit)
+ *
+ *    team strength → chance volume → chance quality → eligible player selection
+ *    → player attributes → opponent defense → shot probability → goal/miss
+ *
+ *  Prinsip yang dijaga:
+ *   - TIDAK ADA daftar bintang manual / STAR_OVERRIDES.
+ *   - TIDAK ADA fallback nama dummy ("BRA_FW9"). Tim tanpa roster → tidak
+ *     menghasilkan scorer sama sekali (engine menandai `available: false`).
+ *   - Skor TIDAK ditentukan dulu lalu nama dipilih: gol lahir murni dari event
+ *     chance → penembak terpilih (role + atribut + stamina + form) → shot probability → goal/miss.
+ *   - Posisi hanya menentukan role eligibility/taktis, bukan jaminan gol.
+ *   - Finishing, attack, positioning, technique, shotPower, stamina dan kondisi/form
+ *     memengaruhi probabilitas secara proporsional (tanpa satu atribut mendominasi).
+ *   - Total expected goals level-pemain konsisten secara matematis dengan team-level xG.
+ *   - Semua RNG deterministik: Ghidra-synced Xorshift32 FUN_0014d320 @003591d8 (118 call-sites)
+ *     untuk reproducibility + sinkron ROM. Skor sadis difficulty ★★★★★ (5) → 5-10 gol possible.
+ * ============================================================================
+ */
+
+import { getTeamPlayers, getTeamAbilityIndices } from "../data/playerAttributes.js";
+import { teamRatings } from "../data/teamRatings.js";
+import { getObservedStats, computeFormMultiplier, DATASET_PRIOR, MIN_CALIBRATION_MATCHES } from "./scoringDataset.js";
+
+// ---------------------------------------------------------------------------
+// 0. WE10 GHIDRA-SYNC RNG — Xorshift32 (FUN_0014d320 @0x0014d320)
+//    State @003591d8, algorithm: tmp = s ^ (s<<17); s = tmp ^ (tmp>>15);
+//    Output scaling: (float)s * 2.3283064e-10 * bound -> clamp <bound
+//    Verified via Ghidra MCP 2026-08-23 (hasil_analisis_rng.txt: 118 call-sites,
+//    decompile + disassemble FUN_0014d320, seed init FUN_0014d470 @003591d8=1).
+//    Predictor sebelumnya pakai NR-LCG 1664525 sebagai placeholder deterministik;
+//    sekarang Xorshift adalah default sinkron Ghidra. LCG dipertahankan sebagai
+//    RNG Xorshift32 menjadi satu-satunya generator produksi.
+// ---------------------------------------------------------------------------
+export class ScoringRng {
+  // Ghidra-synced Xorshift32 — default untuk semua simulasi
+  constructor(seed) { this.state = (seed >>> 0) || 0x00000001; if (this.state === 0) this.state = 1; }
+  next() {
+    // FUN_0014d320 core: uVar1 = DAT_003591d8 ^ DAT_003591d8<<0x11; DAT = uVar1 ^ uVar1>>0xf
+    let a = this.state;
+    let tmp = (a ^ (a << 17)) >>> 0;
+    this.state = (tmp ^ (tmp >>> 15)) >>> 0;
+    if (this.state === 0) this.state = 1;
+    return this.state;
+  }
+  nextFloat() { return this.next() * 2.3283064e-10; } // * 1/2^32 exactly as Ghidra mul.S f1,f0
+  range(n) {
+    if (n <= 0) return 0;
+    const v = this.nextFloat() * n;
+    let r = v | 0;
+    if (r >= n) r = n - 1;
+    return r & 0xffff;
+  }
+  // Bounded call identical to FUN_0014d320(param): returns [0,param-1]
+  bounded(bound) {
+    const v = bound & 0xffff;
+    if (v === 0) return 0;
+    const f = this.nextFloat() * v;
+    let r = f | 0;
+    if (r >= v) r = (v - 1) & 0xffff;
+    return r & 0xffff;
+  }
+  choice(arr) { return arr[this.range(arr.length)]; }
+}
+
+export function scoringHashSeed(str) {
+  let h = 0x9e3779b9;
+  const s = String(str);
+  for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 0x85ebca6b) >>> 0;
+  return h >>> 0;
+}
+
+export const PLAYER_SCORING_MODEL_VERSION = "player-attribute v7.2-xorshift (event-based)";
+
+// ---------------------------------------------------------------------------
+// 1. KONFIGURASI MODEL
+// ---------------------------------------------------------------------------
+export const PLAYER_SCORING_CONFIG = Object.freeze({
+  MODEL_VERSION: PLAYER_SCORING_MODEL_VERSION,
+  RNG_LABEL: "Xorshift32 deterministik (implementasi model)",
+
+  // --- Chance generation (TEAM MODEL) — difficulty ★★★★★ sadis 5-10 gol ---
+  CHANCES: {
+    BASE: 6.5,          // naik dari 5.8 → lebih banyak chance di bintang 5
+    MID_FACTOR: 2.2,    // ± oleh dominasi midfield
+    EDGE_FACTOR: 0.45,  // ± oleh (attackIndex - defenseIndex)/10, lebih sensitif
+    JITTER: 4,          // rng.range(4) → variasi lebih lebar
+    MIN: 4,
+    MAX: 20
+  },
+
+  // --- Kualitas chance (0..1): makin tinggi makin mudah jadi gol ---
+  QUALITY: { BASE: 0.52, EDGE: 0.10, SPREAD: 0.22, MIN: 0.06, MAX: 0.96 },
+
+  // --- Bobot peran posisi dalam pemilihan penembak (model taktis — role eligibility) ---
+  ROLE_WEIGHT: {
+    CF: 1.00, ST: 0.96, WG: 0.88, WF: 0.88,
+    OMF: 0.65, AMF: 0.65,
+    SMF: 0.42, CMF: 0.35, DMF: 0.22,
+    WB: 0.16, SB: 0.13, CB: 0.10, SW: 0.08,
+    GK: 0.00            // GK tidak pernah menembak (own-goal/penalti GK di luar scope model)
+  },
+
+  // --- Shot probability (PLAYER MODEL) — sadis bintang 5 ---
+  SHOT: {
+    BASE: 0.38,            // naik 0.31→0.38 → base lebih sadis
+    FINISHING: 0.0042,     // per poin di atas 65, lebih tajam
+    ATTACK: 0.0028,
+    POSITIONING: 0.0028,
+    TECHNIQUE: 0.0024,
+    POWER: 0.0019,
+    STAMINA: 0.0012,
+    QUALITY: 0.42,         // per unit kualitas chance
+    OPP_DEFENSE: 0.0050,   // defense lawan kurang menahan (sadis)
+    FORM: 0.20,
+    MIN: 0.03,
+    MAX: 0.92               // clamp max 92% → memungkinkan hujan gol
+  },
+  DIFFICULTY_5_MULTIPLIER: 1.35, // FUN_0026c910 Difficulty ★★★★★ factor — sadis 5-10 gol
+
+  MONTE_CARLO_SIMS: 400,   // probs/markets/xG + statistik pemain
+  TOP_SCORERS_LIMIT: 8,
+  MAX_GOALS_PER_TEAM: 20
+});
+
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+
+// ---------------------------------------------------------------------------
+// 2. KALIBRASI BERBASIS DATASET (shrinkage Bayesian, bukan tuning manual per pemain)
+// ---------------------------------------------------------------------------
+let _calibrationCache = { key: null, value: null };
+let _referenceConversion = null;
+let _profileRev = 1;
+const _profileCache = new Map();
+
+export function invalidateScoringCaches() {
+  _calibrationCache = { key: null, value: null };
+  _referenceConversion = null;
+  _profileCache.clear();
+}
+
+export function bumpPlayerScoringRevision() {
+  _profileRev++;
+  invalidateScoringCaches();
+}
+
+/**
+ * Target skala dari data observasi (rata-rata gol per tim + rasio home).
+ * Menggunakan Bayesian shrinkage: transisi mulus dari prior (DATASET_PRIOR)
+ * ke observasi seiring bertambahnya data pertandingan user.
+ */
+export function getCalibration(exclude = null) {
+  const stats = getObservedStats(exclude);
+  const key = `${stats.excludeKey}|${stats.datasetKey}`;
+  if (_calibrationCache.key === key && _calibrationCache.value) return _calibrationCache.value;
+
+  const N = stats.matches;
+  const K_CALIB = 16;
+  const target = N > 0 && stats.avgGoalsPerTeam > 0
+    ? (N * stats.avgGoalsPerTeam + K_CALIB * DATASET_PRIOR.avgGoalsPerTeam) / (N + K_CALIB)
+    : DATASET_PRIOR.avgGoalsPerTeam;
+  const homeShare = N > 0 && stats.homeShare > 0
+    ? (N * stats.homeShare + K_CALIB * DATASET_PRIOR.homeShare) / (N + K_CALIB)
+    : DATASET_PRIOR.homeShare;
+  const reference = getReferenceGoalsPerTeam();
+  // sadis: izinkan scale hingga 2.2 untuk Bintang 5 hujan gol 5-10
+  const value = {
+    scale: clamp(target / (reference || target), 0.55, 2.20),
+    targetGoalsPerTeam: target,
+    homeShare: clamp(homeShare, 0.40, 0.60),
+    sampleSize: N > 0 ? N : DATASET_PRIOR.sampleSize,
+    calibratedFromData: N > 0,
+    source: N > 0 ? `observed: ${N} matches (Bayesian shrinkage K=${K_CALIB})` : DATASET_PRIOR.source,
+    referenceConversionPerTeam: reference
+  };
+  _calibrationCache = { key, value };
+  return value;
+}
+
+/**
+ * Baseline model pada scale = 1, diukur dengan mini-MC pada dua tim referensi.
+ * Dipakai untuk men-scale conversion supaya rata-rata gol simulasi menyamai
+ * rata-rata data observasi. Deterministik & di-cache.
+ */
+export function getReferenceGoalsPerTeam() {
+  if (_referenceConversion != null) return _referenceConversion;
+  try {
+    const sims = 160;
+    let goals = 0;
+    const home = getTeamScoringProfile("BRA", { formEnabled: false });
+    const away = getTeamScoringProfile("ARG", { formEnabled: false });
+    for (let i = 0; i < sims; i++) {
+      const rng = new ScoringRng((0x00c0ffee ^ Math.imul(i + 1, 0x9e3779b9)) >>> 0);
+      const sim = simulateProfiles(home, away, rng, { scale: 1, homeFactor: 1, awayFactor: 1, includeEvents: false });
+      goals += sim.homeGoals + sim.awayGoals;
+    }
+    _referenceConversion = goals / (sims * 2) || null;
+  } catch (_) {
+    _referenceConversion = null;
+  }
+  return _referenceConversion;
+}
+
+// ---------------------------------------------------------------------------
+// 3. PROFIL TIM (cached — tidak dihitung ulang per iterasi Monte Carlo)
+// ---------------------------------------------------------------------------
+function roleWeightFor(pos) {
+  const key = String(pos || "").toUpperCase();
+  const w = PLAYER_SCORING_CONFIG.ROLE_WEIGHT[key];
+  if (w != null) return w;
+  if (key === "FW") return 0.95;
+  if (key === "MF") return 0.32;
+  if (key === "DF") return 0.10;
+  return 0.30;
+}
+
+/** Keterlibatan pemain dalam serangan (tanpa form) — dasar share prior. */
+function involvementOf(p) {
+  return 0.35 * (p.attack || 60) + 0.35 * (p.positioning || 60) + 0.15 * (p.technique || 60) + 0.15 * (p.speed || 60);
+}
+
+function selectionWeightOf(player, entry, formMultiplier = 1) {
+  const staminaFactor = 0.82 + 0.18 * ((player.stamina || 60) / 99);
+  const involvementFactor = 0.40 + 0.60 * (entry.involvement / 100);
+  return entry.roleWeight * involvementFactor * staminaFactor * formMultiplier;
+}
+
+/**
+ * Profil scoring satu tim: daftar pemain + form, indeks attack/defense,
+ * dan baseline midfield. Cache key: kode|exclude|formEnabled|revisi.
+ * TIDAK ada pemain dummy: tim tanpa roster → available:false, players: [].
+ */
+export function getTeamScoringProfile(code, opts = {}) {
+  const team = String(code || "").toUpperCase();
+  const exclude = opts.exclude || null;
+  const formEnabled = opts.formEnabled !== false;
+  const stats = getObservedStats(exclude);
+  const key = `${team}|${stats.excludeKey}|${stats.datasetKey}|${formEnabled ? 1 : 0}|${_profileRev}`;
+  const cached = _profileCache.get(key);
+  if (cached) return cached;
+
+  const rawPlayers = getTeamPlayers(team);
+  if (!rawPlayers.length) {
+    const empty = {
+      code: team, available: false, players: [], attackIndex: 60, defenseIndex: 60,
+      mid: 0.5, rating: null, formApplied: formEnabled, observedSampleMatches: stats.matches
+    };
+    _profileCache.set(key, empty);
+    return empty;
+  }
+
+  const indices = getTeamAbilityIndices(team);
+  const invalidPosition = rawPlayers.find((player) => !player.pos || !(String(player.pos).toUpperCase() in PLAYER_SCORING_CONFIG.ROLE_WEIGHT));
+  if (invalidPosition) throw new Error(`Posisi pemain tidak valid di ${team}: ${invalidPosition.name}`);
+  const rating = teamRatings[team];
+  if (!rating) throw new Error(`Rating tim tidak tersedia untuk ${team}`);
+  const mid = clamp((rating.midfield - 65) / 30, 0, 1);
+
+  const entries = rawPlayers.map((p, idx) => ({
+    index: idx,
+    player: p,
+    name: p.name,
+    pos: p.pos,
+    involvement: involvementOf(p),
+    roleWeight: roleWeightFor(p.pos)
+  }));
+
+  // 1) bobot statis (tanpa form) → share prior untuk shrinkage
+  const rawWeights = entries.map((e) => selectionWeightOf(e.player, e, 1));
+  const totalRaw = rawWeights.reduce((s, w) => s + w, 0) || 1;
+  entries.forEach((e, i) => { e.staticShare = rawWeights[i] / totalRaw; });
+
+  // 2) form level-pemain dari data historis (shrinkage, dibatasi)
+  entries.forEach((e) => {
+    const form = formEnabled
+      ? computeFormMultiplier({ code: team, playerName: e.name, priorShare: e.staticShare, stats })
+      : { multiplier: 1, source: "disabled", observedGoals: 0, teamGoals: 0, apps: 0 };
+    e.form = form;
+    e.formMultiplier = clamp(form.multiplier, 0.5, 2.0);
+  });
+
+  const weights = entries.map((e) => selectionWeightOf(e.player, e, e.formMultiplier));
+  const totalWeight = weights.reduce((s, w) => s + w, 0) || 1;
+  entries.forEach((e, i) => {
+    e.selectionWeight = weights[i];
+    e.selectionProbability = weights[i] / totalWeight;
+  });
+
+  const profile = {
+    code: team,
+    available: true,
+    players: entries,
+    attackIndex: indices.attackIndex,
+    defenseIndex: indices.defenseIndex,
+    mid,
+    rating,
+    formApplied: formEnabled,
+    observedSampleMatches: stats.matches,
+    formSamplePlayers: entries.filter((e) => e.form?.observedGoals > 0).length,
+    topSelection: [...entries].sort((a, b) => b.selectionProbability - a.selectionProbability)[0]?.name || null
+  };
+  if (_profileCache.size > 300) _profileCache.clear();
+  _profileCache.set(key, profile);
+  return profile;
+}
+
+// ---------------------------------------------------------------------------
+// 4. MODEL PROBABILITAS
+// ---------------------------------------------------------------------------
+/** Jumlah chance satu tim (TEAM MODEL: kekuatan tim → banyaknya chance). */
+export function generateChances(attackProfile, defenseProfile, rng, midDiffNorm = 0) {
+  const cfg = PLAYER_SCORING_CONFIG.CHANCES;
+  const edge = (attackProfile.attackIndex - defenseProfile.defenseIndex) / 10;
+  const base = cfg.BASE + cfg.MID_FACTOR * midDiffNorm + cfg.EDGE_FACTOR * edge;
+  return clamp(Math.round(base + rng.range(cfg.JITTER)), cfg.MIN, cfg.MAX);
+}
+
+/** Kualitas satu chance (0..1). */
+export function drawChanceQuality(rng, edge = 0) {
+  const cfg = PLAYER_SCORING_CONFIG.QUALITY;
+  const spread = (rng.nextFloat() + rng.nextFloat() - 1) * cfg.SPREAD;
+  return clamp(cfg.BASE + cfg.EDGE * edge + spread, cfg.MIN, cfg.MAX);
+}
+
+/** Probabilitas gol untuk SATU pemain pada SATU chance (proporsional per atribut). */
+export function shotProbability(player, { quality = 0.5, oppDefenseIndex = 65, formMultiplier = 1, scale = 1 } = {}) {
+  const cfg = PLAYER_SCORING_CONFIG.SHOT;
+  let p = cfg.BASE;
+  p += cfg.FINISHING * ((player.finishing ?? 60) - 65);
+  p += (cfg.ATTACK ?? 0.0024) * ((player.attack ?? 60) - 65);
+  p += cfg.POSITIONING * ((player.positioning ?? 60) - 65);
+  p += cfg.TECHNIQUE * ((player.technique ?? 60) - 65);
+  p += (cfg.POWER ?? 0.0016) * ((player.shotPower ?? 70) - 70);
+  p += (cfg.STAMINA ?? 0.0010) * ((player.stamina ?? 70) - 70);
+  p += cfg.QUALITY * (quality - 0.5);
+  p -= cfg.OPP_DEFENSE * (oppDefenseIndex - 65);
+  p += cfg.FORM * (formMultiplier - 1);
+  p *= scale;
+  return clamp(p, cfg.MIN, cfg.MAX);
+}
+
+/**
+ * Pilih penembak untuk satu chance (roulette deterministik).
+ * Posisi memengaruhi lewat ROLE_WEIGHT; atribut lewat involvement + stamina;
+ * form dari data historis; kualitas chance sedikit menggeser ke positioning.
+ */
+export function selectAttackingPlayer(profile, quality, rng) {
+  // GK DIKELUARKAN dari pool penembak: model ini hanya mensimulasikan peluang
+  // open-play/set-piece pemain outfield. Tanpa filter ini, roleWeight GK yang
+  // sangat kecil masih bisa terpilih sesekali (mis. 1 chance per 400 sim) dan
+  // gol itu tidak akan pernah muncul di daftar scorer UI (GK difilter) sehingga
+  // skor dan daftar pencetak gol jadi tidak konsisten.
+  const entries = profile.players.filter((e) => String(e.pos).toUpperCase() !== "GK" && (e.roleWeight ?? 0) > 0);
+  if (!entries.length) return null;
+  const qualityTilt = clamp((quality - 0.5) * 0.5, -0.25, 0.25);
+  let total = 0;
+  for (const e of entries) {
+    const tilt = 1 + (((e.player.positioning ?? 60) - 65) / 100) * qualityTilt * 4;
+    e._pickWeight = e.selectionWeight * Math.max(0.2, tilt);
+    total += e._pickWeight;
+  }
+  if (total <= 0) return entries[0];
+  let r = rng.nextFloat() * total;
+  for (const e of entries) {
+    if (r < e._pickWeight) return e;
+    r -= e._pickWeight;
+  }
+  return entries[entries.length - 1];
+}
+
+// ---------------------------------------------------------------------------
+// 5. MATCH ENGINE — simulasi berbasis event
+// ---------------------------------------------------------------------------
+export function buildMatchContext(homeCode, awayCode, opts = {}) {
+  const home = getTeamScoringProfile(homeCode, opts);
+  const away = getTeamScoringProfile(awayCode, opts);
+  const calibration = getCalibration(opts.exclude || null);
+  const scale = opts.scale != null ? opts.scale : calibration.scale;
+  const homeFactor = clamp((2 * calibration.homeShare), 0.94, 1.06); // 1.024 pada data 51.2%
+  const diffMul = PLAYER_SCORING_CONFIG.DIFFICULTY_5_MULTIPLIER || 1.22; // FUN_0026c910 Difficulty ★★★★★ /5
+  // Skala konversi per sisi: kalibrasi dataset × faktor tim (form tim/H2H/context
+  // dari model tim di predictor.js). Hanya memengaruhi PELUANG GOL tim. Difficulty 5 → hujan gol.
+  return {
+    home, away, calibration,
+    scale,
+    homeFactor,
+    homeScale: clamp((opts.homeScale != null ? opts.homeScale : 1) * scale * diffMul, 0.35, 3.0),
+    awayScale: clamp((opts.awayScale != null ? opts.awayScale : 1) * scale * diffMul, 0.35, 3.0)
+  };
+}
+
+function simulateProfiles(home, away, rng, { scale = 1, homeFactor = 1, awayFactor = 1, includeEvents = true, minHomeChances = 0, minAwayChances = 0 } = {}) {
+  const midDiff = (home.mid || 0.5) - (away.mid || 0.5);
+  const generatedHomeChances = home.available ? generateChances(home, away, rng, midDiff) : 0;
+  const generatedAwayChances = away.available ? generateChances(away, home, rng, -midDiff) : 0;
+  const homeChances = home.available
+    ? Math.min(PLAYER_SCORING_CONFIG.CHANCES.MAX, Math.max(generatedHomeChances, minHomeChances))
+    : 0;
+  const awayChances = away.available
+    ? Math.min(PLAYER_SCORING_CONFIG.CHANCES.MAX, Math.max(generatedAwayChances, minAwayChances))
+    : 0;
+
+  const events = [];
+  const runSide = (attackProfile, defenseProfile, chances, side, factor) => {
+    let goals = 0;
+    for (let i = 0; i < chances; i++) {
+      const edge = (attackProfile.attackIndex - defenseProfile.defenseIndex) / 10;
+      const quality = drawChanceQuality(rng, edge);
+      const entry = selectAttackingPlayer(attackProfile, quality, rng);
+      if (!entry) break;
+      const p = shotProbability(entry.player, {
+        quality,
+        oppDefenseIndex: defenseProfile.defenseIndex,
+        formMultiplier: entry.formMultiplier,
+        scale: factor
+      });
+      const scored = rng.nextFloat() < p;
+      if (scored) goals++;
+      if (includeEvents) {
+        events.push({
+          teamCode: attackProfile.code,
+          side,
+          playerIndex: entry.index,
+          playerName: entry.name,
+          pos: entry.pos,
+          quality: Number(quality.toFixed(3)),
+          pGoal: Number(p.toFixed(4)),
+          scored,
+          formMultiplier: Number(entry.formMultiplier.toFixed(3)),
+          selectionProbability: Number(entry.selectionProbability.toFixed(4))
+        });
+      }
+    }
+    return goals;
+  };
+
+  const homeGoals = runSide(home, away, homeChances, "home", homeFactor * scale);
+  const awayGoals = runSide(away, home, awayChances, "away", awayFactor * scale);
+
+  return {
+    homeGoals: Math.min(PLAYER_SCORING_CONFIG.MAX_GOALS_PER_TEAM, homeGoals),
+    awayGoals: Math.min(PLAYER_SCORING_CONFIG.MAX_GOALS_PER_TEAM, awayGoals),
+    homeChances,
+    awayChances,
+    midDiff,
+    events,
+    homeProfile: home,
+    awayProfile: away
+  };
+}
+
+/**
+ * Simulasi satu pertandingan PENUH (mode bebas): skor DAN pencetak gol lahir
+ * dari event yang sama. Ini jalur produksi (predict & bulk).
+ */
+export function simulateMatch(homeCode, awayCode, opts = {}) {
+  const rng = opts.rng || new ScoringRng(opts.seed != null ? opts.seed : 0x5eed1234);
+  const ctx = buildMatchContext(homeCode, awayCode, opts);
+  const sim = simulateProfiles(ctx.home, ctx.away, rng, {
+    scale: 1,
+    homeFactor: ctx.homeScale,
+    awayFactor: ctx.awayScale,
+    includeEvents: opts.includeEvents !== false
+  });
+  sim.calibration = ctx.calibration;
+  sim.ctx = ctx;
+  sim.scales = { home: ctx.homeScale, away: ctx.awayScale, calibration: ctx.scale };
+  return sim;
+}
+
+/**
+ * Simulasi dengan skor TERIKAT (what-if / "apply skor" ke UI). Chance, pemain,
+ * dan probabilitas tembakan tetap dari model yang sama; yang berbeda hanya
+ * "chance mana yang jadi gol": dipilih dengan bobot pGoal (weighted sampling
+ * tanpa pengembalian) sampai jumlah gol cocok dengan skor target.
+ */
+export function simulateMatchToScore(homeCode, awayCode, homeGoals, awayGoals, opts = {}) {
+  const parsedHome = typeof homeGoals === "number" ? homeGoals : Number.NaN;
+  const parsedAway = typeof awayGoals === "number" ? awayGoals : Number.NaN;
+  if (!Number.isInteger(parsedHome) || !Number.isInteger(parsedAway) || parsedHome < 0 || parsedAway < 0 || parsedHome > PLAYER_SCORING_CONFIG.MAX_GOALS_PER_TEAM || parsedAway > PLAYER_SCORING_CONFIG.MAX_GOALS_PER_TEAM) {
+    throw new Error(`Skor What-If harus bilangan bulat 0-${PLAYER_SCORING_CONFIG.MAX_GOALS_PER_TEAM} per tim.`);
+  }
+  const rng = opts.rng || new ScoringRng(opts.seed != null ? opts.seed : 0x5eed1234);
+  const ctx = buildMatchContext(homeCode, awayCode, opts);
+  const targetHome = parsedHome;
+  const targetAway = parsedAway;
+  if ((targetHome > 0 && !ctx.home.available) || (targetAway > 0 && !ctx.away.available)) {
+    throw new Error("Skor What-If tidak dapat mencoba memberikan gol ke tim tanpa roster.");
+  }
+  const base = simulateProfiles(ctx.home, ctx.away, rng, {
+    scale: 1, homeFactor: ctx.homeScale, awayFactor: ctx.awayScale, includeEvents: true,
+    minHomeChances: targetHome,
+    minAwayChances: targetAway
+  });
+  return {
+    ...base,
+    homeGoals: targetHome,
+    awayGoals: targetAway,
+    events: conditionEventsToScore(base.events, targetHome, targetAway, rng),
+    conditioned: true,
+    calibration: ctx.calibration,
+    ctx
+  };
+}
+
+/**
+ * Pilih tepat `targetHome`/`targetAway` chance sebagai gol, dengan bobot pGoal.
+ * Semua gol tetap berasal dari event pemain (bukan undian nama).
+ */
+export function conditionEventsToScore(events, targetHome, targetAway, rng) {
+  const out = events.map((e) => ({ ...e, scored: false }));
+  const applySide = (side, target) => {
+    const pool = out.map((e, idx) => ({ e, idx })).filter((x) => x.e.side === side);
+    if (target > pool.length) throw new Error(`Tidak cukup event ${side} untuk ${target} gol.`);
+    if (!pool.length || target <= 0) return;
+    const chosen = new Set();
+    const n = Math.min(target, pool.length);
+    for (let k = 0; k < n; k++) {
+      let total = 0;
+      for (const item of pool) if (!chosen.has(item.idx)) total += Math.max(1e-4, item.e.pGoal);
+      if (total <= 0) break;
+      let r = rng.nextFloat() * total;
+      let picked = null;
+      for (const item of pool) {
+        if (chosen.has(item.idx)) continue;
+        const w = Math.max(1e-4, item.e.pGoal);
+        if (r < w) { picked = item; break; }
+        r -= w;
+      }
+      if (!picked) picked = pool.find((x) => !chosen.has(x.idx));
+      if (!picked) break;
+      chosen.add(picked.idx);
+    }
+    for (const idx of chosen) out[idx].scored = true;
+  };
+  applySide("home", targetHome);
+  applySide("away", targetAway);
+  return out;
+}
+
+export function playerEventKey(eventOrParts) {
+  const teamCode = String(eventOrParts?.teamCode || "").toUpperCase();
+  const playerName = String(eventOrParts?.playerName ?? eventOrParts?.name ?? "");
+  const playerIndex = eventOrParts?.playerIndex;
+  const slot = playerIndex == null ? "" : `:${playerIndex}`;
+  return `${teamCode}${slot}|${playerName}`;
+}
+
+/** Ubah daftar event → ringkasan pencetak gol per pemain. */
+export function scorersFromEvents(events) {
+  const map = new Map();
+  for (const e of events) {
+    if (!e.scored) continue;
+    const key = playerEventKey(e);
+    const cur = map.get(key) || { name: e.playerName, playerIndex: e.playerIndex, pos: e.pos, teamCode: e.teamCode, goals: 0, chances: 0 };
+    cur.goals++;
+    cur.chances++;
+    map.set(key, cur);
+  }
+  for (const e of events) {
+    if (e.scored) continue;
+    const cur = map.get(playerEventKey(e));
+    if (cur) cur.chances++;
+  }
+  return [...map.values()].sort((a, b) => b.goals - a.goals);
+}
+
+// ---------------------------------------------------------------------------
+// 6. MONTE CARLO SATU PERTANDINGAN (probs, markets, xG, statistik pemain)
+// ---------------------------------------------------------------------------
+/**
+ * Jalankan `sims` simulasi bebas satu fixture dengan seed turunan deterministik.
+ * Mengembalikan distribusi skor, 1X2, markets, xG, dan statistik per pemain.
+ */
+export function runMatchMonteCarlo(homeCode, awayCode, opts = {}) {
+  const sims = Math.max(1, opts.sims || PLAYER_SCORING_CONFIG.MONTE_CARLO_SIMS);
+  const baseSeed = opts.seed != null ? opts.seed >>> 0 : scoringHashSeed(`${homeCode}|${awayCode}|${PLAYER_SCORING_MODEL_VERSION}`);
+  const ctx = buildMatchContext(homeCode, awayCode, opts);
+
+  const scoreMap = new Map();
+  const playerStats = new Map();
+  const simByScore = new Map();
+  let winsH = 0, draws = 0, winsA = 0, over25 = 0, btts = 0, sumH = 0, sumA = 0, totalGoals = 0, chanceTotal = 0;
+
+  const bumpPlayer = (key, name, pos, teamCode, playerIndex, scored) => {
+    let cur = playerStats.get(key);
+    if (!cur) {
+      cur = { name, playerIndex, pos, teamCode, goals: 0, hits: 0, twoPlus: 0, chances: 0 };
+      playerStats.set(key, cur);
+    }
+    cur.chances++;
+    if (scored) cur.goals++;
+    return cur;
+  };
+
+  for (let i = 0; i < sims; i++) {
+    const rng = new ScoringRng((baseSeed ^ Math.imul(i + 1, 0x9e3779b9)) >>> 0);
+    const sim = simulateProfiles(ctx.home, ctx.away, rng, {
+      scale: 1, homeFactor: ctx.homeScale, awayFactor: ctx.awayScale, includeEvents: true
+    });
+    const key = `${sim.homeGoals}:${sim.awayGoals}`;
+    scoreMap.set(key, (scoreMap.get(key) || 0) + 1);
+    if (!simByScore.has(key)) simByScore.set(key, sim);
+    if (sim.homeGoals > sim.awayGoals) winsH++;
+    else if (sim.homeGoals < sim.awayGoals) winsA++;
+    else draws++;
+    if (sim.homeGoals + sim.awayGoals > 2) over25++;
+    if (sim.homeGoals > 0 && sim.awayGoals > 0) btts++;
+    sumH += sim.homeGoals; sumA += sim.awayGoals;
+    totalGoals += sim.homeGoals + sim.awayGoals;
+    chanceTotal += sim.homeChances + sim.awayChances;
+
+    const perSim = new Map();
+    for (const e of sim.events) {
+      const k = playerEventKey(e);
+      bumpPlayer(k, e.playerName, e.pos, e.teamCode, e.playerIndex, e.scored);
+      if (e.scored) perSim.set(k, (perSim.get(k) || 0) + 1);
+    }
+    for (const [k, goals] of perSim) {
+      const cur = playerStats.get(k);
+      if (!cur) continue;
+      cur.hits++;
+      if (goals >= 2) cur.twoPlus++;
+    }
+  }
+
+  // normalisasi statistik pemain
+  const players = [...playerStats.values()].map((p) => {
+    const expectedGoals = p.goals / sims;
+    return {
+      ...p,
+      expectedGoals: Number(expectedGoals.toFixed(4)),
+      prob: Number(((p.hits / sims) * 100).toFixed(2)),
+      probability2Plus: Number(((p.twoPlus / sims) * 100).toFixed(2)),
+      scoringShare: totalGoals > 0 ? Number(((p.goals / totalGoals) * 100).toFixed(2)) : 0,
+      goalProbabilityPerChance: p.chances > 0 ? Number((p.goals / p.chances).toFixed(4)) : 0,
+      chanceShare: chanceTotal > 0 ? Number(((p.chances / chanceTotal) * 100).toFixed(2)) : 0
+    };
+  }).sort((a, b) => b.expectedGoals - a.expectedGoals || b.prob - a.prob);
+
+  const distribution = [...scoreMap.entries()]
+    .map(([k, c]) => { const [h, a] = k.split(":").map(Number); return { home: h, away: a, prob: c / sims }; })
+    .sort((x, y) => y.prob - x.prob);
+
+  const topScoreKey = distribution[0] ? `${distribution[0].home}:${distribution[0].away}` : "0:0";
+  const modalSim = simByScore.get(topScoreKey) || null;
+
+  const over25P = over25 / sims;
+  return {
+    sims,
+    seed: baseSeed,
+    distribution,
+    probs: { home: winsH / sims, draw: draws / sims, away: winsA / sims },
+    markets: { over25: over25P, under25: 1 - over25P, btts: btts / sims },
+    avgHome: Number((sumH / sims).toFixed(3)),
+    avgAway: Number((sumA / sims).toFixed(3)),
+    avgTotalGoals: Number((totalGoals / sims).toFixed(3)),
+    avgChancesPerTeam: Number((chanceTotal / sims / 2).toFixed(2)),
+    players,
+    calibration: ctx.calibration,
+    modalSim
+  };
+}
+
+export function playerKey(code, name) {
+  return `${name}|${String(code || "").toUpperCase()}`;
+}
